@@ -1,0 +1,147 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro'
+---
+
+<BaseLayout
+  title="Veritio - Evidence Graph for Software Systems"
+  description="Open-source evidence protocol and hosted evidence vault for audit trails, AI change provenance, and governance workflows."
+>
+  <main>
+    <section class="hero">
+      <nav>
+        <strong>Veritio</strong>
+        <div>
+          <a href="#oss">OSS</a>
+          <a href="#cloud">Cloud</a>
+          <a href="#workbench">Workbench</a>
+        </div>
+      </nav>
+
+      <div class="hero-copy">
+        <p class="eyebrow">Open-source protocol. Managed evidence vault.</p>
+        <h1>Evidence graph for audit trails, AI changes, and governance workflows.</h1>
+        <p>
+          Veritio helps teams record, connect, verify, and export application
+          events, code changes, agent sessions, deployments, consent history,
+          data subject workflows, and retention decisions.
+        </p>
+      </div>
+    </section>
+
+    <section class="band" id="oss">
+      <h2>OSS SDK</h2>
+      <p>
+        The public SDK and protocol stay useful without a hosted account:
+        schemas, SDKs, storage adapters, self-hosted server, local Workbench,
+        MCP server, verifier, and export bundle format.
+      </p>
+    </section>
+
+    <section class="band" id="cloud">
+      <h2>SaaS and PaaS</h2>
+      <p>
+        Hosted Veritio adds managed ingest, scoped keys, graph projection,
+        customer portals, policy drift jobs, long retention, exports, regional
+        storage controls, and operational service commitments.
+      </p>
+    </section>
+
+    <section class="band" id="workbench">
+      <h2>Local Workbench</h2>
+      <p>
+        Run <code>veritio dev --mcp</code> to test integrations locally with a
+        visual evidence graph, verifier, scenario runner, and MCP tools for AI
+        agents.
+      </p>
+    </section>
+  </main>
+</BaseLayout>
+
+<style>
+  main {
+    min-height: 100vh;
+  }
+
+  .hero {
+    min-height: 76vh;
+    padding: 24px clamp(20px, 5vw, 72px) 56px;
+    background:
+      linear-gradient(180deg, rgb(248 250 247 / 86%), rgb(248 250 247 / 96%)),
+      url('/evidence-grid.svg');
+    background-size: cover;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+  }
+
+  nav div {
+    display: flex;
+    gap: 20px;
+    font-size: 14px;
+  }
+
+  nav a {
+    text-decoration: none;
+    color: #44524a;
+  }
+
+  .hero-copy {
+    max-width: 960px;
+  }
+
+  .eyebrow {
+    margin: 0 0 14px;
+    color: #4b6658;
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 13px;
+    letter-spacing: 0.08em;
+  }
+
+  h1 {
+    max-width: 920px;
+    margin: 0;
+    font-size: clamp(42px, 7vw, 92px);
+    line-height: 0.98;
+    letter-spacing: 0;
+  }
+
+  .hero-copy > p:last-child {
+    max-width: 760px;
+    margin: 28px 0 0;
+    font-size: 20px;
+    line-height: 1.55;
+    color: #38443d;
+  }
+
+  .band {
+    padding: 56px clamp(20px, 5vw, 72px);
+    border-top: 1px solid #dfe7df;
+  }
+
+  .band h2 {
+    margin: 0 0 12px;
+    font-size: 28px;
+  }
+
+  .band p {
+    max-width: 820px;
+    margin: 0;
+    color: #3d4942;
+    line-height: 1.65;
+  }
+
+  code {
+    background: #e9efe8;
+    border: 1px solid #d8e2d8;
+    border-radius: 5px;
+    padding: 2px 6px;
+  }
+</style>
