@@ -1,0 +1,54 @@
+---
+const { pathname } = Astro.url
+const links = [
+  { href: '/', label: 'Home' },
+  { href: '/cloud', label: 'Cloud' },
+  { href: '/examples', label: 'Examples' },
+]
+const isActive = (href: string) =>
+  href === '/' ? pathname === '/' : pathname.startsWith(href)
+---
+
+<nav class="border-b border-line bg-surface/80 backdrop-blur">
+  <div class="container flex flex-wrap items-center justify-between gap-4 py-4">
+    <a href="/" class="flex items-center gap-2 no-underline" aria-label="Veritio home">
+      <span
+        class="grid h-7 w-7 place-items-center rounded-md bg-evergreen text-surface"
+        aria-hidden="true"
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <circle cx="3.5" cy="3.5" r="2" fill="currentColor" />
+          <circle cx="12.5" cy="3.5" r="2" fill="currentColor" />
+          <circle cx="8" cy="12.5" r="2" fill="currentColor" />
+          <path d="M3.5 3.5 8 12.5 12.5 3.5" stroke="currentColor" stroke-width="1.2" />
+        </svg>
+      </span>
+      <strong class="text-[17px] tracking-tight text-ink">Veritio</strong>
+    </a>
+
+    <div class="flex items-center gap-5 text-sm">
+      {
+        links.map((link) => (
+          <a
+            href={link.href}
+            class:list={[
+              'no-underline transition-colors hover:text-accent',
+              isActive(link.href) ? 'text-accent font-semibold' : 'text-ink-muted',
+            ]}
+            aria-current={isActive(link.href) ? 'page' : undefined}
+          >
+            {link.label}
+          </a>
+        ))
+      }
+      <a
+        href="https://github.com/getveritio/veritio"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="rounded-full border border-line-strong px-3.5 py-1.5 font-medium text-ink no-underline transition-colors hover:border-accent hover:text-accent"
+      >
+        GitHub
+      </a>
+    </div>
+  </div>
+</nav>

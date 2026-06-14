@@ -1,0 +1,58 @@
+---
+const year = 2026
+---
+
+<footer class="border-t border-line bg-surface-sunken">
+  <div class="container grid gap-10 py-14 sm:grid-cols-2 lg:grid-cols-4">
+    <div>
+      <strong class="text-[17px] tracking-tight text-ink">Veritio</strong>
+      <p class="mt-3 max-w-xs text-sm leading-relaxed text-ink-muted">
+        Open-source evidence layer for audit trails, change provenance, and
+        governance workflows.
+      </p>
+    </div>
+
+    <div>
+      <h3 class="text-xs font-semibold uppercase tracking-wider text-ink-muted">
+        Product
+      </h3>
+      <ul class="mt-4 space-y-2 text-sm">
+        <li><a class="text-ink-soft no-underline hover:text-accent" href="/">Overview</a></li>
+        <li><a class="text-ink-soft no-underline hover:text-accent" href="/cloud">Cloud</a></li>
+        <li><a class="text-ink-soft no-underline hover:text-accent" href="/examples">Examples</a></li>
+      </ul>
+    </div>
+
+    <div>
+      <h3 class="text-xs font-semibold uppercase tracking-wider text-ink-muted">
+        Open source
+      </h3>
+      <ul class="mt-4 space-y-2 text-sm">
+        <li>
+          <a
+            class="text-ink-soft no-underline hover:text-accent"
+            href="https://github.com/getveritio/veritio"
+            target="_blank"
+            rel="noopener noreferrer">GitHub repository</a>
+        </li>
+        <li><span class="text-ink-muted">Docs (coming soon)</span></li>
+      </ul>
+    </div>
+
+    <div>
+      <h3 class="text-xs font-semibold uppercase tracking-wider text-ink-muted">
+        Legal
+      </h3>
+      <p class="mt-4 max-w-xs text-xs leading-relaxed text-ink-muted">
+        Veritio provides evidence support. It is not legal advice and does not
+        make an application automatically compliant with GDPR, CCPA, SOC&nbsp;2,
+        HIPAA, DORA, NIS2, or any other framework.
+      </p>
+    </div>
+  </div>
+
+  <div class="container flex flex-col gap-2 border-t border-line py-6 text-xs text-ink-muted sm:flex-row sm:items-center sm:justify-between">
+    <span>© {year} Veritio</span>
+    <span>Built with Astro.</span>
+  </div>
+</footer>

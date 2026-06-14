@@ -1,0 +1,41 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="630" fill="#f8faf7" />
+
+  <!-- evidence graph motif -->
+  <g stroke="#cdd9cc" stroke-width="2" fill="none" opacity="0.7">
+    <path d="M820 150 L980 250 L900 430 L1040 470 L760 520" />
+    <path d="M980 250 L1080 160" />
+    <path d="M900 430 L760 300" />
+  </g>
+  <g fill="#2f6f57">
+    <circle cx="820" cy="150" r="11" />
+    <circle cx="980" cy="250" r="11" />
+    <circle cx="1080" cy="160" r="11" />
+    <circle cx="900" cy="430" r="11" />
+    <circle cx="1040" cy="470" r="11" />
+    <circle cx="760" cy="300" r="11" />
+    <circle cx="760" cy="520" r="11" />
+  </g>
+
+  <!-- brand mark -->
+  <g transform="translate(90, 96)">
+    <rect width="56" height="56" rx="13" fill="#1f3b30" />
+    <g transform="translate(11, 11)" fill="#f8faf7" stroke="#f8faf7">
+      <path d="M5 5 17 28 29 5" stroke-width="3.4" fill="none" stroke-linejoin="round" />
+      <circle cx="5" cy="5" r="4.2" stroke="none" />
+      <circle cx="29" cy="5" r="4.2" stroke="none" />
+      <circle cx="17" cy="28" r="4.2" stroke="none" />
+    </g>
+    <text x="74" y="38" font-family="Inter, system-ui, sans-serif" font-size="30" font-weight="700" fill="#17211c">Veritio</text>
+  </g>
+
+  <!-- headline -->
+  <text x="90" y="300" font-family="Inter, system-ui, sans-serif" font-size="62" font-weight="700" fill="#17211c" letter-spacing="-1">Evidence graph for</text>
+  <text x="90" y="372" font-family="Inter, system-ui, sans-serif" font-size="62" font-weight="700" fill="#17211c" letter-spacing="-1">audit trails &amp; governance.</text>
+
+  <!-- sub -->
+  <text x="90" y="452" font-family="Inter, system-ui, sans-serif" font-size="28" fill="#38443d">Open-source evidence layer. Optional managed vault.</text>
+
+  <!-- footer tag -->
+  <text x="90" y="556" font-family="ui-monospace, monospace" font-size="22" fill="#2f6f57">getveritio.com</text>
+</svg>
