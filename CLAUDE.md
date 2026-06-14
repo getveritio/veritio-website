@@ -4,9 +4,10 @@
 
 This repo is the Astro public website for Veritio.
 
-Read `docs/repo-map.md` and `docs/repository-spec.md` before changing split
-boundaries, product claims, docs structure, examples, or anything that may
-belong in a sibling repo.
+Read any local hidden execution specs under `.codex/private/specs/` when
+present. Those files are intentionally ignored and must not be committed. Use
+the split boundaries in this file before changing product claims, docs
+structure, examples, or anything that may belong in a sibling repo.
 
 ## Operating Mode
 
@@ -17,6 +18,20 @@ belong in a sibling repo.
 - Preserve the split: website here, OSS SDK/protocol in `veritio`, hosted
   SaaS/PaaS in `veritio-cloud`.
 - Prefer concrete product language over generic compliance or AI hype.
+- Do not publish internal product specs, execution prompts, roadmap details, or
+  private orchestration notes in public docs.
+
+## Split Routing
+
+- `veritio`: public protocol, schemas, SDKs, framework adapters, storage
+  helpers, self-hosted server modules, verifier, export format, conformance
+  fixtures, and public examples.
+- `veritio-website`: public Astro website, docs pages, SEO metadata, marketing
+  copy, public examples, and static assets.
+- `veritio-cloud`: private hosted SaaS/PaaS implementation, hosted ingest,
+  hosted MCP, managed storage, billing, regions, customer portals, admin, and
+  operational jobs.
+- Publish website claims only after backing OSS or hosted behavior exists.
 
 ## Non-Negotiables
 

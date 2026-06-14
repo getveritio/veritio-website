@@ -22,10 +22,10 @@ getveritio.com.
 - The private hosted SaaS/PaaS repo is `veritio-cloud`.
 - If a claim depends on an SDK, protocol, or hosted feature, verify that the
   source repo actually supports it before publishing.
-- Read `docs/repo-map.md` before making changes that might involve a sibling
-  repository.
-- Read `docs/repository-spec.md` before changing website structure, public
-  claims, examples, docs routes, or repository ownership.
+- Read any local hidden execution specs under `.codex/private/specs/` when
+  present. Those files are intentionally ignored and must not be committed.
+- Route sibling work with the inline boundaries in this file before changing
+  website structure, public claims, examples, docs routes, or ownership.
 - Cross-repo work should normally be coordinated from the `veritio` control
   repo, not by asking the user to manage separate chats.
 
@@ -47,6 +47,18 @@ getveritio.com.
   product claims.
 - Use `repo-routing-reviewer` when a change could belong in `veritio` or
   `veritio-cloud`.
+
+## Split Routing
+
+- `veritio`: public protocol, schemas, SDKs, framework adapters, storage
+  helpers, self-hosted server modules, verifier, export format, conformance
+  fixtures, and public examples.
+- `veritio-website`: public Astro website, docs pages, SEO metadata, marketing
+  copy, public examples, and static assets.
+- `veritio-cloud`: private hosted SaaS/PaaS implementation, hosted ingest,
+  hosted MCP, managed storage, billing, regions, customer portals, admin, and
+  operational jobs.
+- Public claims here must wait until backing OSS or hosted behavior exists.
 
 ## Commands
 
