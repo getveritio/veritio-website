@@ -1,0 +1,28 @@
+---
+interface Props {
+  id?: string
+  class?: string
+  tone?: 'surface' | 'sunken' | 'raised'
+  bordered?: boolean
+}
+const { id, class: className = '', tone = 'surface', bordered = true } = Astro.props
+const toneClass = {
+  surface: 'bg-surface',
+  sunken: 'bg-surface-sunken',
+  raised: 'bg-surface-raised',
+}[tone]
+---
+
+<section
+  id={id}
+  class:list={[
+    'py-16 sm:py-20',
+    toneClass,
+    bordered && 'border-t border-line',
+    className,
+  ]}
+>
+  <div class="container">
+    <slot />
+  </div>
+</section>

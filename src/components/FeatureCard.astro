@@ -1,0 +1,23 @@
+---
+interface Props {
+  title: string
+  icon?: string
+}
+const { title, icon } = Astro.props
+---
+
+<div class="rounded-xl border border-line bg-surface-raised p-6 transition-colors hover:border-line-strong">
+  {
+    icon && (
+      <div
+        class="mb-4 grid h-9 w-9 place-items-center rounded-lg bg-surface-sunken text-accent"
+        aria-hidden="true"
+        set:html={icon}
+      />
+    )
+  }
+  <h3 class="text-base font-semibold text-ink">{title}</h3>
+  <p class="mt-2 text-sm leading-relaxed text-ink-soft">
+    <slot />
+  </p>
+</div>

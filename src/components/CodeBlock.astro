@@ -1,0 +1,27 @@
+---
+import { Code } from 'astro:components'
+import type { ComponentProps } from 'astro/types'
+
+type CodeLang = ComponentProps<typeof Code>['lang']
+
+interface Props {
+  code: string
+  lang?: CodeLang
+  title?: string
+}
+const { code, lang = 'ts', title } = Astro.props
+---
+
+<div class="code-frame">
+  {
+    title && (
+      <div class="flex items-center justify-between border-b border-code-border bg-surface-sunken px-4 py-2">
+        <span class="font-mono text-xs text-ink-muted">{title}</span>
+        <span class="font-mono text-[11px] uppercase tracking-wider text-ink-muted">
+          {lang}
+        </span>
+      </div>
+    )
+  }
+  <Code code={code} lang={lang} theme="github-light" />
+</div>

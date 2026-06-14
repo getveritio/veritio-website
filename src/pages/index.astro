@@ -1,147 +1,275 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro'
+import Nav from '../components/Nav.astro'
+import Footer from '../components/Footer.astro'
+import Section from '../components/Section.astro'
+import FeatureCard from '../components/FeatureCard.astro'
+import CodeBlock from '../components/CodeBlock.astro'
+
+const heroBg =
+  "background-image: linear-gradient(180deg, rgb(248 250 247 / 86%), rgb(248 250 247 / 97%)), url('/evidence-grid.svg'); background-size: cover;"
+
+const displayStyle =
+  'font-size: var(--text-display); line-height: var(--text-display--line-height); letter-spacing: var(--text-display--letter-spacing);'
+
+const headlineStyle =
+  'font-size: var(--text-headline); line-height: var(--text-headline--line-height); letter-spacing: var(--text-headline--letter-spacing);'
+
+const primaryBtn =
+  'inline-flex items-center gap-2 rounded-full bg-evergreen px-5 py-2.5 text-sm font-semibold text-surface no-underline transition-colors hover:bg-accent-strong'
+const secondaryBtn =
+  'inline-flex items-center gap-2 rounded-full border border-line-strong px-5 py-2.5 text-sm font-semibold text-ink no-underline transition-colors hover:border-accent hover:text-accent'
+
+const icons = {
+  sdk: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="8 7 3 12 8 17"/><polyline points="16 7 21 12 16 17"/><line x1="13" y1="4" x2="11" y2="20"/></svg>',
+  adapters:
+    '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
+  storage:
+    '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.66 3.58 3 8 3s8-1.34 8-3V5"/><path d="M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3"/></svg>',
+  verify:
+    '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>',
+  workbench:
+    '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><polyline points="8 9 10.5 11 8 13"/><line x1="13" y1="13" x2="16" y2="13"/></svg>',
+  graph:
+    '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><line x1="8" y1="7.5" x2="11" y2="16"/><line x1="16" y1="7.5" x2="13" y2="16"/><line x1="8" y1="6" x2="15.5" y2="6"/></svg>',
+}
+
+const quickstartCode = `import { MemoryAuditStore, createAuditEvent } from "@veritio/core";
+
+const store = new MemoryAuditStore();
+
+const event = createAuditEvent({
+  id: "evt_01",
+  occurredAt: "2026-06-10T00:00:00.000Z",
+  actor: { type: "user", id: "usr_123" },
+  action: "org.member.invited",
+  target: { type: "organization", id: "org_123" },
+  scope: { tenantId: "org_123", environment: "production" },
+  purpose: "access_management",
+  lawfulBasis: "contract",
+  retention: "security_1y",
+  metadata: { inviteId: "inv_123", role: "viewer" },
+});
+
+await store.append(event);`
+
+const ossPoints = [
+  'TypeScript, Python, and Go SDKs',
+  'Audit event + evidence graph schemas',
+  'Storage adapters and a self-hosted server',
+  'Local Workbench and MCP server',
+  'Verifier and export bundle format',
+]
+
+const cloudPoints = [
+  'Managed ingest and durable retention',
+  'A shared evidence graph across services',
+  'Exports and verification on demand',
+  'Team access and operational support',
+]
 ---
 
 <BaseLayout
-  title="Veritio - Evidence Graph for Software Systems"
-  description="Open-source evidence protocol and hosted evidence vault for audit trails, AI change provenance, and governance workflows."
+  title="Veritio - Evidence Graph for Audit Trails, AI Changes, and Governance"
+  description="Open-source evidence layer to record, connect, verify, and export application events, code changes, agent sessions, deployments, consent history, and retention decisions. Optional managed vault."
 >
-  <main>
-    <section class="hero">
-      <nav>
-        <strong>Veritio</strong>
-        <div>
-          <a href="#oss">OSS</a>
-          <a href="#cloud">Cloud</a>
-          <a href="#workbench">Workbench</a>
-        </div>
-      </nav>
+  <Nav />
 
-      <div class="hero-copy">
-        <p class="eyebrow">Open-source protocol. Managed evidence vault.</p>
-        <h1>Evidence graph for audit trails, AI changes, and governance workflows.</h1>
-        <p>
+  <main>
+    <!-- HERO -->
+    <section class="border-b border-line" style={heroBg}>
+      <div class="container py-20 sm:py-28">
+        <p class="eyebrow">Open-source evidence layer · Optional managed vault</p>
+        <h1 class="mt-5 max-w-[24ch] text-ink" style={displayStyle}>
+          Evidence graph for audit trails, AI changes, and governance workflows.
+        </h1>
+        <p class="mt-6 max-w-2xl text-lg leading-relaxed text-ink-soft sm:text-xl">
           Veritio helps teams record, connect, verify, and export application
           events, code changes, agent sessions, deployments, consent history,
           data subject workflows, and retention decisions.
         </p>
+        <div class="mt-9 flex flex-wrap items-center gap-3">
+          <a
+            href="https://github.com/getveritio/veritio"
+            target="_blank"
+            rel="noopener noreferrer"
+            class={primaryBtn}
+          >
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+            View on GitHub
+          </a>
+          <a href="/examples" class={secondaryBtn}>
+            See examples
+            <span aria-hidden="true">→</span>
+          </a>
+        </div>
       </div>
     </section>
 
-    <section class="band" id="oss">
-      <h2>OSS SDK</h2>
-      <p>
-        The public SDK and protocol stay useful without a hosted account:
-        schemas, SDKs, storage adapters, self-hosted server, local Workbench,
-        MCP server, verifier, and export bundle format.
-      </p>
-    </section>
+    <!-- WHAT IT IS -->
+    <Section tone="raised">
+      <p class="eyebrow">What it is</p>
+      <h2 class="mt-4 max-w-3xl text-ink" style={headlineStyle}>
+        A protocol-first evidence layer built on two primitives.
+      </h2>
+      <div class="mt-7 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+        <p class="text-lg leading-relaxed text-ink-soft">
+          Veritio is built on <strong class="font-semibold text-ink">audit events</strong>
+          and <strong class="font-semibold text-ink">evidence graph edges</strong>. Records
+          are made tamper-evident with SHA-256 hash chains: each event is serialized
+          with a canonical JSON encoding (<code class="inline">veritio-json-v1</code>),
+          assigned a per-tenant sequence number, and linked to the previous record
+          through a <code class="inline">previousHash</code> reference.
+        </p>
+        <p class="text-lg leading-relaxed text-ink-soft">
+          A verifier recomputes the hashes across a chain to detect mutation,
+          deletion, or reordering. Because the format is open and deterministic,
+          anyone can independently re-derive and check the chain — no hidden
+          state and no trust in a single black box.
+        </p>
+      </div>
+    </Section>
 
-    <section class="band" id="cloud">
-      <h2>SaaS and PaaS</h2>
-      <p>
-        Hosted Veritio adds managed ingest, scoped keys, graph projection,
-        customer portals, policy drift jobs, long retention, exports, regional
-        storage controls, and operational service commitments.
-      </p>
-    </section>
+    <!-- CAPABILITY GRID -->
+    <Section tone="surface">
+      <p class="eyebrow">Capabilities</p>
+      <h2 class="mt-4 max-w-2xl text-ink" style={headlineStyle}>
+        One protocol, from your code to your evidence graph.
+      </h2>
+      <div class="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <FeatureCard title="Multi-language SDKs" icon={icons.sdk}>
+          TypeScript (<code class="inline">@veritio/core</code>), Python
+          (<code class="inline">veritio</code>), and Go SDKs that share one
+          protocol and record format.
+        </FeatureCard>
+        <FeatureCard title="Framework adapters" icon={icons.adapters}>
+          Recording adapters for Better Auth, Next.js, TanStack Start, and
+          SvelteKit, plus UI intent helpers for React, Vue, and Svelte.
+        </FeatureCard>
+        <FeatureCard title="Storage you control" icon={icons.storage}>
+          Durable stores for PostgreSQL/Neon, MySQL, MariaDB, and MongoDB, plus
+          a Redis tip cache for fast chain heads.
+        </FeatureCard>
+        <FeatureCard title="Tamper-evident verification" icon={icons.verify}>
+          Hash-chained records and a verifier that detects mutation, deletion,
+          and reordering across an evidence chain.
+        </FeatureCard>
+        <FeatureCard title="Local Workbench" icon={icons.workbench}>
+          Run <code class="inline">veritio dev --mcp</code> for a visual evidence
+          graph, verifier, scenario runner, and MCP tools for AI agents.
+        </FeatureCard>
+        <FeatureCard title="Evidence graph" icon={icons.graph}>
+          Connect actors, resources, agent sessions, deployments, consent, and
+          data-subject requests with typed relations.
+        </FeatureCard>
+      </div>
+    </Section>
 
-    <section class="band" id="workbench">
-      <h2>Local Workbench</h2>
-      <p>
-        Run <code>veritio dev --mcp</code> to test integrations locally with a
-        visual evidence graph, verifier, scenario runner, and MCP tools for AI
-        agents.
-      </p>
+    <!-- QUICKSTART -->
+    <Section tone="raised">
+      <div class="grid gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
+        <div>
+          <p class="eyebrow">Quickstart</p>
+          <h2 class="mt-4 text-ink" style={headlineStyle}>
+            Start in your own stack.
+          </h2>
+          <p class="mt-5 text-lg leading-relaxed text-ink-soft">
+            Install the SDK, create an audit event, and append it to a store.
+            The in-memory store runs anywhere, so you can record and verify
+            evidence before you wire up durable storage.
+          </p>
+          <a
+            href="/examples"
+            class="mt-6 inline-flex items-center gap-1.5 text-sm font-semibold text-accent no-underline transition-colors hover:text-accent-strong"
+          >
+            View more examples
+            <span aria-hidden="true">→</span>
+          </a>
+        </div>
+        <CodeBlock code={quickstartCode} lang="ts" title="audit-event.ts" />
+      </div>
+    </Section>
+
+    <!-- OSS vs CLOUD -->
+    <Section tone="sunken">
+      <p class="eyebrow">Open source and Cloud</p>
+      <h2 class="mt-4 max-w-2xl text-ink" style={headlineStyle}>
+        Run it yourself. Hand off operations when you want to.
+      </h2>
+      <div class="mt-10 grid gap-6 lg:grid-cols-2">
+        <div class="rounded-2xl border border-line-strong bg-surface-raised p-8">
+          <h3 class="text-lg font-semibold text-ink">Open source</h3>
+          <p class="mt-3 leading-relaxed text-ink-soft">
+            The SDK, schemas, storage adapters, self-hosted server, local
+            Workbench, MCP server, verifier, and export bundle format are fully
+            useful on their own. They run without any hosted account, and you
+            keep your data in storage you control.
+          </p>
+          <ul class="mt-5 space-y-2.5">
+            {
+              ossPoints.map((point) => (
+                <li class="flex items-start gap-2.5 text-sm text-ink-soft">
+                  <svg class="mt-0.5 shrink-0 text-accent" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                  <span>{point}</span>
+                </li>
+              ))
+            }
+          </ul>
+        </div>
+
+        <div class="rounded-2xl border border-line-strong bg-surface-raised p-8">
+          <h3 class="text-lg font-semibold text-ink">Veritio Cloud</h3>
+          <p class="mt-3 leading-relaxed text-ink-soft">
+            Veritio Cloud is an <strong class="font-semibold text-ink">optional</strong>
+            managed service that adds operational features on top of the same
+            protocol. It is never required to use the SDK — adopt it only when
+            you would rather not run ingest and storage yourself.
+          </p>
+          <ul class="mt-5 space-y-2.5">
+            {
+              cloudPoints.map((point) => (
+                <li class="flex items-start gap-2.5 text-sm text-ink-soft">
+                  <svg class="mt-0.5 shrink-0 text-accent" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                  <span>{point}</span>
+                </li>
+              ))
+            }
+          </ul>
+          <a
+            href="/cloud"
+            class="mt-6 inline-flex items-center gap-1.5 text-sm font-semibold text-accent no-underline transition-colors hover:text-accent-strong"
+          >
+            Explore Veritio Cloud
+            <span aria-hidden="true">→</span>
+          </a>
+        </div>
+      </div>
+    </Section>
+
+    <!-- FINAL CTA -->
+    <section class="border-t border-line bg-evergreen">
+      <div class="container py-20 text-center sm:py-24">
+        <h2 class="mx-auto max-w-2xl text-surface" style={headlineStyle}>
+          Build your evidence graph in the open.
+        </h2>
+        <p class="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-surface/80">
+          Read the protocol, explore the SDKs, and run the Workbench locally.
+          Everything you need to record and verify evidence is open source.
+        </p>
+        <div class="mt-8 flex justify-center">
+          <a
+            href="https://github.com/getveritio/veritio"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center gap-2 rounded-full bg-surface px-6 py-3 text-sm font-semibold text-evergreen no-underline transition-colors hover:bg-surface-sunken"
+          >
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+            View on GitHub
+          </a>
+        </div>
+      </div>
     </section>
   </main>
+
+  <Footer />
 </BaseLayout>
-
-<style>
-  main {
-    min-height: 100vh;
-  }
-
-  .hero {
-    min-height: 76vh;
-    padding: 24px clamp(20px, 5vw, 72px) 56px;
-    background:
-      linear-gradient(180deg, rgb(248 250 247 / 86%), rgb(248 250 247 / 96%)),
-      url('/evidence-grid.svg');
-    background-size: cover;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-  }
-
-  nav {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 24px;
-  }
-
-  nav div {
-    display: flex;
-    gap: 20px;
-    font-size: 14px;
-  }
-
-  nav a {
-    text-decoration: none;
-    color: #44524a;
-  }
-
-  .hero-copy {
-    max-width: 960px;
-  }
-
-  .eyebrow {
-    margin: 0 0 14px;
-    color: #4b6658;
-    font-weight: 700;
-    text-transform: uppercase;
-    font-size: 13px;
-    letter-spacing: 0.08em;
-  }
-
-  h1 {
-    max-width: 920px;
-    margin: 0;
-    font-size: clamp(42px, 7vw, 92px);
-    line-height: 0.98;
-    letter-spacing: 0;
-  }
-
-  .hero-copy > p:last-child {
-    max-width: 760px;
-    margin: 28px 0 0;
-    font-size: 20px;
-    line-height: 1.55;
-    color: #38443d;
-  }
-
-  .band {
-    padding: 56px clamp(20px, 5vw, 72px);
-    border-top: 1px solid #dfe7df;
-  }
-
-  .band h2 {
-    margin: 0 0 12px;
-    font-size: 28px;
-  }
-
-  .band p {
-    max-width: 820px;
-    margin: 0;
-    color: #3d4942;
-    line-height: 1.65;
-  }
-
-  code {
-    background: #e9efe8;
-    border: 1px solid #d8e2d8;
-    border-radius: 5px;
-    padding: 2px 6px;
-  }
-</style>

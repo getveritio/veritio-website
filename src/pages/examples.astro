@@ -1,0 +1,247 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro'
+import Nav from '../components/Nav.astro'
+import Footer from '../components/Footer.astro'
+import Section from '../components/Section.astro'
+import CodeBlock from '../components/CodeBlock.astro'
+import FeatureCard from '../components/FeatureCard.astro'
+
+const installTs = `npm install @veritio/core
+# or
+bun add @veritio/core`
+
+const installPy = `pip install veritio`
+
+const installGo = `go get github.com/getveritio/veritio/sdks/go`
+
+const recordEvent = `import { MemoryAuditStore, createAuditEvent, createEvidenceEdge } from "@veritio/core";
+
+const store = new MemoryAuditStore();
+
+const event = createAuditEvent({
+  id: "evt_01",
+  occurredAt: "2026-06-10T00:00:00.000Z",
+  actor: { type: "user", id: "usr_123" },
+  action: "org.member.invited",
+  target: { type: "organization", id: "org_123" },
+  scope: { tenantId: "org_123", environment: "production" },
+  purpose: "access_management",
+  lawfulBasis: "contract",
+  retention: "security_1y",
+  metadata: { inviteId: "inv_123", role: "viewer" },
+});
+
+await store.append(event);
+
+const edge = createEvidenceEdge({
+  id: "edge_01",
+  occurredAt: "2026-06-10T00:00:01.000Z",
+  scope: { tenantId: "org_123", environment: "production" },
+  from: { type: "actor", id: "usr_123", actorType: "user" },
+  relation: "created",
+  to: { type: "runtime_event", id: "evt_01" },
+  metadata: { reason: "member_invite" },
+});`
+
+const pythonEdge = `from veritio import create_evidence_edge, hash_evidence_edge
+
+edge = create_evidence_edge({
+    "from": {"type": "agent_session", "id": "agt_sess_123"},
+    "relation": "created",
+    "to": {"type": "file", "id": "file_billing_plan", "pathHash": "sha256:..."},
+    "scope": {"tenantId": "org_123", "environment": "production"},
+    "metadata": {"reason": "ai_agent"},
+})
+
+edge_hash = hash_evidence_edge(edge)`
+
+const workbench = `veritio dev --mcp`
+
+const githubRepo = 'https://github.com/getveritio/veritio'
+const referenceExample =
+  'https://github.com/getveritio/veritio/tree/main/examples/nextjs-better-auth'
+
+const adapters = [
+  {
+    title: 'Better Auth',
+    body: 'Record user, session, and invitation events.',
+  },
+  {
+    title: 'Next.js',
+    body: 'Record evidence from server route handlers and server actions.',
+  },
+  {
+    title: 'TanStack Start',
+    body: 'Server-side evidence recording.',
+  },
+  {
+    title: 'SvelteKit',
+    body: 'Server-side evidence recording.',
+  },
+  {
+    title: 'React / Vue / Svelte',
+    body: 'UI intent helpers that annotate the interface (no client-side recording).',
+  },
+]
+---
+
+<BaseLayout
+  title="Examples — Veritio"
+  description="Real, copy-pasteable examples for recording audit events and evidence edges with the open-source Veritio SDKs. No hosted account required."
+>
+  <Nav />
+
+  <section class="py-16 sm:py-20">
+    <div class="container">
+      <span class="eyebrow">Examples</span>
+      <h1
+        class="mt-4 max-w-3xl font-semibold tracking-tight text-ink"
+        style="font-size: var(--text-headline); line-height: var(--text-headline--line-height);"
+      >
+        Integrate Veritio in minutes
+      </h1>
+      <p class="mt-5 max-w-2xl text-lg leading-relaxed text-ink-soft">
+        These are real, copy-pasteable examples using the open-source SDKs. No
+        hosted account required — everything below runs against the local,
+        self-hostable packages.
+      </p>
+    </div>
+  </section>
+
+  <Section id="install">
+    <h2 class="text-2xl font-semibold tracking-tight text-ink">Install</h2>
+    <p class="mt-3 max-w-2xl text-ink-soft">
+      Pick the SDK for your stack. Each package ships independently.
+    </p>
+    <div class="mt-8 grid gap-5 lg:grid-cols-3">
+      <CodeBlock code={installTs} lang="bash" title="TypeScript" />
+      <CodeBlock code={installPy} lang="bash" title="Python" />
+      <CodeBlock code={installGo} lang="bash" title="Go" />
+    </div>
+  </Section>
+
+  <Section id="record-event">
+    <h2 class="text-2xl font-semibold tracking-tight text-ink">
+      Record your first event
+    </h2>
+    <p class="mt-3 max-w-2xl text-ink-soft">
+      Append a structured audit event to a store, then link the actor to it with
+      an evidence edge.
+    </p>
+    <div class="mt-8">
+      <CodeBlock code={recordEvent} lang="ts" title="audit-event.ts" />
+    </div>
+    <p class="mt-5 max-w-2xl text-sm leading-relaxed text-ink-soft">
+      The evidence edge connects the actor (<code class="inline">usr_123</code>)
+      to the recorded event in the evidence graph, capturing who did what
+      without overwriting the original event.
+    </p>
+  </Section>
+
+  <Section id="python-edges" tone="sunken">
+    <h2 class="text-2xl font-semibold tracking-tight text-ink">
+      Python: evidence edges
+    </h2>
+    <p class="mt-3 max-w-2xl text-ink-soft">
+      Build an evidence edge — for example, linking an AI agent session to a
+      file it created — and produce a stable hash for that edge.
+    </p>
+    <div class="mt-8">
+      <CodeBlock code={pythonEdge} lang="python" title="edge.py" />
+    </div>
+  </Section>
+
+  <Section id="workbench">
+    <h2 class="text-2xl font-semibold tracking-tight text-ink">
+      Local Workbench
+    </h2>
+    <p class="mt-3 max-w-2xl text-ink-soft">
+      Run the Workbench from your terminal to explore evidence locally.
+    </p>
+    <div class="mt-8 max-w-2xl">
+      <CodeBlock code={workbench} lang="bash" title="terminal" />
+    </div>
+    <p class="mt-5 max-w-2xl text-sm leading-relaxed text-ink-soft">
+      This opens a browser evidence-graph UI with a verifier, a scenario runner,
+      and MCP tools for AI agents — all running locally, with no account needed.
+    </p>
+  </Section>
+
+  <Section id="frameworks" tone="sunken">
+    <h2 class="text-2xl font-semibold tracking-tight text-ink">
+      Framework integrations
+    </h2>
+    <p class="mt-3 max-w-2xl text-ink-soft">
+      Shipped adapters wire evidence recording into popular frameworks with
+      minimal glue code.
+    </p>
+
+    <div class="mt-8 grid gap-5 sm:grid-cols-2">
+      {
+        adapters.map((adapter) => (
+          <FeatureCard title={adapter.title}>{adapter.body}</FeatureCard>
+        ))
+      }
+    </div>
+
+    <div
+      class="mt-8 rounded-xl border border-line bg-surface-raised p-6"
+    >
+      <p class="text-sm leading-relaxed text-ink-soft">
+        See the full reference example combining
+        <strong class="text-ink">Next.js + Better Auth</strong>:
+        <a
+          class="text-accent no-underline hover:text-accent-strong"
+          href={referenceExample}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          examples/nextjs-better-auth →
+        </a>
+      </p>
+    </div>
+
+    <div class="mt-8 flex flex-wrap items-center gap-3">
+      <span
+        class="inline-flex items-center rounded-full border border-line-strong bg-surface px-3 py-1 text-xs font-semibold uppercase tracking-wider text-ink-muted"
+      >
+        Planned
+      </span>
+      <p class="text-sm text-ink-muted">
+        Express, Hono, tRPC, and FastAPI adapters are planned and not yet
+        available.
+      </p>
+    </div>
+  </Section>
+
+  <Section id="cta">
+    <div class="max-w-2xl">
+      <h2 class="text-2xl font-semibold tracking-tight text-ink">
+        Start with the open source
+      </h2>
+      <p class="mt-3 text-ink-soft">
+        Clone the repo, read the protocol, and run the examples above. Veritio
+        provides evidence support for your audit trails — you stay in control of
+        where it runs.
+      </p>
+      <div class="mt-7 flex flex-wrap gap-3">
+        <a
+          class="inline-flex items-center gap-2 rounded-full bg-evergreen px-5 py-2.5 text-sm font-semibold text-surface no-underline transition-colors hover:bg-accent-strong"
+          href={githubRepo}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          View on GitHub
+        </a>
+        <a
+          class="inline-flex items-center gap-2 rounded-full border border-line-strong px-5 py-2.5 text-sm font-semibold text-ink no-underline transition-colors hover:border-accent hover:text-accent"
+          href="/cloud"
+        >
+          When you want it hosted →
+        </a>
+      </div>
+    </div>
+  </Section>
+
+  <Footer />
+</BaseLayout>
