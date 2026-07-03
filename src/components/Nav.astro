@@ -1,7 +1,12 @@
 ---
+/**
+ * Site masthead, styled as a document header: serif wordmark, mono uppercase
+ * navigation, square-cornered GitHub action. Shared by all pages; active
+ * state is computed at build time — no client JS.
+ */
 const { pathname } = Astro.url
 const links = [
-  { href: '/', label: 'Home' },
+  { href: '/', label: 'Overview' },
   { href: '/cloud', label: 'Cloud' },
   { href: '/examples', label: 'Examples' },
 ]
@@ -9,11 +14,11 @@ const isActive = (href: string) =>
   href === '/' ? pathname === '/' : pathname.startsWith(href)
 ---
 
-<nav class="border-b border-line bg-surface/80 backdrop-blur">
+<nav class="border-b border-line-strong bg-surface">
   <div class="container flex flex-wrap items-center justify-between gap-4 py-4">
-    <a href="/" class="flex items-center gap-2 no-underline" aria-label="Veritio home">
+    <a href="/" class="flex items-center gap-2.5 no-underline" aria-label="Veritio home">
       <span
-        class="grid h-7 w-7 place-items-center rounded-md bg-evergreen text-surface"
+        class="grid h-7 w-7 place-items-center bg-evergreen text-surface"
         aria-hidden="true"
       >
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -23,17 +28,19 @@ const isActive = (href: string) =>
           <path d="M3.5 3.5 8 12.5 12.5 3.5" stroke="currentColor" stroke-width="1.2" />
         </svg>
       </span>
-      <strong class="text-[17px] tracking-tight text-ink">Veritio</strong>
+      <strong class="text-[20px] font-semibold tracking-tight text-ink">Veritio</strong>
     </a>
 
-    <div class="flex items-center gap-5 text-sm">
+    <div class="flex items-center gap-6 font-mono text-[12px] font-medium uppercase tracking-[0.14em]">
       {
         links.map((link) => (
           <a
             href={link.href}
             class:list={[
               'no-underline transition-colors hover:text-accent',
-              isActive(link.href) ? 'text-accent font-semibold' : 'text-ink-muted',
+              isActive(link.href)
+                ? 'border-b border-accent pb-0.5 text-accent'
+                : 'text-ink-muted',
             ]}
             aria-current={isActive(link.href) ? 'page' : undefined}
           >
@@ -45,9 +52,9 @@ const isActive = (href: string) =>
         href="https://github.com/getveritio/veritio"
         target="_blank"
         rel="noopener noreferrer"
-        class="rounded-full border border-line-strong px-3.5 py-1.5 font-medium text-ink no-underline transition-colors hover:border-accent hover:text-accent"
+        class="border border-line-strong px-3.5 py-1.5 text-ink no-underline transition-colors hover:border-ink hover:bg-ink hover:text-surface"
       >
-        GitHub
+        GitHub ↗
       </a>
     </div>
   </div>

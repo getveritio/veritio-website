@@ -1,38 +1,22 @@
 ---
+/**
+ * Landing page, structured as an evidence dossier that argues a case: cover
+ * statement + live Evidence Console, then 01 the situation (why logs fail),
+ * 02 anatomy of a real record (hover cross-highlighting), 03 the verifier
+ * catching tampering, 04 getting started, closing with the Veritio Cloud
+ * pitch (the paid service — sold, not footnoted, but always optional). Mono is
+ * reserved for data/labels, serif for prose; hairline rules instead of cards.
+ * The Remotion island is the page's only client JS and paints over a static
+ * server-rendered fallback.
+ */
 import BaseLayout from '../layouts/BaseLayout.astro'
 import Nav from '../components/Nav.astro'
 import Footer from '../components/Footer.astro'
-import Section from '../components/Section.astro'
-import FeatureCard from '../components/FeatureCard.astro'
 import CodeBlock from '../components/CodeBlock.astro'
-
-const heroBg =
-  "background-image: linear-gradient(180deg, rgb(248 250 247 / 86%), rgb(248 250 247 / 97%)), url('/evidence-grid.svg'); background-size: cover;"
-
-const displayStyle =
-  'font-size: var(--text-display); line-height: var(--text-display--line-height); letter-spacing: var(--text-display--letter-spacing);'
-
-const headlineStyle =
-  'font-size: var(--text-headline); line-height: var(--text-headline--line-height); letter-spacing: var(--text-headline--letter-spacing);'
-
-const primaryBtn =
-  'inline-flex items-center gap-2 rounded-full bg-evergreen px-5 py-2.5 text-sm font-semibold text-surface no-underline transition-colors hover:bg-accent-strong'
-const secondaryBtn =
-  'inline-flex items-center gap-2 rounded-full border border-line-strong px-5 py-2.5 text-sm font-semibold text-ink no-underline transition-colors hover:border-accent hover:text-accent'
-
-const icons = {
-  sdk: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="8 7 3 12 8 17"/><polyline points="16 7 21 12 16 17"/><line x1="13" y1="4" x2="11" y2="20"/></svg>',
-  adapters:
-    '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
-  storage:
-    '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.66 3.58 3 8 3s8-1.34 8-3V5"/><path d="M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3"/></svg>',
-  verify:
-    '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>',
-  workbench:
-    '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><polyline points="8 9 10.5 11 8 13"/><line x1="13" y1="13" x2="16" y2="13"/></svg>',
-  graph:
-    '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><line x1="8" y1="7.5" x2="11" y2="16"/><line x1="16" y1="7.5" x2="13" y2="16"/><line x1="8" y1="6" x2="15.5" y2="6"/></svg>',
-}
+import HeroPlayer from '../components/hero/HeroPlayer.tsx'
+import HeroConsoleFallback from '../components/hero/HeroConsoleFallback.astro'
+import CanvasPlayer from '../components/hero/CanvasPlayer.tsx'
+import CanvasFallback from '../components/hero/CanvasFallback.astro'
 
 const quickstartCode = `import { MemoryAuditStore, createAuditEvent } from "@veritio/core";
 
@@ -53,13 +37,114 @@ const event = createAuditEvent({
 
 await store.append(event);`
 
-const ossPoints = [
-  'TypeScript, Python, and Go SDKs',
-  'Audit event + evidence graph schemas',
-  'Storage adapters and a self-hosted server',
-  'Local Workbench and MCP server',
-  'Verifier and export bundle format',
+/**
+ * Record #4 from the hero episode (the production table drop), shaped exactly
+ * like the SDK's AuditRecord envelope. Hash tails match the hero's
+ * illustrative chain (5db8 → c1a7); riskSignals are the conformance-fixture
+ * inputs behind the 1.0/critical score shown in the recorder.
+ *
+ * The JSON is hand-marked HTML (rendered via set:html) instead of a Shiki
+ * block so semantic regions carry data-r attributes: hovering a region
+ * cross-highlights its margin note and vice versa, via pure-CSS :has() rules
+ * (see the style block at the bottom of this file — no client JS).
+ */
+const kk = (name: string) => `<span class="k">"${name}"</span>`
+const sv = (v: string) => `<span class="s">"${v}"</span>`
+const nv = (v: number) => `<span class="n">${v}</span>`
+
+const recordHtml = `{
+  <span class="rgn" data-r="chain"><sup class="mk">01</sup>${kk('sequence')}: ${nv(4)},
+  ${kk('previousHash')}: ${sv('5db8…')},</span>
+  <span class="rgn" data-r="hash"><sup class="mk">02</sup>${kk('hash')}: ${sv('c1a7…')},
+  ${kk('hashAlgorithm')}: ${sv('sha256')},
+  ${kk('canonicalization')}: ${sv('veritio-json-v1')},</span>
+  ${kk('appendedAt')}: ${sv('2026-06-23T00:03:00.412Z')},
+  <span class="rgn" data-r="event"><sup class="mk">03</sup>${kk('event')}: {
+    ${kk('id')}: ${sv('evt_9f27a1c4')},
+    ${kk('occurredAt')}: ${sv('2026-06-23T00:03:00.000Z')},
+    ${kk('action')}: ${sv('deploy.deployed')},
+    ${kk('actor')}: {
+      ${kk('type')}: ${sv('service')},
+      ${kk('id')}: ${sv('svc_deploy')}
+    },
+    ${kk('target')}: {
+      ${kk('type')}: ${sv('deployment')},
+      ${kk('id')}: ${sv('dep_0623')}
+    },
+    ${kk('scope')}: {
+      ${kk('tenantId')}: ${sv('org_acme')},
+      ${kk('environment')}: ${sv('production')}
+    },
+    ${kk('metadata')}: {
+      ${kk('activityEpisodeId')}: ${sv('ep_7c21f0a3')},
+      <span class="rgn" data-r="signals"><sup class="mk">04</sup>${kk('riskSignals')}: {
+        ${kk('operationType')}: ${sv('destructive')},
+        ${kk('reversibility')}: ${sv('irreversible')},
+        ${kk('envCriticality')}: ${sv('production')},
+        ${kk('dataVolume')}: ${nv(12000)},
+        ${kk('fanOut')}: ${nv(12)},
+        ${kk('referenceCount')}: ${nv(12)}
+      }</span>
+    }
+  }</span>
+}`
+
+/**
+ * Margin notes for the record anatomy, in code order. `r` keys pair each note
+ * with its code region for the CSS cross-highlight.
+ */
+const recordNotes = [
+  {
+    r: 'chain',
+    field: 'sequence · previousHash',
+    body: 'Each record locks to the one before it, per tenant. Delete or reorder history and the chain stops verifying at exactly that point.',
+  },
+  {
+    r: 'hash',
+    field: 'hash · canonicalization',
+    body: 'SHA-256 over canonical bytes (veritio-json-v1). Change one character anywhere in the record and this stops matching.',
+  },
+  {
+    r: 'event',
+    field: 'event',
+    body: 'The protocol body: who (actor.type — user, service, or ai_agent), what (action, target), and where (tenant scope). Same field names in TypeScript, Python, and Go.',
+  },
+  {
+    r: 'signals',
+    field: 'metadata.riskSignals',
+    body: 'The inputs behind the score in the recording above. The policy is open — recompute the score yourself and you get the same number.',
+  },
 ]
+
+/** Real verifier behavior: verifyAuditRecords returns {ok:false, index, reason} on tampering. */
+const verifySnippet = `import { verifyAuditRecords } from "@veritio/core";
+
+verifyAuditRecords(records);
+// → { ok: true }
+
+// Quietly promote someone in an old record:
+records[2].event.metadata.role = "admin";
+
+verifyAuditRecords(records);
+// → { ok: false, index: 2, reason: "hash_mismatch" }
+
+// Try deleting the record instead:
+const gapped = records.filter((_, i) => i !== 2);
+
+verifyAuditRecords(gapped);
+// → { ok: false, index: 2, reason: "sequence_mismatch" }`
+
+/** What ships in the open packages — the 04 · Get started manifest. */
+const manifest = [
+  { label: 'SDKs', value: '@veritio/core (TypeScript) · veritio (Python) · Go' },
+  { label: 'Adapters', value: 'Better Auth, Next.js, TanStack Start, SvelteKit · UI intent helpers for React, Vue, Svelte' },
+  { label: 'Storage', value: 'PostgreSQL/Neon, MySQL, MariaDB, MongoDB · Redis tip cache' },
+  { label: 'Schemas', value: 'Audit events, evidence graph edges, export bundle format' },
+  { label: 'Verifier', value: 'Chain verification in every SDK — re-runnable by auditors' },
+  { label: 'Workbench', value: 'veritio dev --mcp: local evidence graph, scenario runner, MCP tools' },
+]
+
+const cloudMailto = 'mailto:hello@getveritio.com?subject=Veritio%20Cloud'
 
 const cloudPoints = [
   'Managed ingest and durable retention',
@@ -67,6 +152,12 @@ const cloudPoints = [
   'Exports and verification on demand',
   'Team access and operational support',
 ]
+
+const displayStyle =
+  'font-size: var(--text-display); line-height: var(--text-display--line-height); letter-spacing: var(--text-display--letter-spacing);'
+
+const headlineStyle =
+  'font-size: var(--text-headline); line-height: var(--text-headline--line-height); letter-spacing: var(--text-headline--letter-spacing);'
 ---
 
 <BaseLayout
@@ -76,196 +167,297 @@ const cloudPoints = [
   <Nav />
 
   <main>
-    <!-- HERO -->
-    <section class="border-b border-line" style={heroBg}>
-      <div class="container py-20 sm:py-28">
-        <p class="eyebrow">Open-source evidence layer · Optional managed vault</p>
-        <h1 class="mt-5 max-w-[24ch] text-ink" style={displayStyle}>
-          Evidence graph for audit trails, AI changes, and governance workflows.
+    <!-- COVER -->
+    <section>
+      <div class="container">
+        <div class="border-b border-line py-3 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-muted">
+          Open-source evidence layer
+        </div>
+
+        <h1 class="max-w-[17ch] pt-12 font-medium text-ink sm:pt-16" style={displayStyle}>
+          Who did what, how risky it was, and proof it happened.
         </h1>
-        <p class="mt-6 max-w-2xl text-lg leading-relaxed text-ink-soft sm:text-xl">
-          Veritio helps teams record, connect, verify, and export application
-          events, code changes, agent sessions, deployments, consent history,
-          data subject workflows, and retention decisions.
-        </p>
-        <div class="mt-9 flex flex-wrap items-center gap-3">
-          <a
-            href="https://github.com/getveritio/veritio"
-            target="_blank"
-            rel="noopener noreferrer"
-            class={primaryBtn}
-          >
-            <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
-            View on GitHub
-          </a>
-          <a href="/examples" class={secondaryBtn}>
-            See examples
-            <span aria-hidden="true">→</span>
-          </a>
+
+        <div class="grid gap-8 pb-12 pt-8 lg:grid-cols-[1fr_auto] lg:items-end">
+          <p class="max-w-2xl text-lg leading-relaxed text-ink-soft sm:text-xl">
+            Veritio records application events, agent sessions, code changes, and
+            deployments as hash-linked audit events — with origin and a
+            deterministic risk score on every step — that anyone can independently
+            verify and export. Evidence support for reviews and
+            investigations, <em>not</em> automatic compliance.
+          </p>
+          <div class="flex flex-wrap items-center gap-3">
+            <a
+              href="https://github.com/getveritio/veritio"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="doc-btn doc-btn--solid"
+            >
+              View on GitHub ↗
+            </a>
+            <a href="/examples" class="doc-btn">See examples</a>
+          </div>
         </div>
       </div>
     </section>
 
-    <!-- WHAT IT IS -->
-    <Section tone="raised">
-      <p class="eyebrow">What it is</p>
-      <h2 class="mt-4 max-w-3xl text-ink" style={headlineStyle}>
-        A protocol-first evidence layer built on two primitives.
-      </h2>
-      <div class="mt-7 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-        <p class="text-lg leading-relaxed text-ink-soft">
-          Veritio is built on <strong class="font-semibold text-ink">audit events</strong>
-          and <strong class="font-semibold text-ink">evidence graph edges</strong>. Records
-          are made tamper-evident with SHA-256 hash chains: each event is serialized
-          with a canonical JSON encoding (<code class="inline">veritio-json-v1</code>),
-          assigned a per-tenant sequence number, and linked to the previous record
-          through a <code class="inline">previousHash</code> reference.
-        </p>
-        <p class="text-lg leading-relaxed text-ink-soft">
-          A verifier recomputes the hashes across a chain to detect mutation,
-          deletion, or reordering. Because the format is open and deterministic,
-          anyone can independently re-derive and check the chain — no hidden
-          state and no trust in a single black box.
+    <!-- EXHIBIT A: the Evidence Console -->
+    <section>
+      <div class="container pb-16 sm:pb-20">
+        <div
+          class="relative overflow-hidden"
+          style="aspect-ratio: 1120 / 640; background: #0c1a14; border: 1px solid #c6bda1;"
+        >
+          <div class="absolute inset-0">
+            <HeroConsoleFallback />
+          </div>
+          <div class="absolute inset-0">
+            <HeroPlayer client:only="react" />
+          </div>
+        </div>
+
+        <p class="mt-3 font-mono text-[11.5px] leading-relaxed tracking-[0.02em] text-ink-muted">
+          Risk scores computed with <code class="inline">@veritio/core</code> ·
+          policy <code class="inline">veritio.reference.v1</code> · signal sets from
+          the public conformance fixtures. Hash values illustrative.
         </p>
       </div>
-    </Section>
+    </section>
 
-    <!-- CAPABILITY GRID -->
-    <Section tone="surface">
-      <p class="eyebrow">Capabilities</p>
-      <h2 class="mt-4 max-w-2xl text-ink" style={headlineStyle}>
-        One protocol, from your code to your evidence graph.
-      </h2>
-      <div class="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        <FeatureCard title="Multi-language SDKs" icon={icons.sdk}>
-          TypeScript (<code class="inline">@veritio/core</code>), Python
-          (<code class="inline">veritio</code>), and Go SDKs that share one
-          protocol and record format.
-        </FeatureCard>
-        <FeatureCard title="Framework adapters" icon={icons.adapters}>
-          Recording adapters for Better Auth, Next.js, TanStack Start, and
-          SvelteKit, plus UI intent helpers for React, Vue, and Svelte.
-        </FeatureCard>
-        <FeatureCard title="Storage you control" icon={icons.storage}>
-          Durable stores for PostgreSQL/Neon, MySQL, MariaDB, and MongoDB, plus
-          a Redis tip cache for fast chain heads.
-        </FeatureCard>
-        <FeatureCard title="Tamper-evident verification" icon={icons.verify}>
-          Hash-chained records and a verifier that detects mutation, deletion,
-          and reordering across an evidence chain.
-        </FeatureCard>
-        <FeatureCard title="Local Workbench" icon={icons.workbench}>
-          Run <code class="inline">veritio dev --mcp</code> for a visual evidence
-          graph, verifier, scenario runner, and MCP tools for AI agents.
-        </FeatureCard>
-        <FeatureCard title="Evidence graph" icon={icons.graph}>
-          Connect actors, resources, agent sessions, deployments, consent, and
-          data-subject requests with typed relations.
-        </FeatureCard>
-      </div>
-    </Section>
-
-    <!-- QUICKSTART -->
-    <Section tone="raised">
-      <div class="grid gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
+    <!-- § 01 · THE SITUATION -->
+    <section class="border-t border-line-strong bg-surface-raised">
+      <div class="container py-16 sm:py-20">
         <div>
-          <p class="eyebrow">Quickstart</p>
-          <h2 class="mt-4 text-ink" style={headlineStyle}>
-            Start in your own stack.
-          </h2>
-          <p class="mt-5 text-lg leading-relaxed text-ink-soft">
-            Install the SDK, create an audit event, and append it to a store.
-            The in-memory store runs anywhere, so you can record and verify
-            evidence before you wire up durable storage.
-          </p>
-          <a
-            href="/examples"
-            class="mt-6 inline-flex items-center gap-1.5 text-sm font-semibold text-accent no-underline transition-colors hover:text-accent-strong"
-          >
-            View more examples
-            <span aria-hidden="true">→</span>
-          </a>
+          <div>
+            <h2 class="max-w-[20ch] font-medium text-ink" style={headlineStyle}>
+              Software ships itself now.
+            </h2>
+            <p class="mt-8 max-w-[52ch] text-[22px] leading-[1.5] text-ink">
+              An agent writes the migration. A pipeline approves it. A service
+              deploys it to production at three in the morning. The work is real
+              — and so are the questions that follow it: <em>who did this, under
+              whose review, and how dangerous was it?</em>
+            </p>
+            <p class="mt-6 max-w-[58ch] text-[17px] leading-relaxed text-ink-soft">
+              Application logs weren't built to answer. They rotate, they get
+              rewritten, and they belong to whoever holds the database. Veritio
+              turns each action into a record instead: an origin — user, service,
+              or AI agent — a deterministic risk score, and a hash that locks it
+              into sequence. Evidence, not logs.
+            </p>
+          </div>
         </div>
-        <CodeBlock code={quickstartCode} lang="ts" title="audit-event.ts" />
       </div>
-    </Section>
+    </section>
 
-    <!-- OSS vs CLOUD -->
-    <Section tone="sunken">
-      <p class="eyebrow">Open source and Cloud</p>
-      <h2 class="mt-4 max-w-2xl text-ink" style={headlineStyle}>
-        Run it yourself. Hand off operations when you want to.
-      </h2>
-      <div class="mt-10 grid gap-6 lg:grid-cols-2">
-        <div class="rounded-2xl border border-line-strong bg-surface-raised p-8">
-          <h3 class="text-lg font-semibold text-ink">Open source</h3>
-          <p class="mt-3 leading-relaxed text-ink-soft">
-            The SDK, schemas, storage adapters, self-hosted server, local
-            Workbench, MCP server, verifier, and export bundle format are fully
-            useful on their own. They run without any hosted account, and you
-            keep your data in storage you control.
-          </p>
-          <ul class="mt-5 space-y-2.5">
-            {
-              ossPoints.map((point) => (
-                <li class="flex items-start gap-2.5 text-sm text-ink-soft">
-                  <svg class="mt-0.5 shrink-0 text-accent" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-                  <span>{point}</span>
-                </li>
-              ))
-            }
-          </ul>
+    <!-- § 02 · THE RECORD -->
+    <section class="border-t border-line-strong">
+      <div class="container py-16 sm:py-20">
+        <div>
+          <div>
+            <h2 class="max-w-[22ch] font-medium text-ink" style={headlineStyle}>
+              Anatomy of a record.
+            </h2>
+            <p class="mt-5 max-w-[58ch] text-[17px] leading-relaxed text-ink-soft">
+              This is the fourth record from the recording above — the production
+              table drop — exactly as an SDK stores it. Hashes truncated for
+              print.
+            </p>
+            <div class="anatomy mt-8 grid gap-10 lg:grid-cols-[1.15fr_0.85fr] lg:items-start">
+              <div class="code-frame">
+                <div class="flex items-center justify-between border-b border-code-border bg-surface-sunken px-4 py-2">
+                  <span class="font-mono text-xs text-ink-muted">record #4 · deploy.deployed</span>
+                  <span class="font-mono text-[11px] uppercase tracking-wider text-ink-muted">json</span>
+                </div>
+                <pre class="anatomy-pre" set:html={recordHtml} />
+              </div>
+              <div>
+                <ol class="m-0 list-none space-y-1 p-0">
+                  {
+                    recordNotes.map((note, i) => (
+                      <li class="note flex gap-4 border-b border-line py-4" data-r={note.r}>
+                        <span class="font-mono text-[13px] font-medium text-accent">{String(i + 1).padStart(2, '0')}</span>
+                        <div>
+                          <h3 class="m-0 font-mono text-[13px] font-medium tracking-[0.02em] text-ink">
+                            {note.field}
+                          </h3>
+                          <p class="mb-0 mt-1.5 text-[15px] leading-relaxed text-ink-muted">{note.body}</p>
+                        </div>
+                      </li>
+                    ))
+                  }
+                </ol>
+                <p class="mt-4 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">
+                  Hover a note — or the record — to cross-highlight
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
+      </div>
+    </section>
 
-        <div class="rounded-2xl border border-line-strong bg-surface-raised p-8">
-          <h3 class="text-lg font-semibold text-ink">Veritio Cloud</h3>
-          <p class="mt-3 leading-relaxed text-ink-soft">
-            Veritio Cloud is an <strong class="font-semibold text-ink">optional</strong>
-            managed service that adds operational features on top of the same
-            protocol. It is never required to use the SDK — adopt it only when
-            you would rather not run ingest and storage yourself.
-          </p>
-          <ul class="mt-5 space-y-2.5">
+    <!-- § 03 · THE PROOF -->
+    <section class="border-t border-line-strong bg-surface-raised">
+      <div class="container py-16 sm:py-20">
+        <div>
+          <div>
+            <h2 class="max-w-[22ch] font-medium text-ink" style={headlineStyle}>
+              Edit one byte. The chain notices.
+            </h2>
+            <div class="mt-8 grid gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-start">
+              <div class="space-y-5 text-[17px] leading-relaxed text-ink-soft">
+                <p>
+                  An audit trail is only as good as its answer to one
+                  question: <em>how do I know nobody touched it?</em>
+                </p>
+                <p>
+                  Veritio's answer is arithmetic, not access control. The verifier
+                  re-derives every hash from the canonical bytes and walks the
+                  chain, so mutation, deletion, and reordering all surface — with
+                  the exact position where history diverged.
+                </p>
+                <p>
+                  And because the verifier ships in the open packages, an auditor
+                  doesn't have to trust your database, your admins, or us.
+                </p>
+              </div>
+              <CodeBlock code={verifySnippet} lang="ts" title="verify.ts" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- § 04 · GET STARTED -->
+    <section class="border-t border-line-strong">
+      <div class="container py-16 sm:py-20">
+        <div>
+          <div>
+            <h2 class="max-w-[22ch] font-medium text-ink" style={headlineStyle}>
+              Start in your own stack.
+            </h2>
+            <p class="mt-5 max-w-[58ch] text-[17px] leading-relaxed text-ink-soft">
+              Install the SDK, create an audit event, append it to a store. The
+              in-memory store runs anywhere, so you can record and verify
+              evidence before you wire up durable storage.
+            </p>
+            <div class="mt-8 grid gap-10 lg:grid-cols-[1.15fr_0.85fr] lg:items-start">
+              <CodeBlock code={quickstartCode} lang="ts" title="audit-event.ts" />
+              <div>
+                <h3 class="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-ink-muted">
+                  In the box
+                </h3>
+                <dl class="mt-3 border-t border-line-strong">
+                  {
+                    manifest.map((row) => (
+                      <div class="grid grid-cols-[110px_1fr] gap-4 border-b border-line py-3.5">
+                        <dt class="font-mono text-[12px] font-medium uppercase tracking-[0.08em] text-accent">
+                          {row.label}
+                        </dt>
+                        <dd class="m-0 text-[14.5px] leading-relaxed text-ink-soft">{row.value}</dd>
+                      </div>
+                    ))
+                  }
+                </dl>
+                <div class="mt-7 flex flex-wrap gap-3">
+                  <a
+                    href="https://github.com/getveritio/veritio"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="doc-btn doc-btn--solid"
+                  >
+                    View on GitHub ↗
+                  </a>
+                  <a href="/examples" class="doc-btn">See examples</a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- VERITIO CLOUD -->
+    <section class="border-t border-line-strong bg-evergreen">
+      <div class="container py-18 sm:py-24">
+        <div class="grid gap-12 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+          <div>
+            <svg width="88" height="88" viewBox="0 0 112 112" aria-hidden="true" class="-rotate-6">
+              <defs>
+                <path id="sealArc" d="M 56 14 A 42 42 0 1 1 55.99 14" fill="none"></path>
+              </defs>
+              <circle cx="56" cy="56" r="52" fill="none" stroke="#f6f3ea" stroke-width="1.5"></circle>
+              <circle cx="56" cy="56" r="42" fill="none" stroke="#f6f3ea" stroke-width="0.75"></circle>
+              <text
+                font-family='"IBM Plex Mono", monospace'
+                font-size="9.5"
+                letter-spacing="1.4"
+                fill="#f6f3ea"
+              >
+                <textPath href="#sealArc">RECORD · VERIFY · EXPORT · VERITIO ·</textPath>
+              </text>
+              <path d="M46 56 L53 63 L67 47" fill="none" stroke="#f6f3ea" stroke-width="2.5" stroke-linecap="square"></path>
+            </svg>
+            <h2 class="mt-7 max-w-[18ch] font-medium text-surface" style={headlineStyle}>
+              Or let us run it.
+            </h2>
+            <p class="mt-5 max-w-[54ch] text-[17px] leading-relaxed text-surface/85">
+              Veritio Cloud is the managed way to run the same open protocol: we
+              operate ingest, storage, retention, and exports — you keep evidence
+              that anyone can verify without trusting us. The open-source path
+              always works on its own; Cloud is for teams that would rather buy
+              the operations than staff them.
+            </p>
+            <div class="mt-8 flex flex-wrap items-center gap-4">
+              <a
+                href={cloudMailto}
+                class="doc-btn"
+                style="border-color: var(--color-surface); color: var(--color-surface);"
+              >
+                Talk to us
+              </a>
+              <a
+                href="/cloud"
+                class="font-mono text-[13px] font-medium uppercase tracking-[0.08em] text-surface/85 no-underline hover:text-surface"
+              >
+                Explore Veritio Cloud →
+              </a>
+            </div>
+          </div>
+          <ul class="space-y-4 border-t border-surface/20 pt-6 lg:border-l lg:border-t-0 lg:pl-10 lg:pt-0">
             {
               cloudPoints.map((point) => (
-                <li class="flex items-start gap-2.5 text-sm text-ink-soft">
-                  <svg class="mt-0.5 shrink-0 text-accent" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                <li class="flex items-baseline gap-3 border-b border-surface/15 pb-4 text-[16px] text-surface/90">
+                  <span class="font-mono text-[12px] text-surface/60">·</span>
                   <span>{point}</span>
                 </li>
               ))
             }
           </ul>
-          <a
-            href="/cloud"
-            class="mt-6 inline-flex items-center gap-1.5 text-sm font-semibold text-accent no-underline transition-colors hover:text-accent-strong"
-          >
-            Explore Veritio Cloud
-            <span aria-hidden="true">→</span>
-          </a>
         </div>
-      </div>
-    </Section>
 
-    <!-- FINAL CTA -->
-    <section class="border-t border-line bg-evergreen">
-      <div class="container py-20 text-center sm:py-24">
-        <h2 class="mx-auto max-w-2xl text-surface" style={headlineStyle}>
-          Build your evidence graph in the open.
-        </h2>
-        <p class="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-surface/80">
-          Read the protocol, explore the SDKs, and run the Workbench locally.
-          Everything you need to record and verify evidence is open source.
-        </p>
-        <div class="mt-8 flex justify-center">
-          <a
-            href="https://github.com/getveritio/veritio"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="inline-flex items-center gap-2 rounded-full bg-surface px-6 py-3 text-sm font-semibold text-evergreen no-underline transition-colors hover:bg-surface-sunken"
+        <!--
+          The same episode, tracked visually: Cloud's activity canvas. The
+          static fallback sits under the client:only island in one reserved
+          box — identical degradation contract to the hero console.
+        -->
+        <div class="mt-14">
+          <div
+            class="relative overflow-hidden"
+            style="aspect-ratio: 1120 / 520; background: #0c1a14; border: 1px solid rgba(246, 243, 234, 0.22);"
           >
-            <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
-            View on GitHub
-          </a>
+            <div class="absolute inset-0">
+              <CanvasFallback />
+            </div>
+            <div class="absolute inset-0">
+              <CanvasPlayer client:only="react" />
+            </div>
+          </div>
+          <p class="mt-3 font-mono text-[11.5px] leading-relaxed tracking-[0.02em] text-surface/60">
+            The recording from above on Veritio Cloud's activity canvas — the
+            same records and scores, tracked visually instead of as a list.
+          </p>
         </div>
       </div>
     </section>
@@ -273,3 +465,98 @@ const cloudPoints = [
 
   <Footer />
 </BaseLayout>
+
+<!--
+  Record-anatomy cross-highlight. Pure CSS via :has() — hovering a code
+  region highlights its margin note and vice versa; no client JS, keeping the
+  Remotion island the page's only script. `is:global` because the JSON's
+  region spans are injected with set:html and never receive Astro's scoping
+  attribute.
+-->
+<style is:global>
+  .anatomy-pre {
+    margin: 0;
+    padding: 18px 20px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.7;
+    overflow-x: auto;
+    color: var(--color-ink-muted);
+  }
+
+  .anatomy-pre .k {
+    color: var(--color-ink);
+  }
+
+  .anatomy-pre .s {
+    color: var(--color-accent-strong);
+  }
+
+  .anatomy-pre .n {
+    color: var(--color-seal);
+  }
+
+  .anatomy-pre .rgn {
+    position: relative;
+    border-radius: 2px;
+    transition: background-color 0.12s ease;
+  }
+
+  /* Region marker floats in the gutter so keys stay column-aligned. */
+  .anatomy-pre .mk {
+    position: absolute;
+    left: -17px;
+    top: 3px;
+    font-size: 9px;
+    line-height: 1;
+    color: var(--color-seal);
+    user-select: none;
+  }
+
+  .anatomy .note {
+    border-left: 2px solid transparent;
+    padding-left: 14px;
+    margin-left: -16px;
+    transition:
+      background-color 0.12s ease,
+      border-color 0.12s ease;
+  }
+
+  /* Pairing rules: one pair per region key. */
+  .anatomy:has(.rgn[data-r='chain']:hover) .rgn[data-r='chain'],
+  .anatomy:has(.note[data-r='chain']:hover) .rgn[data-r='chain'],
+  .anatomy:has(.rgn[data-r='hash']:hover) .rgn[data-r='hash'],
+  .anatomy:has(.note[data-r='hash']:hover) .rgn[data-r='hash'],
+  .anatomy:has(.rgn[data-r='event']:hover) .rgn[data-r='event'],
+  .anatomy:has(.note[data-r='event']:hover) .rgn[data-r='event'],
+  .anatomy:has(.rgn[data-r='signals']:hover) .rgn[data-r='signals'],
+  .anatomy:has(.note[data-r='signals']:hover) .rgn[data-r='signals'] {
+    background-color: rgba(47, 111, 87, 0.13);
+  }
+
+  .anatomy:has(.rgn[data-r='chain']:hover) .note[data-r='chain'],
+  .anatomy:has(.note[data-r='chain']:hover) .note[data-r='chain'],
+  .anatomy:has(.rgn[data-r='hash']:hover) .note[data-r='hash'],
+  .anatomy:has(.note[data-r='hash']:hover) .note[data-r='hash'],
+  .anatomy:has(.rgn[data-r='event']:hover) .note[data-r='event'],
+  .anatomy:has(.note[data-r='event']:hover) .note[data-r='event'],
+  .anatomy:has(.rgn[data-r='signals']:hover) .note[data-r='signals'],
+  .anatomy:has(.note[data-r='signals']:hover) .note[data-r='signals'] {
+    background-color: var(--color-surface-sunken);
+    border-left-color: var(--color-accent);
+  }
+
+  /* riskSignals nests inside event: when it is the hovered target, mute the
+     enclosing event highlight so exactly one pair lights up. Order matters —
+     these override the equal-specificity rules above. */
+  .anatomy:has(.rgn[data-r='signals']:hover) .rgn[data-r='event'],
+  .anatomy:has(.note[data-r='signals']:hover) .rgn[data-r='event'] {
+    background-color: transparent;
+  }
+
+  .anatomy:has(.rgn[data-r='signals']:hover) .note[data-r='event'],
+  .anatomy:has(.note[data-r='signals']:hover) .note[data-r='event'] {
+    background-color: transparent;
+    border-left-color: transparent;
+  }
+</style>

@@ -1,20 +1,28 @@
+@import "@fontsource-variable/newsreader/opsz.css";
+@import "@fontsource-variable/newsreader/opsz-italic.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+@import "@fontsource/ibm-plex-mono/600.css";
 @import "tailwindcss";
 
 /*
- * Veritio design tokens — evolves the existing green "evidence" aesthetic into
- * a production-grade system. Build-time only; no client JS.
+ * Veritio design tokens — "evidence dossier" system: warm paper surfaces,
+ * evergreen ink, a documentary serif (Newsreader) for prose and display, and
+ * IBM Plex Mono for anything that is data, metadata, or a label. Hairline
+ * rules over boxes; color only where it carries meaning. Build-time only; no
+ * client JS.
  */
 @theme {
-  /* Surfaces */
-  --color-surface: #f8faf7;
-  --color-surface-raised: #ffffff;
-  --color-surface-sunken: #eef3ec;
+  /* Surfaces — warm paper, not cool white */
+  --color-surface: #f6f3ea;
+  --color-surface-raised: #fbf9f2;
+  --color-surface-sunken: #eeeadc;
   --color-surface-invert: #10231b;
 
   /* Ink / text */
-  --color-ink: #17211c;
-  --color-ink-soft: #38443d;
-  --color-ink-muted: #54635a;
+  --color-ink: #1a231e;
+  --color-ink-soft: #414c44;
+  --color-ink-muted: #5d685f;
 
   /* Evidence green accents */
   --color-evergreen: #1f3b30;
@@ -22,24 +30,29 @@
   --color-accent-strong: #235943;
   --color-accent-soft: #4b6658;
 
-  /* Lines + code surfaces */
-  --color-line: #dfe7df;
-  --color-line-strong: #cdd9cc;
-  --color-code-bg: #e9efe8;
-  --color-code-border: #d8e2d8;
+  /* Seal red — reserved for critical/stamp moments */
+  --color-seal: #b23c2e;
 
-  /* Typography */
-  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-    "Segoe UI", sans-serif;
-  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Fira Code", Menlo,
-    Consolas, monospace;
+  /* Lines + code surfaces — warm ruled-paper hairlines */
+  --color-line: #ddd6c2;
+  --color-line-strong: #c6bda1;
+  --color-code-bg: #f0ecdf;
+  --color-code-border: #ddd6c2;
 
-  /* Display type scale */
-  --text-display: clamp(42px, 7vw, 88px);
-  --text-display--line-height: 0.99;
-  --text-display--letter-spacing: -0.01em;
-  --text-headline: clamp(28px, 3.6vw, 44px);
-  --text-headline--line-height: 1.08;
+  /* Typography — document serif + data mono. No Inter. */
+  --font-sans: "Newsreader Variable", "Newsreader", Georgia, "Times New Roman",
+    serif;
+  --font-serif: "Newsreader Variable", "Newsreader", Georgia, "Times New Roman",
+    serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas,
+    monospace;
+
+  /* Display type scale — serif carries larger sizes at tighter leading */
+  --text-display: clamp(44px, 6.5vw, 92px);
+  --text-display--line-height: 0.98;
+  --text-display--letter-spacing: -0.015em;
+  --text-headline: clamp(30px, 3.8vw, 50px);
+  --text-headline--line-height: 1.05;
   --text-headline--letter-spacing: -0.01em;
 
   /* Layout */
@@ -48,7 +61,8 @@
 
 :root {
   color-scheme: light;
-  font-family: var(--font-sans);
+  font-family: var(--font-serif);
+  font-optical-sizing: auto;
   color: var(--color-ink);
   background: var(--color-surface);
   -webkit-font-smoothing: antialiased;
@@ -75,19 +89,56 @@ a {
   padding-inline: var(--spacing-gutter);
 }
 
+/* Mono metadata label — the dossier's section/figure captions. */
 .eyebrow {
   display: inline-block;
+  font-family: var(--font-mono);
+  font-weight: 500;
   color: var(--color-accent);
-  font-weight: 700;
   text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: 0.18em;
+}
+
+/* Square-cornered mono action link — replaces pill buttons. */
+.doc-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-mono);
   font-size: 13px;
-  letter-spacing: 0.09em;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
+  padding: 12px 20px;
+  border: 1px solid var(--color-ink);
+  color: var(--color-ink);
+  background: transparent;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.doc-btn:hover {
+  background: var(--color-ink);
+  color: var(--color-surface);
+}
+
+.doc-btn--solid {
+  background: var(--color-evergreen);
+  border-color: var(--color-evergreen);
+  color: var(--color-surface);
+}
+
+.doc-btn--solid:hover {
+  background: var(--color-accent-strong);
+  border-color: var(--color-accent-strong);
+  color: var(--color-surface);
 }
 
 /* Frame for Astro <Code> blocks (Shiki, build-time). */
 .code-frame {
   border: 1px solid var(--color-code-border);
-  border-radius: 12px;
+  border-radius: 2px;
   overflow: hidden;
   background: var(--color-code-bg);
 }
@@ -99,21 +150,21 @@ a {
   line-height: 1.6;
   overflow-x: auto;
   border-radius: 0;
+  background: transparent !important;
 }
 
 /* Inline code in prose */
 .prose-inline code,
 code.inline {
   font-family: var(--font-mono);
-  font-size: 0.9em;
+  font-size: 0.82em;
   background: var(--color-code-bg);
   border: 1px solid var(--color-code-border);
-  border-radius: 5px;
+  border-radius: 2px;
   padding: 2px 6px;
 }
 
 :focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
-  border-radius: 4px;
 }

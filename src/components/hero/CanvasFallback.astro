@@ -1,0 +1,118 @@
+---
+/**
+ * Static, build-time snapshot of the activity episode canvas at its end
+ * state: all four event cards, all edges, the rollup badge. Sits under the
+ * `client:only` CanvasPlayer island in the same slot so no-JS visitors and
+ * stalled playback always see a complete, truthful canvas (the composition's
+ * background rides its fade envelope, so a stuck frame is transparent over
+ * this). Consumes the same `data/episode.ts` layout as the animation.
+ */
+import { EPISODE_ID, canvasCards, finalRollup } from './data/episode'
+import { consoleTheme as T, levelColor } from './theme'
+
+const W = 1120
+const H = 520
+const CARD_W = 228
+const CARD_H = 84
+
+const centerOf = (i: number) => ({ x: canvasCards[i]!.x * W, y: canvasCards[i]!.y * H })
+
+const edges = canvasCards.slice(1).map((card, i) => {
+  const a = centerOf(i)
+  const b = centerOf(i + 1)
+  const start = { x: a.x + CARD_W / 2 + 6, y: a.y }
+  const end = { x: b.x - CARD_W / 2 - 6, y: b.y }
+  const midX = (start.x + end.x) / 2
+  return {
+    key: card.step.sequence,
+    d: `M ${start.x} ${start.y} C ${midX} ${start.y}, ${midX} ${end.y}, ${end.x} ${end.y}`,
+    end,
+  }
+})
+
+const badgeColor = levelColor[finalRollup.level]
+---
+
+<svg
+  viewBox={`0 0 ${W} ${H}`}
+  width="100%"
+  height="100%"
+  preserveAspectRatio="xMidYMid meet"
+  role="img"
+  aria-label="Veritio Cloud activity episode canvas: four connected event cards rolling up to a critical-risk episode badge"
+>
+<foreignObject x="0" y="0" width={W} height={H}>
+<div
+  style={`position:relative;width:${W}px;height:${H}px;overflow:hidden;font-family:${T.mono};background:radial-gradient(rgba(231,239,233,0.07) 1px, transparent 1px) 0 0 / 26px 26px, ${T.bg};`}
+>
+  <div
+    style="position:absolute;bottom:-26px;left:30px;font-size:130px;font-weight:600;letter-spacing:6px;color:rgba(231,239,233,0.045);white-space:nowrap;"
+  >
+    23 JUN
+  </div>
+
+  <svg width={W} height={H} style="position:absolute;inset:0;" aria-hidden="true">
+    {edges.map((edge) => (
+      <>
+        <path d={edge.d} fill="none" stroke={T.accentBright} stroke-width="1.4" opacity="0.55" />
+        <circle cx={edge.end.x} cy={edge.end.y} r="2.6" fill={T.accentBright} />
+      </>
+    ))}
+  </svg>
+
+  {
+    canvasCards.map((card, i) => {
+      const { x, y } = centerOf(i)
+      const color = levelColor[card.step.assessment.level]
+      return (
+        <div
+          style={`position:absolute;left:${x - CARD_W / 2}px;top:${y - CARD_H / 2}px;width:${CARD_W}px;height:${CARD_H}px;box-sizing:border-box;padding:10px 14px;background:#101e17;border:1px solid ${T.lineStrong};border-radius:6px;box-shadow:0 12px 32px rgba(2,8,5,0.45);`}
+        >
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <span style={`display:inline-flex;align-items:center;gap:6px;font-size:9.5px;letter-spacing:1.8px;color:${T.textFaint};`}>
+              <span style={`width:6px;height:6px;border-radius:99px;background:${color};display:inline-block;`} />
+              {card.kind}
+            </span>
+            <span style={`font-size:10.5px;color:${color};`}>{card.step.assessment.score.toFixed(3)}</span>
+          </div>
+          <div style={`margin-top:8px;font-size:12.5px;color:${T.text};letter-spacing:0.2px;`}>{card.step.action}</div>
+          <div style={`margin-top:5px;font-size:10.5px;color:${T.textSoft};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;`}>
+            {card.step.detail}
+          </div>
+        </div>
+      )
+    })
+  }
+
+  <div
+    style={`position:absolute;top:22px;right:24px;display:flex;align-items:center;gap:18px;padding:12px 18px;background:#101e17;border:1px solid ${badgeColor}55;border-radius:6px;box-shadow:0 12px 32px rgba(2,8,5,0.45);`}
+  >
+    <span style="display:inline-flex;align-items:center;gap:8px;">
+      <span style={`width:8px;height:8px;border-radius:99px;background:${badgeColor};display:inline-block;`} />
+      <span style="display:flex;flex-direction:column;gap:2px;">
+        <span style={`font-size:13px;color:${T.text};letter-spacing:0.4px;`}>Critical risk</span>
+        <span style={`font-size:9px;letter-spacing:1.6px;color:${T.textFaint};`}>EPISODE ROLLUP</span>
+      </span>
+    </span>
+    {
+      [
+        [finalRollup.peak.toFixed(2), 'PEAK'],
+        [finalRollup.velocityScore.toFixed(2), 'VELOCITY'],
+        [`${finalRollup.stepCount}`, 'STEPS'],
+      ].map(([value, label]) => (
+        <span style="display:flex;flex-direction:column;gap:2px;text-align:right;">
+          <span style={`font-size:13px;color:${T.text};`}>{value}</span>
+          <span style={`font-size:9px;letter-spacing:1.6px;color:${T.textFaint};`}>{label}</span>
+        </span>
+      ))
+    }
+  </div>
+
+  <div
+    style={`position:absolute;left:24px;bottom:20px;padding:7px 12px;border:1px solid ${T.line};border-radius:4px;font-size:10.5px;letter-spacing:0.8px;color:${T.textSoft};background:rgba(12,26,20,0.7);`}
+  >
+    {canvasCards.length} events · 1 episode · {EPISODE_ID}
+  </div>
+</div>
+</foreignObject>
+</svg>
