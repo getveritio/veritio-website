@@ -1,0 +1,158 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro'
+import Nav from '../../components/Nav.astro'
+import Footer from '../../components/Footer.astro'
+import Section from '../../components/Section.astro'
+import CodeBlock from '../../components/CodeBlock.astro'
+import FeatureCard from '../../components/FeatureCard.astro'
+
+const claudeInstall = `/plugin marketplace add getveritio/veritio
+/plugin install veritio@veritio`
+
+const claudeLogin = `veritio login claude`
+
+const codexLogin = `veritio login codex`
+
+const githubRepo = 'https://github.com/getveritio/veritio'
+const pluginReadme =
+  'https://github.com/getveritio/veritio/tree/main/plugins/veritio'
+
+const recorded = [
+  {
+    title: 'Session start & end',
+    body: 'A tamper-evident record of when each agent session opened and closed.',
+  },
+  {
+    title: 'Prompts',
+    body: 'The prompt is recorded as a content hash — never the raw text.',
+  },
+  {
+    title: 'Tool calls & file changes',
+    body: 'Edits, writes, and Bash-driven changes captured as before/after hashes.',
+  },
+  {
+    title: 'Query it back',
+    body: 'Ask your own audit trail questions over MCP — list and export sessions.',
+  },
+]
+---
+
+<BaseLayout
+  title="Connect Claude Code & Codex — Veritio"
+  description="Give your Claude Code and Codex sessions a tamper-evident audit trail, recorded to Veritio Cloud, with a hosted MCP to query it back. One browser login, no pasted keys."
+>
+  <Nav />
+
+  <section class="py-16 sm:py-20">
+    <div class="container">
+      <span class="eyebrow">Connect your agents</span>
+      <h1
+        class="mt-4 max-w-3xl font-semibold tracking-tight text-ink"
+        style="font-size: var(--text-headline); line-height: var(--text-headline--line-height);"
+      >
+        Claude Code & Codex in two minutes
+      </h1>
+      <p class="mt-5 max-w-2xl text-lg leading-relaxed text-ink-soft">
+        Record what your coding agents actually did — session by session, as a
+        hash-chained evidence trail — and query it back over MCP. One browser
+        login mints the credentials; you never paste a key.
+      </p>
+      <p class="mt-4 max-w-2xl text-sm leading-relaxed text-ink-muted">
+        This is the hosted-connected path. The open-source SDK and the local
+        Workbench run fully offline without an account — see{' '}
+        <a class="text-accent no-underline hover:text-accent-strong" href="/examples">Examples</a>.
+      </p>
+    </div>
+  </section>
+
+  <Section id="claude-code">
+    <h2 class="text-2xl font-semibold tracking-tight text-ink">Claude Code</h2>
+    <p class="mt-3 max-w-2xl text-ink-soft">
+      Install the Veritio plugin from the marketplace. It bundles the capture
+      hooks and registers the hosted MCP server.
+    </p>
+    <div class="mt-8 max-w-2xl">
+      <CodeBlock code={claudeInstall} lang="bash" title="Claude Code" />
+    </div>
+    <p class="mt-5 max-w-2xl text-sm leading-relaxed text-ink-soft">
+      The plugin ships <strong class="text-ink">disabled by default</strong>{' '}
+      because it connects to a hosted service. Enable it with
+      <code class="inline">/plugin</code>, then connect once to record evidence:
+    </p>
+    <div class="mt-6 max-w-2xl">
+      <CodeBlock code={claudeLogin} lang="bash" title="terminal" />
+    </div>
+    <p class="mt-5 max-w-2xl text-sm leading-relaxed text-ink-soft">
+      <code class="inline">veritio login</code> opens your browser, you approve
+      in the console, and it mints a scoped, revocable key and writes the
+      capture credentials — no key is ever pasted. For the read side, the hosted
+      MCP uses Claude Code's built-in OAuth: approve it once in
+      <code class="inline">/mcp</code> and Claude can query your evidence.
+    </p>
+  </Section>
+
+  <Section id="codex" tone="sunken">
+    <h2 class="text-2xl font-semibold tracking-tight text-ink">Codex CLI</h2>
+    <p class="mt-3 max-w-2xl text-ink-soft">
+      Codex has no plugin system, so one command wires capture into its config —
+      preserving any notifier you already have, never replacing it.
+    </p>
+    <div class="mt-8 max-w-2xl">
+      <CodeBlock code={codexLogin} lang="bash" title="terminal" />
+    </div>
+    <p class="mt-5 max-w-2xl text-sm leading-relaxed text-ink-soft">
+      Same browser device-login: approve in the console, and it writes the
+      capture credentials plus the Codex notify wrapper. Your existing
+      <code class="inline">notify</code> command keeps running.
+    </p>
+  </Section>
+
+  <Section id="recorded">
+    <h2 class="text-2xl font-semibold tracking-tight text-ink">
+      What gets recorded
+    </h2>
+    <p class="mt-3 max-w-2xl text-ink-soft">
+      Capture is <strong class="text-ink">hash-only</strong>: raw prompts, tool
+      inputs, and file contents are never stored — only stable ids and content
+      hashes, hash-chained so tampering is detectable.
+    </p>
+    <div class="mt-8 grid gap-5 sm:grid-cols-2">
+      {
+        recorded.map((item) => (
+          <FeatureCard title={item.title}>{item.body}</FeatureCard>
+        ))
+      }
+    </div>
+    <p class="mt-8 max-w-2xl text-sm leading-relaxed text-ink-muted">
+      Veritio produces compliance <em>evidence</em>; it does not make you
+      compliant and is not legal advice.
+    </p>
+  </Section>
+
+  <Section id="cta" tone="sunken">
+    <div class="max-w-2xl">
+      <h2 class="text-2xl font-semibold tracking-tight text-ink">
+        Read the details
+      </h2>
+      <p class="mt-3 text-ink-soft">
+        The plugin README covers the full event mapping, the env contract, and
+        requirements. Everything is open source.
+      </p>
+      <div class="mt-7 flex flex-wrap gap-3">
+        <a
+          class="doc-btn doc-btn--solid"
+          href={pluginReadme}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Plugin README →
+        </a>
+        <a class="doc-btn" href="/cloud">
+          About Veritio Cloud →
+        </a>
+      </div>
+    </div>
+  </Section>
+
+  <Footer />
+</BaseLayout>
