@@ -1,0 +1,393 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro'
+import Nav from '../../components/Nav.astro'
+import Footer from '../../components/Footer.astro'
+
+const lastUpdated = '16 July 2026'
+
+const subprocessors = [
+  {
+    name: 'Cloudflare, Inc.',
+    role: 'Application compute, object storage for evidence records, and transactional email delivery',
+    location: 'Region pinned to the customer’s chosen storage region',
+  },
+  {
+    name: 'Neon, Inc. (on Amazon Web Services)',
+    role: 'Managed Postgres databases holding tenant metadata and evidence sequence state',
+    location: 'Region pinned to the customer’s chosen storage region',
+  },
+  {
+    name: 'Polar Software, Inc.',
+    role: 'Payment and subscription processing (planned — activated when billing goes live)',
+    location: 'Provider-operated infrastructure',
+  },
+]
+---
+<!-- DRAFT: review with counsel before launch announcement -->
+
+<BaseLayout
+  title="Data Processing Agreement — Veritio"
+  description="The Article 28 GDPR terms under which Veritio Cloud processes tenant evidence data on behalf of its customers, with security measures, subprocessors, and transfer safeguards."
+>
+  <Nav />
+
+  <section class="py-16 sm:py-20">
+    <div class="container">
+      <span class="eyebrow">Legal</span>
+      <h1
+        class="mt-4 max-w-3xl font-semibold tracking-tight text-ink"
+        style="font-size: var(--text-headline); line-height: var(--text-headline--line-height);"
+      >
+        Data Processing Agreement
+      </h1>
+      <p class="mt-5 max-w-2xl text-lg leading-relaxed text-ink-soft">
+        This agreement sets out how Veritio processes personal data contained in
+        the evidence records you send to your tenant. For that data you are the
+        controller and Veritio is your processor, as required by Article 28 of
+        the GDPR.
+      </p>
+      <p class="mt-4 font-mono text-[12px] uppercase tracking-[0.14em] text-ink-muted">
+        Draft · Last updated {lastUpdated}
+      </p>
+    </div>
+  </section>
+
+  <section class="border-t border-line py-14 sm:py-16">
+    <div class="container">
+      <div class="legal-doc">
+        <p class="lede">
+          This Data Processing Agreement (&ldquo;DPA&rdquo;) forms part of the
+          <a href="/legal/terms">Terms of Service</a> between the customer
+          (&ldquo;Controller&rdquo;) and the Veritio entity operating Veritio
+          Cloud (&ldquo;Processor&rdquo;). Where it conflicts with the Terms on
+          the processing of personal data, this DPA prevails.
+        </p>
+
+        <div class="legal-todo">
+          <span class="legal-todo__label">Owner action required</span>
+          <p>
+            Insert the Processor&rsquo;s registered legal entity name and
+            address, and confirm the signature or acceptance mechanism (for
+            example, acceptance on account creation, or a countersigned copy for
+            Enterprise customers).
+          </p>
+        </div>
+
+        <h2><span class="num">1</span> Roles and scope</h2>
+        <p>
+          The Controller determines the purposes and means of processing the
+          personal data contained in its tenant evidence records. The Processor
+          processes that data only on the Controller&rsquo;s behalf to provide
+          Veritio Cloud. This DPA applies to that processing for as long as the
+          Processor holds such data.
+        </p>
+
+        <h2><span class="num">2</span> Subject matter and details of processing</h2>
+        <ul>
+          <li>
+            <strong>Subject matter</strong> — hosting, storing, verifying, and
+            exporting tamper-evident evidence records on the Controller&rsquo;s
+            instruction.
+          </li>
+          <li>
+            <strong>Duration</strong> — the term of the account, plus the export
+            and deletion windows in Section 9.
+          </li>
+          <li>
+            <strong>Nature and purpose</strong> — append-only ingestion,
+            hash-chained storage, integrity verification, querying, and export of
+            evidence records.
+          </li>
+          <li>
+            <strong>Types of personal data</strong> — determined by what the
+            Controller chooses to send. Veritio instructs Controllers to send
+            stable identifiers rather than personal data and not to submit
+            secrets or credentials, and applies deterministic redaction to
+            sensitive fields, but the Controller decides the content.
+          </li>
+          <li>
+            <strong>Categories of data subjects</strong> — determined by the
+            Controller (for example, the Controller&rsquo;s own users, staff, or
+            end customers referenced in its records).
+          </li>
+        </ul>
+
+        <h2><span class="num">3</span> Processing instructions</h2>
+        <p>
+          The Processor processes personal data only on the Controller&rsquo;s
+          documented instructions, including those given through the service and
+          this DPA, unless required to act otherwise by law — in which case, where
+          permitted, it will inform the Controller first. The Processor will
+          inform the Controller if, in its opinion, an instruction infringes
+          applicable data-protection law.
+        </p>
+
+        <h2><span class="num">4</span> Confidentiality</h2>
+        <p>
+          The Processor ensures that personnel authorized to process personal data
+          are bound by confidentiality obligations and access such data only as
+          needed to provide the service.
+        </p>
+
+        <h2><span class="num">5</span> Security measures</h2>
+        <p>
+          Taking account of the state of the art and the risks of processing, the
+          Processor implements appropriate technical and organizational measures,
+          including:
+        </p>
+        <ul>
+          <li>
+            <strong>Integrity by design</strong> — evidence records are
+            append-only and hash-chained, so tampering with stored records is
+            detectable, and records are hash-revalidated on read.
+          </li>
+          <li>
+            <strong>Encryption</strong> — personal data is encrypted in transit
+            and at rest.
+          </li>
+          <li>
+            <strong>Tenant isolation and access controls</strong> — data is
+            scoped per tenant, with authentication, least-privilege access, and
+            security audit logging of sensitive actions.
+          </li>
+          <li>
+            <strong>Region pinning</strong> — data is stored in the
+            Controller&rsquo;s chosen region (EU, US, or APAC), with an EU
+            jurisdiction guarantee on object storage for the EU region.
+          </li>
+        </ul>
+
+        <h2><span class="num">6</span> Subprocessors</h2>
+        <p>
+          The Controller authorizes the Processor to engage the subprocessors
+          listed below to provide the infrastructure of the service. Each
+          subprocessor is bound by data-protection obligations no less protective
+          than this DPA.
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Subprocessor</th>
+                <th>Purpose</th>
+                <th>Location</th>
+              </tr>
+            </thead>
+            <tbody>
+              {
+                subprocessors.map((s) => (
+                  <tr>
+                    <td>{s.name}</td>
+                    <td>{s.role}</td>
+                    <td>{s.location}</td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+        </div>
+        <p>
+          The Processor will give the Controller prior notice of any intended
+          addition or replacement of a subprocessor so the Controller has an
+          opportunity to object on reasonable data-protection grounds.
+        </p>
+
+        <h2><span class="num">7</span> International transfers</h2>
+        <p>
+          Where processing a personal data transfer outside the EEA requires it,
+          the parties rely on appropriate safeguards, including the European
+          Commission&rsquo;s Standard Contractual Clauses, which are incorporated
+          by reference for such transfers, together with any supplementary
+          measures required. Region pinning lets the Controller keep evidence
+          data within a chosen region.
+        </p>
+
+        <h2><span class="num">8</span> Assistance to the Controller</h2>
+        <p>
+          Taking into account the nature of the processing, the Processor assists
+          the Controller with appropriate technical and organizational measures,
+          insofar as possible, to respond to data-subject requests — including
+          access, rectification, erasure, restriction, and portability — and to
+          meet the Controller&rsquo;s obligations on security, breach
+          notification, and data-protection impact assessments. The service&rsquo;s
+          query and export tools are the primary means of this assistance. The
+          Processor notifies the Controller without undue delay after becoming
+          aware of a personal data breach affecting the Controller&rsquo;s data.
+        </p>
+
+        <h2><span class="num">9</span> Return and deletion</h2>
+        <p>
+          On termination, the Controller may export its evidence data as
+          verifiable bundles for <strong>30 days</strong>. After that window, the
+          Processor deletes or de-identifies the personal data it processes for
+          the Controller, except to the extent retention is required by law. This
+          reflects the append-only, verifiable nature of the evidence trail.
+        </p>
+
+        <h2><span class="num">10</span> Audits</h2>
+        <p>
+          The Processor makes available information reasonably necessary to
+          demonstrate compliance with this DPA and contributes to audits,
+          including inspections, conducted by the Controller or an auditor it
+          mandates, subject to reasonable confidentiality, security, and notice
+          arrangements.
+        </p>
+
+        <h2><span class="num">11</span> Not legal advice</h2>
+        <p class="emphatic">
+          Veritio supports compliance evidence workflows. This DPA and the
+          service do not constitute legal advice and do not guarantee that the
+          Controller&rsquo;s processing is compliant with the GDPR or any other
+          framework. The Controller remains responsible for the lawfulness of its
+          processing.
+        </p>
+
+        <h2><span class="num">12</span> Contact</h2>
+        <p>
+          Data-protection questions and requests under this DPA:
+          <a href="mailto:hello@getveritio.com">hello@getveritio.com</a>.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <Footer />
+</BaseLayout>
+
+<style>
+  .legal-doc {
+    --measure: 70ch;
+  }
+  .legal-doc .lede {
+    max-width: var(--measure);
+    font-size: 18px;
+    line-height: 1.7;
+    color: var(--color-ink-soft);
+  }
+  .legal-doc h2 {
+    display: flex;
+    align-items: baseline;
+    gap: 0.85rem;
+    margin-top: 3.5rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--color-line);
+    font-family: var(--font-serif);
+    font-size: clamp(22px, 2.4vw, 28px);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--color-ink);
+  }
+  .legal-doc h2 .num {
+    flex: none;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    color: var(--color-accent);
+    transform: translateY(0.15em);
+  }
+  .legal-doc p,
+  .legal-doc li {
+    max-width: var(--measure);
+    margin-top: 1rem;
+    font-size: 17px;
+    line-height: 1.72;
+    color: var(--color-ink-soft);
+  }
+  .legal-doc ul {
+    margin-top: 0.5rem;
+    padding-left: 1.2rem;
+    list-style: none;
+  }
+  .legal-doc li {
+    position: relative;
+    padding-left: 1.1rem;
+  }
+  .legal-doc li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.72em;
+    width: 6px;
+    height: 1px;
+    background: var(--color-accent);
+  }
+  .legal-doc strong {
+    font-weight: 600;
+    color: var(--color-ink);
+  }
+  .legal-doc a {
+    color: var(--color-accent);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    text-decoration-thickness: 1px;
+  }
+  .legal-doc a:hover {
+    color: var(--color-accent-strong);
+  }
+  .legal-doc .emphatic {
+    border-left: 2px solid var(--color-evergreen);
+    padding-left: 1.1rem;
+    color: var(--color-ink);
+  }
+  .legal-doc .table-wrap {
+    max-width: 860px;
+    margin-top: 1.5rem;
+    overflow-x: auto;
+  }
+  .legal-doc table {
+    width: 100%;
+    min-width: 560px;
+    border-collapse: collapse;
+    font-size: 15px;
+  }
+  .legal-doc th {
+    padding: 10px 16px 10px 0;
+    border-bottom: 1px solid var(--color-line-strong);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--color-ink-muted);
+    text-align: left;
+    vertical-align: bottom;
+  }
+  .legal-doc td {
+    max-width: none;
+    margin: 0;
+    padding: 13px 16px 13px 0;
+    border-bottom: 1px solid var(--color-line);
+    color: var(--color-ink-soft);
+    line-height: 1.5;
+    vertical-align: top;
+  }
+  .legal-doc td:first-child {
+    color: var(--color-ink);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .legal-todo {
+    max-width: 70ch;
+    margin-top: 2rem;
+    padding: 1rem 1.25rem;
+    border: 1px dashed var(--color-seal);
+    background: color-mix(in srgb, var(--color-seal) 6%, transparent);
+  }
+  .legal-todo__label {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--color-seal);
+  }
+  .legal-todo p {
+    margin-top: 0.5rem;
+    max-width: none;
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--color-ink-soft);
+  }
+</style>

@@ -145,6 +145,7 @@ const manifest = [
 ]
 
 const cloudMailto = 'mailto:hello@getveritio.com?subject=Veritio%20Cloud'
+const cloudRegister = 'https://console.getveritio.com/register'
 
 const cloudPoints = [
   'Managed ingest and durable retention',
@@ -411,17 +412,25 @@ const headlineStyle =
             </p>
             <div class="mt-8 flex flex-wrap items-center gap-4">
               <a
-                href={cloudMailto}
+                href={cloudRegister}
+                target="_blank"
+                rel="noopener noreferrer"
                 class="doc-btn"
                 style="border-color: var(--color-surface); color: var(--color-surface);"
               >
-                Talk to us
+                Create an account ↗
               </a>
               <a
-                href="/cloud"
+                href="/pricing"
                 class="font-mono text-[13px] font-medium uppercase tracking-[0.08em] text-surface/85 no-underline hover:text-surface"
               >
-                Explore Veritio Cloud →
+                See pricing →
+              </a>
+              <a
+                href={cloudMailto}
+                class="font-mono text-[13px] font-medium uppercase tracking-[0.08em] text-surface/60 no-underline hover:text-surface"
+              >
+                Talk to us
               </a>
             </div>
           </div>

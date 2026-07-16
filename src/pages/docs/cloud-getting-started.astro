@@ -1,0 +1,306 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro'
+import Nav from '../../components/Nav.astro'
+import Footer from '../../components/Footer.astro'
+import Section from '../../components/Section.astro'
+import CodeBlock from '../../components/CodeBlock.astro'
+
+const registerUrl = 'https://console.getveritio.com/register'
+const cloudPocExample =
+  'https://github.com/getveritio/veritio/tree/main/examples/cloud-full-governance-poc'
+
+/**
+ * Server-side env contract taken verbatim from the OSS reference examples
+ * (examples/react-better-auth, examples/cloud-full-governance-poc). The ingest
+ * token is scoped and must never reach the browser — delivery is server-to-
+ * server, which is why the hosted ingest sets no CORS headers.
+ */
+const ingestEnv = `# Set on your server only — never ship an ingest key to the browser.
+export VERITIO_CLOUD_BASE_URL=https://console.getveritio.com
+export VERITIO_CLOUD_PROJECT_ID=<your project id>   # becomes scope.tenantId
+export VERITIO_CLOUD_INGEST_TOKEN=vrt_...            # an "ingest" scoped key`
+
+/**
+ * Raw wire shape of a single hosted-ingest call. The SDK's outbox batches
+ * canonical event and edge records into one POST to /api/ingest with the
+ * ingest key as a bearer token; this curl mirrors that batch envelope.
+ */
+const ingestCurl = `curl -X POST https://console.getveritio.com/api/ingest \\
+  -H "authorization: Bearer $VERITIO_CLOUD_INGEST_TOKEN" \\
+  -H "content-type: application/json" \\
+  -d '{ "events": [ /* canonical audit records */ ], "edges": [] }'`
+
+const steps = [
+  {
+    n: '01',
+    id: 'sign-up',
+    title: 'Sign up',
+    body:
+      'Create an account with your email. Veritio Cloud sends a verification link — confirm it before continuing.',
+  },
+  {
+    n: '02',
+    id: 'organization',
+    title: 'Create your organization & region',
+    body:
+      'Pick an organization name and a data region. The region is locked at creation and cannot be changed later.',
+  },
+  {
+    n: '03',
+    id: 'project',
+    title: 'Create a project',
+    body:
+      'A project is the tenant boundary for your evidence. Its project id becomes the scope.tenantId on every event you send.',
+  },
+  {
+    n: '04',
+    id: 'keys',
+    title: 'Mint scoped API keys',
+    body:
+      'Create one key per authority: ingest, read, export, admin, or mcp. Keep each key narrow and revoke anything you no longer use.',
+  },
+  {
+    n: '05',
+    id: 'first-events',
+    title: 'Send your first events',
+    body:
+      'Build canonical events with the open-source SDK and POST a batch to the hosted ingest with your ingest key.',
+  },
+  {
+    n: '06',
+    id: 'team',
+    title: 'Invite your team',
+    body:
+      'Owners and admins invite members by email with an admin, member, or viewer role. Invite links expire after 7 days.',
+  },
+  {
+    n: '07',
+    id: 'export',
+    title: 'Request an export',
+    body:
+      'Request a signed vevb-1 export bundle from Evidence → Exports. Download it when ready and verify it offline with the OSS verifier.',
+  },
+]
+---
+
+<BaseLayout
+  title="Cloud getting started — Veritio"
+  description="Onboard to Veritio Cloud: sign up, choose your data region, create a project, mint scoped API keys, send your first events, invite your team, and request a verifiable export bundle."
+>
+  <Nav />
+
+  <section class="py-16 sm:py-20">
+    <div class="container">
+      <span class="eyebrow">Cloud getting started</span>
+      <h1
+        class="mt-4 max-w-3xl font-semibold tracking-tight text-ink"
+        style="font-size: var(--text-headline); line-height: var(--text-headline--line-height);"
+      >
+        From sign-up to your first export
+      </h1>
+      <p class="mt-5 max-w-2xl text-lg leading-relaxed text-ink-soft">
+        Veritio Cloud is the managed way to run the evidence layer — hosted
+        ingest, storage in your region, a hosted MCP, and signed export bundles.
+        This walkthrough takes you from an empty account to a verifiable export.
+      </p>
+      <p class="mt-4 max-w-2xl text-sm leading-relaxed text-ink-muted">
+        The open-source SDK runs fully offline with no account — see{' '}
+        <a class="text-accent no-underline hover:text-accent-strong" href="/examples">Examples</a>.
+        Veritio produces compliance <em>evidence</em>; it does not make you
+        compliant and is not legal advice.
+      </p>
+      <div class="mt-8 flex flex-wrap gap-3">
+        <a
+          class="doc-btn doc-btn--solid"
+          href={registerUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Open the console →
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <Section id="sign-up">
+    <span class="eyebrow">Step {steps[0].n}</span>
+    <h2 class="mt-4 text-2xl font-semibold tracking-tight text-ink">
+      {steps[0].title}
+    </h2>
+    <p class="mt-3 max-w-2xl text-ink-soft">
+      Register at{' '}
+      <a
+        class="text-accent no-underline hover:text-accent-strong"
+        href={registerUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        console.getveritio.com/register
+      </a>{' '}
+      with your email. Veritio Cloud sends a verification link — confirm it, then
+      sign in to reach the console.
+    </p>
+  </Section>
+
+  <Section id="organization" tone="sunken">
+    <span class="eyebrow">Step {steps[1].n}</span>
+    <h2 class="mt-4 text-2xl font-semibold tracking-tight text-ink">
+      {steps[1].title}
+    </h2>
+    <p class="mt-3 max-w-2xl text-ink-soft">
+      On first sign-in you name your organization and choose its data region —
+      EU, US, or APAC. This choice sets where your evidence lives.
+    </p>
+    <div class="mt-8 max-w-2xl border-l-2 border-line-strong pl-5">
+      <p class="text-sm leading-relaxed text-ink-soft">
+        <strong class="text-ink">What the region means, honestly.</strong> Your
+        database and evidence objects are stored in the region you pick, and the
+        EU object store carries a hard EU-jurisdiction guarantee. Application
+        <em> compute</em> is currently EU-located regardless of the storage
+        region. The region is <strong class="text-ink">locked at creation</strong> —
+        choose deliberately, because you cannot move an organization later.
+      </p>
+    </div>
+  </Section>
+
+  <Section id="project">
+    <span class="eyebrow">Step {steps[2].n}</span>
+    <h2 class="mt-4 text-2xl font-semibold tracking-tight text-ink">
+      {steps[2].title}
+    </h2>
+    <p class="mt-3 max-w-2xl text-ink-soft">
+      Inside your organization, create a project. Each project is an isolated
+      tenant boundary: its project id becomes the{' '}
+      <code class="inline">scope.tenantId</code> on every event and edge you
+      record, and evidence never crosses between projects.
+    </p>
+  </Section>
+
+  <Section id="keys" tone="sunken">
+    <span class="eyebrow">Step {steps[3].n}</span>
+    <h2 class="mt-4 text-2xl font-semibold tracking-tight text-ink">
+      {steps[3].title}
+    </h2>
+    <p class="mt-3 max-w-2xl text-ink-soft">
+      Veritio keys are scoped to a single authority, so a key can do exactly one
+      job and nothing more. Mint the keys your integration needs:
+    </p>
+    <dl class="mt-8 max-w-2xl border-t border-line">
+      {
+        [
+          ['ingest', 'Write events and edges to the hosted ingest. Server-side only.'],
+          ['read', 'Read your evidence back — graph, changes, and timelines.'],
+          ['export', 'Request signed export bundles.'],
+          ['admin', 'Manage the project and its keys.'],
+          ['mcp', 'Let a hosted MCP client query your evidence.'],
+        ].map(([name, desc]) => (
+          <div class="grid grid-cols-[7rem_1fr] gap-4 border-b border-line py-4">
+            <dt class="font-mono text-[13px] uppercase tracking-[0.08em] text-accent">
+              {name}
+            </dt>
+            <dd class="text-sm leading-relaxed text-ink-soft">{desc}</dd>
+          </div>
+        ))
+      }
+    </dl>
+    <p class="mt-6 max-w-2xl text-sm leading-relaxed text-ink-muted">
+      Treat keys like passwords. Keep them in server environment variables or a
+      secret manager, never in browser code or version control, and revoke any
+      key you no longer need.
+    </p>
+  </Section>
+
+  <Section id="first-events">
+    <span class="eyebrow">Step {steps[4].n}</span>
+    <h2 class="mt-4 text-2xl font-semibold tracking-tight text-ink">
+      {steps[4].title}
+    </h2>
+    <p class="mt-3 max-w-2xl text-ink-soft">
+      Build canonical audit events and evidence edges with the open-source{' '}
+      <code class="inline">@veritio/core</code> SDK — the same code shown on the{' '}
+      <a class="text-accent no-underline hover:text-accent-strong" href="/examples">Examples</a>{' '}
+      page — then hand them to a server-side dispatcher that drains a batch to the
+      hosted ingest. Point the dispatcher at your project with three environment
+      variables:
+    </p>
+    <div class="mt-8 max-w-2xl">
+      <CodeBlock code={ingestEnv} lang="bash" title="server environment" />
+    </div>
+    <p class="mt-6 max-w-2xl text-sm leading-relaxed text-ink-soft">
+      The dispatcher POSTs each batch as one <code class="inline">{'{ events, edges }'}</code>{' '}
+      payload to <code class="inline">/api/ingest</code> with the ingest key as a
+      bearer token. Delivery is server-to-server — the hosted ingest sets no CORS
+      headers, so the key stays on your backend:
+    </p>
+    <div class="mt-6 max-w-2xl">
+      <CodeBlock code={ingestCurl} lang="bash" title="terminal" />
+    </div>
+    <p class="mt-6 max-w-2xl text-sm leading-relaxed text-ink-muted">
+      For a complete, runnable delivery harness — building the records, draining
+      an outbox, and posting to a deployed project — see the{' '}
+      <a
+        class="text-accent no-underline hover:text-accent-strong"
+        href={cloudPocExample}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        cloud-full-governance-poc example
+      </a>{' '}
+      in the OSS repo.
+    </p>
+  </Section>
+
+  <Section id="team" tone="sunken">
+    <span class="eyebrow">Step {steps[5].n}</span>
+    <h2 class="mt-4 text-2xl font-semibold tracking-tight text-ink">
+      {steps[5].title}
+    </h2>
+    <p class="mt-3 max-w-2xl text-ink-soft">
+      Owners and admins invite teammates by email. Each invite carries a role —
+      <strong class="text-ink"> admin</strong> (manage the org, projects, and
+      keys), <strong class="text-ink">member</strong> (do the work), or
+      <strong class="text-ink"> viewer</strong> (read-only). Invite links expire
+      after 7 days; re-send if one lapses.
+    </p>
+  </Section>
+
+  <Section id="export">
+    <span class="eyebrow">Step {steps[6].n}</span>
+    <h2 class="mt-4 text-2xl font-semibold tracking-tight text-ink">
+      {steps[6].title}
+    </h2>
+    <p class="mt-3 max-w-2xl text-ink-soft">
+      When you need portable proof, open <strong class="text-ink">Evidence → Exports</strong>{' '}
+      and request a bundle. Veritio assembles a signed{' '}
+      <code class="inline">vevb-1</code> export bundle, stores it in your region,
+      and makes it downloadable once ready.
+    </p>
+    <p class="mt-5 max-w-2xl text-sm leading-relaxed text-ink-soft">
+      The bundle verifies <strong class="text-ink">offline</strong> with the
+      open-source verifier — no account, no network, no trust in the host
+      required. Monthly export volume depends on your plan.
+    </p>
+  </Section>
+
+  <Section id="next" tone="sunken">
+    <div class="max-w-2xl">
+      <span class="eyebrow">Next</span>
+      <h2 class="mt-4 text-2xl font-semibold tracking-tight text-ink">
+        Keep going
+      </h2>
+      <p class="mt-3 text-ink-soft">
+        Wire your coding agents into the same evidence trail, browse the SDK
+        examples, or check plan limits before you scale up.
+      </p>
+      <div class="mt-7 flex flex-wrap gap-3">
+        <a class="doc-btn doc-btn--solid" href="/docs/connect-agents">
+          Connect Claude Code & Codex →
+        </a>
+        <a class="doc-btn" href="/examples">SDK examples →</a>
+        <a class="doc-btn" href="/pricing">Pricing & quotas →</a>
+      </div>
+    </div>
+  </Section>
+
+  <Footer />
+</BaseLayout>

@@ -6,6 +6,7 @@ import Section from '../components/Section.astro'
 import FeatureCard from '../components/FeatureCard.astro'
 
 const cloudMailto = 'mailto:hello@getveritio.com?subject=Veritio%20Cloud'
+const cloudRegister = 'https://console.getveritio.com/register'
 const ossRepo = 'https://github.com/getveritio/veritio'
 
 const icon = {
@@ -42,18 +43,27 @@ const icon = {
         Hosted evidence operations, on your terms.
       </h1>
       <p class="mt-6 max-w-2xl text-lg leading-relaxed text-ink-soft">
-        Veritio Cloud is the optional managed way to run Veritio. It speaks the
-        same open protocol as the SDK and self-hosted server, then adds managed
-        infrastructure and operational service so you can run evidence workflows
-        without operating the pipeline yourself. The open-source path works on
-        its own — Cloud is there when you would rather not run it.
+        Veritio Cloud is the optional managed way to run Veritio, and it's open
+        now. It speaks the same open protocol as the SDK and self-hosted server,
+        then adds managed infrastructure and operational service so you can run
+        evidence workflows without operating the pipeline yourself. The
+        open-source path works on its own — Cloud is there when you would rather
+        not run it.
       </p>
       <div class="mt-9 flex flex-wrap gap-3">
         <a
-          href={cloudMailto}
+          href={cloudRegister}
+          target="_blank"
+          rel="noopener noreferrer"
           class="doc-btn doc-btn--solid"
         >
-          Get notified
+          Create an account ↗
+        </a>
+        <a
+          href="/pricing"
+          class="doc-btn"
+        >
+          See pricing
         </a>
         <a
           href={ossRepo}
@@ -175,16 +185,31 @@ const icon = {
         Want hosted Veritio?
       </h2>
       <p class="mt-4 max-w-2xl text-base leading-relaxed text-surface/80">
-        Pricing and plans aren't public yet. Tell us what you're building and
-        we'll reach out when Veritio Cloud is ready for you.
+        Veritio Cloud is open now. The Developer plan is free and needs no card —
+        pick your region at signup and start recording verifiable evidence today.
+        Larger volumes, longer retention, and more seats are on the paid plans.
       </p>
-      <div class="mt-8">
+      <div class="mt-8 flex flex-wrap items-center gap-4">
         <a
-          href={cloudMailto}
+          href={cloudRegister}
+          target="_blank"
+          rel="noopener noreferrer"
           class="doc-btn"
           style="border-color: var(--color-surface); color: var(--color-surface);"
         >
-          Get notified
+          Create an account ↗
+        </a>
+        <a
+          href="/pricing"
+          class="font-mono text-[13px] font-medium uppercase tracking-[0.08em] text-surface/85 no-underline hover:text-surface"
+        >
+          See pricing →
+        </a>
+        <a
+          href={cloudMailto}
+          class="font-mono text-[13px] font-medium uppercase tracking-[0.08em] text-surface/60 no-underline hover:text-surface"
+        >
+          Talk to us
         </a>
       </div>
     </div>
