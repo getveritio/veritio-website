@@ -1,0 +1,21 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  // Assets-only Worker (no `main`): Cloudflare serves the Astro build output
+  // directly from the edge; there is no server code in this site. Custom
+  // domains below auto-create the apex/www DNS records on the zone.
+  "name": "veritio-website",
+  "compatibility_date": "2026-07-17",
+  "assets": {
+    "directory": "./dist"
+  },
+  "routes": [
+    {
+      "pattern": "getveritio.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.getveritio.com",
+      "custom_domain": true
+    }
+  ]
+}
