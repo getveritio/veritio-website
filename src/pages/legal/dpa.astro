@@ -3,7 +3,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro'
 import Nav from '../../components/Nav.astro'
 import Footer from '../../components/Footer.astro'
 
-const lastUpdated = '16 July 2026'
+const lastUpdated = '17 July 2026'
 
 const subprocessors = [
   {
@@ -63,15 +63,16 @@ const subprocessors = [
           the processing of personal data, this DPA prevails.
         </p>
 
-        <div class="legal-todo">
-          <span class="legal-todo__label">Owner action required</span>
-          <p>
-            Insert the Processor&rsquo;s registered legal entity name and
-            address, and confirm the signature or acceptance mechanism (for
-            example, acceptance on account creation, or a countersigned copy for
-            Enterprise customers).
-          </p>
-        </div>
+        <p>
+          The Processor under this agreement is <strong>Yan Malinovskiy</strong>
+          (sole proprietor), Belchenstraße&nbsp;2, 79276 Reute, Germany (see
+          the <a href="/legal/imprint">Imprint</a>). This Data Processing
+          Agreement is accepted electronically as part of account creation —
+          opening a Veritio Cloud organization incorporates it into the
+          contract under the <a href="/legal/terms">Terms of Service</a>.
+          Enterprise customers may request a countersigned copy at
+          <a href="mailto:hello@getveritio.com">hello@getveritio.com</a>.
+        </p>
 
         <h2><span class="num">1</span> Roles and scope</h2>
         <p>
@@ -366,28 +367,5 @@ const subprocessors = [
     color: var(--color-ink);
     font-weight: 500;
     white-space: nowrap;
-  }
-  .legal-todo {
-    max-width: 70ch;
-    margin-top: 2rem;
-    padding: 1rem 1.25rem;
-    border: 1px dashed var(--color-seal);
-    background: color-mix(in srgb, var(--color-seal) 6%, transparent);
-  }
-  .legal-todo__label {
-    display: block;
-    font-family: var(--font-mono);
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.14em;
-    color: var(--color-seal);
-  }
-  .legal-todo p {
-    margin-top: 0.5rem;
-    max-width: none;
-    font-size: 15px;
-    line-height: 1.6;
-    color: var(--color-ink-soft);
   }
 </style>

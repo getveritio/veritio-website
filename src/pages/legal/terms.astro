@@ -3,7 +3,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro'
 import Nav from '../../components/Nav.astro'
 import Footer from '../../components/Footer.astro'
 
-const lastUpdated = '16 July 2026'
+const lastUpdated = '17 July 2026'
 ---
 <!-- DRAFT: review with counsel before launch announcement -->
 
@@ -45,15 +45,15 @@ const lastUpdated = '16 July 2026'
           organization, you confirm that you are authorized to bind it.
         </p>
 
-        <div class="legal-todo">
-          <span class="legal-todo__label">Owner action required</span>
-          <p>
-            Insert the registered legal entity that operates Veritio Cloud —
-            full legal name, legal form, registered address in Germany,
-            commercial register number, and VAT ID — and confirm it as the
-            contracting party throughout this document before launch.
-          </p>
-        </div>
+        <p>
+          Veritio Cloud is operated by <strong>Yan Malinovskiy</strong> (sole
+          proprietor), Belchenstraße&nbsp;2, 79276 Reute, Germany — the
+          contracting party under these Terms. VAT identification number
+          pursuant to § 27&nbsp;a Umsatzsteuergesetz:
+          <span class="font-mono">DE406158651</span>. Full provider
+          identification is published in the
+          <a href="/legal/imprint">Imprint</a>.
+        </p>
 
         <h2><span class="num">1</span> The service</h2>
         <p>
@@ -323,28 +323,5 @@ const lastUpdated = '16 July 2026'
     border-left: 2px solid var(--color-evergreen);
     padding-left: 1.1rem;
     color: var(--color-ink);
-  }
-  .legal-todo {
-    max-width: var(--measure);
-    margin-top: 2rem;
-    padding: 1rem 1.25rem;
-    border: 1px dashed var(--color-seal);
-    background: color-mix(in srgb, var(--color-seal) 6%, transparent);
-  }
-  .legal-todo__label {
-    display: block;
-    font-family: var(--font-mono);
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.14em;
-    color: var(--color-seal);
-  }
-  .legal-todo p {
-    margin-top: 0.5rem;
-    max-width: none;
-    font-size: 15px;
-    line-height: 1.6;
-    color: var(--color-ink-soft);
   }
 </style>
