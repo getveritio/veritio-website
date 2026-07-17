@@ -1,0 +1,327 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro'
+import Nav from '../../components/Nav.astro'
+import Footer from '../../components/Footer.astro'
+
+const lastUpdated = '17 July 2026'
+---
+<!-- DRAFT: review with counsel before launch announcement -->
+
+<BaseLayout
+  title="Terms of Service — Veritio"
+  description="The terms governing use of Veritio Cloud, the hosted audit-trail and compliance-evidence service operated from Germany."
+>
+  <Nav />
+
+  <section class="py-16 sm:py-20">
+    <div class="container">
+      <span class="eyebrow">Legal</span>
+      <h1
+        class="mt-4 max-w-3xl font-semibold tracking-tight text-ink"
+        style="font-size: var(--text-headline); line-height: var(--text-headline--line-height);"
+      >
+        Terms of Service
+      </h1>
+      <p class="mt-5 max-w-2xl text-lg leading-relaxed text-ink-soft">
+        These terms govern your use of Veritio Cloud, the hosted service for
+        recording tamper-evident audit trails and preparing compliance evidence.
+        Please read them carefully — using the service means you accept them.
+      </p>
+      <p class="mt-4 font-mono text-[12px] uppercase tracking-[0.14em] text-ink-muted">
+        Draft · Last updated {lastUpdated}
+      </p>
+    </div>
+  </section>
+
+  <section class="border-t border-line py-14 sm:py-16">
+    <div class="container">
+      <div class="legal-doc">
+        <p class="lede">
+          Veritio Cloud (&ldquo;Veritio&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;)
+          is a business-to-business software service. These Terms of Service
+          (the &ldquo;Terms&rdquo;) form a binding agreement between us and the
+          organization or individual that opens an account (&ldquo;you&rdquo;,
+          the &ldquo;Customer&rdquo;). If you accept these Terms on behalf of an
+          organization, you confirm that you are authorized to bind it.
+        </p>
+
+        <p>
+          Veritio Cloud is operated by <strong>Yan Malinovskiy</strong> (sole
+          proprietor), Belchenstraße&nbsp;2, 79276 Reute, Germany — the
+          contracting party under these Terms. VAT identification number
+          pursuant to § 27&nbsp;a Umsatzsteuergesetz:
+          <span class="font-mono">DE406158651</span>. Full provider
+          identification is published in the
+          <a href="/legal/imprint">Imprint</a>.
+        </p>
+
+        <h2><span class="num">1</span> The service</h2>
+        <p>
+          Veritio Cloud is a hosted platform that ingests event records from
+          your applications and coding agents, stores them as an append-only,
+          hash-chained evidence trail, and provides tools to query, verify, and
+          export that trail. It is designed to help you produce audit and
+          compliance <em>evidence</em>. What Veritio does not do is stated
+          plainly in Section 12.
+        </p>
+        <p>
+          The open-source Veritio SDK and self-hosted server run independently of
+          this hosted service and are governed by their own open-source license,
+          not these Terms.
+        </p>
+
+        <h2><span class="num">2</span> Accounts and eligibility</h2>
+        <p>
+          Accounts use an email address and password, and email verification is
+          required before an account becomes active. You are responsible for the
+          accuracy of your registration details, for keeping credentials
+          confidential, and for all activity under your account. Notify us
+          promptly at
+          <a href="mailto:hello@getveritio.com">hello@getveritio.com</a> if you
+          suspect unauthorized access.
+        </p>
+        <p>
+          You may invite additional members to your organization. The person or
+          organization that owns the account remains responsible for the acts and
+          omissions of every invited member. The service is intended for business
+          and professional use and is not directed at consumers or children.
+        </p>
+
+        <h2><span class="num">3</span> Your data and content</h2>
+        <p>
+          You own the evidence records and other content you send to Veritio
+          (&ldquo;Customer Data&rdquo;). We claim no ownership of it. You grant us
+          only the limited rights needed to host, process, secure, back up, and
+          return Customer Data so we can provide the service. You decide what your
+          applications and agents transmit; you are responsible for having the
+          legal basis to send it.
+        </p>
+        <p>
+          Where Veritio processes personal data contained in Customer Data on your
+          behalf, that processing is governed by our
+          <a href="/legal/dpa">Data Processing Agreement</a>, which is
+          incorporated into these Terms.
+        </p>
+
+        <h2><span class="num">4</span> Acceptable use</h2>
+        <p>You agree that you will not, and will not permit anyone to:</p>
+        <ul>
+          <li>
+            submit unlawful content, or content you have no right to submit, or
+            use the service to infringe the rights of others;
+          </li>
+          <li>
+            submit secrets, passwords, API keys, bearer tokens, authorization
+            headers, database URLs, or connector credentials as event data —
+            Veritio instructs you not to, and applies deterministic redaction,
+            but you remain responsible for what you transmit;
+          </li>
+          <li>
+            attempt to access another customer&rsquo;s tenant, defeat tenant
+            isolation, probe or test the security of the service without
+            authorization, or interfere with its integrity or availability;
+          </li>
+          <li>
+            reverse engineer the service except to the extent that restriction is
+            prohibited by law, resell or provide the service to third parties
+            except as expressly permitted, or exceed the usage quotas of your
+            plan through automated or abusive means.
+          </li>
+        </ul>
+        <p>
+          We may suspend access to address a material or ongoing violation of this
+          section, a security risk, or a legal obligation. Where practical we will
+          give notice and an opportunity to cure first.
+        </p>
+
+        <h2><span class="num">5</span> Plans, quotas, and fees</h2>
+        <p>
+          Available plans, their usage quotas, and prices are described on our
+          <a href="/pricing">pricing page</a>. Paid plans are billed through our
+          payment processor, Polar, once billing is live; until then, plans made
+          available to you are provided on the terms stated at sign-up. Fees are
+          exclusive of taxes unless stated otherwise, and you are responsible for
+          applicable taxes other than taxes on our income.
+        </p>
+        <p>
+          If your usage exceeds your plan&rsquo;s quota, we may throttle ingestion,
+          require an upgrade, or apply overage terms described on the pricing
+          page. We may change prices and plan features on prospective notice; the
+          change takes effect at your next renewal.
+        </p>
+
+        <h2><span class="num">6</span> Availability</h2>
+        <p>
+          We work to keep Veritio Cloud available and performant, but the service
+          is provided without a committed service level except where a separate,
+          signed Enterprise agreement states one. We may perform maintenance,
+          change, or discontinue features. Because the evidence trail is
+          append-only and hash-chained, we design changes to preserve the
+          integrity and verifiability of records already stored.
+        </p>
+
+        <h2><span class="num">7</span> Term, termination, and export</h2>
+        <p>
+          These Terms apply for as long as you have an account. You may stop using
+          the service and close your account at any time. We may terminate or
+          suspend for material breach, non-payment, or where required by law,
+          with notice where practical.
+        </p>
+        <p>
+          For <strong>30 days</strong> after termination you may export your
+          Customer Data as verifiable evidence bundles through the service&rsquo;s
+          export tools. After that window we will delete or de-identify Customer
+          Data in the ordinary course, subject to the retention terms of the
+          <a href="/legal/dpa">Data Processing Agreement</a> and any legal
+          retention obligation.
+        </p>
+
+        <h2><span class="num">8</span> Intellectual property</h2>
+        <p>
+          We and our licensors own the Veritio Cloud service, software, and
+          brand, except for the open-source components, which are governed by
+          their own licenses, and except for Customer Data, which is yours. If you
+          send us feedback, you allow us to use it to improve the service without
+          obligation to you.
+        </p>
+
+        <h2><span class="num">9</span> Warranties and disclaimer</h2>
+        <p>
+          Each party warrants that it has the authority to enter into these Terms.
+          Except as expressly stated, the service is provided
+          <strong>&ldquo;as is&rdquo; and &ldquo;as available&rdquo;</strong>,
+          without warranties of any kind, whether express, implied, or statutory,
+          including implied warranties of merchantability, fitness for a
+          particular purpose, and non-infringement, to the maximum extent
+          permitted by law.
+        </p>
+
+        <h2><span class="num">10</span> Limitation of liability</h2>
+        <p>
+          To the maximum extent permitted by law, neither party is liable for
+          indirect, incidental, special, consequential, or punitive damages, or
+          for lost profits, revenue, or data, arising out of or related to these
+          Terms. Except for your payment obligations, and except for liability
+          that cannot be limited by law (including for intentional acts, gross
+          negligence, injury to life or body, or, under German law, breach of a
+          cardinal contractual duty), each party&rsquo;s total aggregate liability
+          is limited to the fees you paid us for the service in the twelve months
+          before the event giving rise to the claim.
+        </p>
+
+        <h2><span class="num">11</span> Changes to these Terms</h2>
+        <p>
+          We may update these Terms as the service evolves or the law requires. We
+          will post the updated version here with a new effective date and, for
+          material changes, give reasonable notice. Continuing to use the service
+          after a change takes effect means you accept the updated Terms.
+        </p>
+
+        <h2><span class="num">12</span> Not legal advice</h2>
+        <p class="emphatic">
+          Veritio supports compliance evidence workflows. It does not provide
+          legal advice and does not guarantee that your application, organization,
+          or use of the service is compliant with the GDPR, CCPA, SOC&nbsp;2,
+          HIPAA, DORA, NIS2, or any other legal or regulatory framework.
+          Compliance is your responsibility; consult qualified counsel for legal
+          advice.
+        </p>
+
+        <h2><span class="num">13</span> Governing law</h2>
+        <p>
+          These Terms are governed by the laws of the Federal Republic of Germany,
+          excluding its conflict-of-law rules and the UN Convention on Contracts
+          for the International Sale of Goods. The place of jurisdiction is the
+          registered seat of the Veritio entity identified above, to the extent
+          permitted by law.
+        </p>
+
+        <h2><span class="num">14</span> Contact</h2>
+        <p>
+          Questions about these Terms:
+          <a href="mailto:hello@getveritio.com">hello@getveritio.com</a>.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <Footer />
+</BaseLayout>
+
+<style>
+  .legal-doc {
+    --measure: 70ch;
+  }
+  .legal-doc .lede {
+    max-width: var(--measure);
+    font-size: 18px;
+    line-height: 1.7;
+    color: var(--color-ink-soft);
+  }
+  .legal-doc h2 {
+    display: flex;
+    align-items: baseline;
+    gap: 0.85rem;
+    margin-top: 3.5rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--color-line);
+    font-family: var(--font-serif);
+    font-size: clamp(22px, 2.4vw, 28px);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--color-ink);
+  }
+  .legal-doc h2 .num {
+    flex: none;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    color: var(--color-accent);
+    transform: translateY(0.15em);
+  }
+  .legal-doc p,
+  .legal-doc li {
+    max-width: var(--measure);
+    margin-top: 1rem;
+    font-size: 17px;
+    line-height: 1.72;
+    color: var(--color-ink-soft);
+  }
+  .legal-doc ul {
+    margin-top: 0.5rem;
+    padding-left: 1.2rem;
+    list-style: none;
+  }
+  .legal-doc li {
+    position: relative;
+    padding-left: 1.1rem;
+  }
+  .legal-doc li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.72em;
+    width: 6px;
+    height: 1px;
+    background: var(--color-accent);
+  }
+  .legal-doc strong {
+    font-weight: 600;
+    color: var(--color-ink);
+  }
+  .legal-doc a {
+    color: var(--color-accent);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    text-decoration-thickness: 1px;
+  }
+  .legal-doc a:hover {
+    color: var(--color-accent-strong);
+  }
+  .legal-doc .emphatic {
+    border-left: 2px solid var(--color-evergreen);
+    padding-left: 1.1rem;
+    color: var(--color-ink);
+  }
+</style>

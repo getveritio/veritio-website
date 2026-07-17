@@ -8,8 +8,9 @@ const { pathname } = Astro.url
 const links = [
   { href: '/', label: 'Overview' },
   { href: '/cloud', label: 'Cloud' },
+  { href: '/pricing', label: 'Pricing' },
+  { href: '/docs', label: 'Docs' },
   { href: '/examples', label: 'Examples' },
-  { href: '/docs/connect-agents', label: 'Connect' },
 ]
 const isActive = (href: string) =>
   href === '/' ? pathname === '/' : pathname.startsWith(href)
@@ -49,6 +50,14 @@ const isActive = (href: string) =>
           </a>
         ))
       }
+      <a
+        href="https://console.getveritio.com/login"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="text-ink-muted no-underline transition-colors hover:text-accent"
+      >
+        Sign in
+      </a>
       <a
         href="https://github.com/getveritio/veritio"
         target="_blank"

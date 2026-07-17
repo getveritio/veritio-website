@@ -1,0 +1,89 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro'
+import Nav from '../../components/Nav.astro'
+import Footer from '../../components/Footer.astro'
+
+const lastUpdated = '17 July 2026'
+---
+
+<BaseLayout
+  title="Imprint (Impressum) — Veritio"
+  description="Provider identification for Veritio and Veritio Cloud pursuant to § 5 DDG and § 18 Abs. 2 MStV."
+>
+  <Nav />
+
+  <section class="py-16 sm:py-20">
+    <div class="container">
+      <span class="eyebrow">Legal</span>
+      <h1
+        class="mt-4 max-w-3xl font-semibold tracking-tight text-ink"
+        style="font-size: var(--text-headline); line-height: var(--text-headline--line-height);"
+      >
+        Imprint <span class="text-ink-muted">(Impressum)</span>
+      </h1>
+      <p class="mt-5 max-w-2xl text-lg leading-relaxed text-ink-soft">
+        Provider identification for this website and for Veritio Cloud,
+        pursuant to German law.
+      </p>
+      <p class="mt-4 font-mono text-[12px] uppercase tracking-[0.14em] text-ink-muted">
+        Last updated {lastUpdated}
+      </p>
+    </div>
+  </section>
+
+  <section class="border-t border-line py-14 sm:py-16">
+    <div class="container">
+      <div class="legal-doc">
+        <h2><span class="num">1</span> Provider (Angaben gemäß § 5 DDG)</h2>
+        <p>
+          Yan Malinovskiy<br />
+          Belchenstraße 2<br />
+          79276 Reute<br />
+          Germany
+        </p>
+
+        <h2><span class="num">2</span> Contact</h2>
+        <p>
+          Email: <a href="mailto:hello@getveritio.com">hello@getveritio.com</a>
+        </p>
+
+        <h2><span class="num">3</span> VAT identification number</h2>
+        <p>
+          Umsatzsteuer-Identifikationsnummer gemäß § 27&nbsp;a
+          Umsatzsteuergesetz:<br />
+          <span class="font-mono">DE406158651</span>
+        </p>
+
+        <h2><span class="num">4</span> Responsible for content (§ 18 Abs. 2 MStV)</h2>
+        <p>
+          Yan Malinovskiy<br />
+          Belchenstraße 2<br />
+          79276 Reute<br />
+          Germany
+        </p>
+
+        <h2><span class="num">5</span> Consumer dispute resolution</h2>
+        <p>
+          Veritio Cloud is a business-to-business service. We are neither
+          obliged nor willing to participate in dispute resolution proceedings
+          before a consumer arbitration board within the meaning of
+          § 36 VSBG.
+        </p>
+
+        <h2><span class="num">6</span> Liability for content and links</h2>
+        <p>
+          As a service provider we are responsible for our own content on
+          these pages under general law. We are not obliged to monitor
+          transmitted or stored third-party information or to investigate
+          circumstances indicating illegal activity (§§ 7–10 DDG).
+          External links were checked for possible legal violations at the
+          time of linking; we have no influence on their current or future
+          content. If we become aware of legal violations, we will remove the
+          affected content or link promptly.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <Footer />
+</BaseLayout>
