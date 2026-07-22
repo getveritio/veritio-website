@@ -81,11 +81,30 @@ const steps = [
       'Request a signed vevb-1 export bundle from Evidence → Exports. Download it when ready and verify it offline with the OSS verifier.',
   },
 ]
+
+/** Breadcrumb structured data; positions mirror the visible nav hierarchy. */
+const breadcrumbJsonLd = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://getveritio.com/' },
+      { '@type': 'ListItem', position: 2, name: 'Documentation', item: 'https://getveritio.com/docs/' },
+      {
+        '@type': 'ListItem',
+        position: 3,
+        name: 'Cloud getting started',
+        item: 'https://getveritio.com/docs/cloud-getting-started/',
+      },
+    ],
+  },
+]
 ---
 
 <BaseLayout
   title="Cloud getting started — Veritio"
   description="Onboard to Veritio Cloud: sign up, choose your data region, create a project, mint scoped API keys, send your first events, invite your team, and request a verifiable export bundle."
+  jsonLd={breadcrumbJsonLd}
 >
   <Nav />
 

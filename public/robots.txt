@@ -1,0 +1,8 @@
+# getveritio.com — all pages are public marketing/docs content.
+# Cloudflare's managed robots.txt (content signals for AI crawlers) may be
+# prepended to this file at the edge; keep this origin file minimal.
+
+User-agent: *
+Allow: /
+
+Sitemap: https://getveritio.com/sitemap-index.xml

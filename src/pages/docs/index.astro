@@ -60,11 +60,24 @@ const contents = [
     kind: 'Plans',
   },
 ]
+
+/** Breadcrumb structured data; positions mirror the visible nav hierarchy. */
+const breadcrumbJsonLd = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://getveritio.com/' },
+      { '@type': 'ListItem', position: 2, name: 'Documentation', item: 'https://getveritio.com/docs/' },
+    ],
+  },
+]
 ---
 
 <BaseLayout
   title="Documentation — Veritio"
   description="Veritio documentation: hosted Cloud onboarding, connecting Claude Code and Codex, the open-source SDKs, self-hosting, and pricing."
+  jsonLd={breadcrumbJsonLd}
 >
   <Nav />
 
