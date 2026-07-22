@@ -83,12 +83,50 @@ const notes = [
 const headline =
   'font-size: var(--text-headline); line-height: var(--text-headline--line-height); letter-spacing: var(--text-headline--letter-spacing);'
 
+/** Questions answered in plain text below the table; also emitted as FAQPage JSON-LD. */
+const faq = [
+  [
+    'Is there a free plan?',
+    'There is no free hosted tier. The free path is self-hosting the open-source stack — the protocol, SDKs, and offline verifier run without an account, and the exports are identical.',
+  ],
+  [
+    'What counts as a billed event?',
+    'Only appends count. Reads, dashboards, exports, and verification are free, and agents, hooks, CI jobs, and API keys are not seats.',
+  ],
+  [
+    'What happens when the monthly event allowance runs out?',
+    'Overage bills at $10 per 100,000 events up to twice the allowance. At the cap, ingest fails closed until the month resets or the plan changes — overage never bills without bound.',
+  ],
+  [
+    'Where is tenant data stored?',
+    'In the region chosen at organization creation — EU jurisdiction, US, or APAC. Evidence storage is pinned to that region.',
+  ],
+  [
+    'When does billing start?',
+    'Billing is not live yet. Organizations created today run with Pro-plan limits at no charge and choose a plan when billing launches; no card is required until then.',
+  ],
+  [
+    'Does Veritio make my organization compliant?',
+    'No. Veritio produces verifiable compliance evidence — hash-chained audit trails and signed export bundles. Whether an organization is compliant is decided by auditors against a framework, not by tooling.',
+  ],
+] as const
+
 /**
  * Pricing structured data for search engines. Offer prices mirror the plan
  * columns above (and therefore veritio-cloud src/billing/plans.ts) — update all
- * three together. Enterprise is negotiated, so it carries no Offer.
+ * three together. Enterprise is negotiated, so it carries no Offer. The
+ * FAQPage entries mirror the visible `faq` list verbatim.
  */
 const pricingJsonLd = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: faq.map(([q, a]) => ({
+      '@type': 'Question',
+      name: q,
+      acceptedAnswer: { '@type': 'Answer', text: a },
+    })),
+  },
   {
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',
@@ -237,6 +275,23 @@ const pricingJsonLd = [
             ))
           }
         </ul>
+      </div>
+    </section>
+
+    <!-- QUESTIONS -->
+    <section class="border-t border-line-strong">
+      <div class="container py-14 sm:py-16">
+        <h2 class="font-medium text-ink" style={headline}>Questions</h2>
+        <dl class="mt-8 border-t border-line-strong">
+          {
+            faq.map(([q, a]) => (
+              <div class="grid gap-2 border-b border-line py-5 sm:grid-cols-[minmax(200px,320px)_1fr] sm:gap-8">
+                <dt class="font-mono text-[12px] font-medium uppercase tracking-[0.08em] text-accent">{q}</dt>
+                <dd class="m-0 max-w-[64ch] text-[15px] leading-relaxed text-ink-soft">{a}</dd>
+              </div>
+            ))
+          }
+        </dl>
       </div>
     </section>
 
