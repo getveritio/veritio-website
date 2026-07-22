@@ -1,12 +1,16 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  // Assets-only Worker (no `main`): Cloudflare serves the Astro build output
-  // directly from the edge; there is no server code in this site. Custom
-  // domains below auto-create the apex/www DNS records on the zone.
+  // Static-assets Worker with one server concern: worker/index.js 301s the
+  // www host to the apex (run_worker_first, see its doc comment) and defers
+  // everything else to the assets binding. Custom domains below auto-create
+  // the apex/www DNS records on the zone.
   "name": "veritio-website",
   "compatibility_date": "2026-07-17",
+  "main": "./worker/index.js",
   "assets": {
-    "directory": "./dist"
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": true
   },
   "routes": [
     {
