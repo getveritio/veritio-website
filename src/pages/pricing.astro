@@ -82,11 +82,35 @@ const notes = [
 
 const headline =
   'font-size: var(--text-headline); line-height: var(--text-headline--line-height); letter-spacing: var(--text-headline--letter-spacing);'
+
+/**
+ * Pricing structured data for search engines. Offer prices mirror the plan
+ * columns above (and therefore veritio-cloud src/billing/plans.ts) — update all
+ * three together. Enterprise is negotiated, so it carries no Offer.
+ */
+const pricingJsonLd = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'Veritio Cloud',
+    url: 'https://getveritio.com/cloud/',
+    applicationCategory: 'BusinessApplication',
+    operatingSystem: 'Web',
+    description:
+      'Hosted evidence layer for audit trails, agent capture, risk scoring, and signed compliance-evidence export bundles.',
+    offers: [
+      { '@type': 'Offer', name: 'Pro', price: '29', priceCurrency: 'USD' },
+      { '@type': 'Offer', name: 'Team', price: '99', priceCurrency: 'USD' },
+      { '@type': 'Offer', name: 'Compliance', price: '499', priceCurrency: 'USD' },
+    ],
+  },
+]
 ---
 
 <BaseLayout
   title="Pricing — Veritio Cloud"
   description="Veritio Cloud plans: Pro $29, Team $99, Compliance $499, Enterprise custom. Self-hosting the open-source stack is free. Supports compliance evidence; it does not make you compliant."
+  jsonLd={pricingJsonLd}
 >
   <Nav />
 
