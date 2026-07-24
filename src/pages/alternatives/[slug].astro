@@ -1,0 +1,116 @@
+---
+/**
+ * Comparison pages (/alternatives/<slug>), generated from
+ * src/data/alternatives.ts. Honest, approach-level comparisons: concede the
+ * other tool's strengths, date the review, no compliance claims.
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro'
+import Nav from '../../components/Nav.astro'
+import Footer from '../../components/Footer.astro'
+import Section from '../../components/Section.astro'
+import { alternatives, lastReviewed } from '../../data/alternatives'
+
+export function getStaticPaths() {
+  return alternatives.map((alt) => ({ params: { slug: alt.slug }, props: { alt } }))
+}
+
+const { alt } = Astro.props
+const ossRepo = 'https://github.com/getveritio/veritio'
+---
+
+<BaseLayout title={alt.metaTitle} description={alt.metaDescription}>
+  <Nav />
+
+  <main>
+    <section>
+      <div class="container">
+        <div class="border-b border-line py-3 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-muted">
+          <a href="/alternatives" class="text-ink-muted no-underline hover:text-accent">Alternatives</a>
+          &nbsp;/&nbsp;{alt.name}
+        </div>
+        <h1
+          class="max-w-[24ch] pt-12 font-medium text-ink"
+          style="font-size: var(--text-headline); line-height: var(--text-headline--line-height); letter-spacing: var(--text-headline--letter-spacing);"
+        >
+          {alt.heading}
+        </h1>
+        <p class="max-w-2xl pb-12 pt-6 text-lg leading-relaxed text-ink-soft">{alt.what}</p>
+      </div>
+    </section>
+
+    <Section tone="raised">
+      <div class="grid gap-10 lg:grid-cols-2">
+        <div>
+          <span class="eyebrow">Credit where due</span>
+          <h2 class="mt-3 text-lg font-semibold text-ink">What {alt.name} does well</h2>
+          <ul class="mt-4 flex flex-col gap-3">
+            {alt.strengths.map((s) => (
+              <li class="border-l-2 border-line-strong pl-4 text-base leading-relaxed text-ink-soft">{s}</li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <span class="eyebrow">The Veritio approach</span>
+          <h2 class="mt-3 text-lg font-semibold text-ink">Where Veritio differs</h2>
+          <ul class="mt-4 flex flex-col gap-3">
+            {alt.differences.map((d) => (
+              <li class="border-l-2 border-accent pl-4 text-base leading-relaxed text-ink-soft">{d}</li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </Section>
+
+    <Section>
+      <span class="eyebrow">Side by side</span>
+      <h2 class="mt-3 text-lg font-semibold text-ink">At a glance</h2>
+      <div class="mt-6 overflow-x-auto">
+        <table class="w-full border-collapse text-left">
+          <thead>
+            <tr class="border-b border-line-strong">
+              <th class="py-3 pr-6 font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-ink-muted"></th>
+              <th class="py-3 pr-6 font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-ink-muted">{alt.name}</th>
+              <th class="py-3 font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-accent">Veritio</th>
+            </tr>
+          </thead>
+          <tbody>
+            {alt.table.map((row) => (
+              <tr class="border-b border-line">
+                <td class="py-3.5 pr-6 align-top text-sm font-medium text-ink">{row.dimension}</td>
+                <td class="py-3.5 pr-6 align-top text-sm leading-relaxed text-ink-soft">{row.them}</td>
+                <td class="py-3.5 align-top text-sm leading-relaxed text-ink">{row.veritio}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p class="mt-4 font-mono text-[11.5px] leading-relaxed text-ink-muted">
+        Comparison last reviewed {lastReviewed}. Products change — check vendor
+        documentation for current behavior. Veritio provides evidence support
+        for reviews and investigations, not automatic compliance.
+      </p>
+    </Section>
+
+    <Section tone="sunken">
+      <div class="grid gap-10 lg:grid-cols-2">
+        <div>
+          <h2 class="text-lg font-semibold text-ink">Choose {alt.name} when…</h2>
+          <p class="mt-3 max-w-xl text-base leading-relaxed text-ink-soft">{alt.chooseThem}</p>
+        </div>
+        <div>
+          <h2 class="text-lg font-semibold text-ink">Choose Veritio when…</h2>
+          <p class="mt-3 max-w-xl text-base leading-relaxed text-ink-soft">{alt.chooseUs}</p>
+        </div>
+      </div>
+      <div class="mt-10 flex flex-wrap gap-3">
+        <a href={ossRepo} target="_blank" rel="noopener noreferrer" class="doc-btn doc-btn--solid">
+          View on GitHub ↗
+        </a>
+        <a href="/cloud" class="doc-btn">See Veritio Cloud</a>
+        <a href="/alternatives" class="doc-btn">More comparisons</a>
+      </div>
+    </Section>
+  </main>
+
+  <Footer />
+</BaseLayout>

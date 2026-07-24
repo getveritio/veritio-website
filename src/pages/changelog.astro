@@ -1,0 +1,109 @@
+---
+/**
+ * Public changelog: dated, public-safe milestones across the OSS packages,
+ * Veritio Cloud, and this site. Entries are curated from real release
+ * history — no private internals, no roadmap.
+ */
+import BaseLayout from '../layouts/BaseLayout.astro'
+import Nav from '../components/Nav.astro'
+import Footer from '../components/Footer.astro'
+import Section from '../components/Section.astro'
+
+const entries = [
+  {
+    date: '2026-07-24',
+    tag: 'Console',
+    title: 'Console refresh: wordmark and flat navigation',
+    body: 'The Veritio Cloud console moved to a mono text wordmark and a flatter, quieter navigation rail. The website now shows real console captures (demonstration data) instead of animated mockups.',
+  },
+  {
+    date: '2026-07-22',
+    tag: 'Pricing',
+    title: 'Pricing ladder v2',
+    body: 'Veritio Cloud pricing restructured around Pro, Team, Compliance, and Enterprise plans. Details and an FAQ live on the pricing page.',
+  },
+  {
+    date: '2026-07-17',
+    tag: 'OSS',
+    title: 'veritio 0.4.3 · @veritio/claude-code 0.4.4',
+    body: 'Release-train update: verifiable windowed and filtered export scopes specced (vevb-1), Claude Code capture self-healing for stale tenant scope, and offline ingest spooling.',
+  },
+  {
+    date: '2026-07-15',
+    tag: 'OSS',
+    title: 'Frozen-vocabulary risk signals for agent capture',
+    body: 'The Claude Code capture plugin classifies activity against a frozen risk-signal vocabulary; provenance edge and prompt ids became occurrence-scoped in core 0.4.2.',
+  },
+  {
+    date: '2026-07-14',
+    tag: 'OSS',
+    title: 'Agent plugin, veritio login, and Codex capture',
+    body: 'One-command capture setup for coding agents: the agent plugin records sessions, tool calls, and code changes as evidence, with a Codex adapter alongside Claude Code.',
+  },
+  {
+    date: '2026-07-10',
+    tag: 'OSS',
+    title: 'AI gateway capture',
+    body: 'An optional gateway tees AI provider traffic into evidence: ai.* event vocabulary, streaming support, usage injection, fail-closed health, and optional ship-out to Cloud ingest.',
+  },
+  {
+    date: '2026-07-16',
+    tag: 'Site',
+    title: 'Public launch surface',
+    body: 'Pricing, legal pages, docs hub, and real Veritio Cloud signup went live on getveritio.com.',
+  },
+  {
+    date: '2026-07-03',
+    tag: 'Site',
+    title: 'Evidence-dossier redesign',
+    body: 'getveritio.com moved to the evidence-dossier design language: serif prose, mono data, hairline rules.',
+  },
+]
+---
+
+<BaseLayout
+  title="Changelog — Veritio"
+  description="Dated, public milestones across the Veritio open-source packages, Veritio Cloud, and getveritio.com."
+>
+  <Nav />
+
+  <main>
+    <section>
+      <div class="container">
+        <div class="border-b border-line py-3 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-muted">
+          Changelog
+        </div>
+        <h1
+          class="max-w-[20ch] pt-12 font-medium text-ink"
+          style="font-size: var(--text-headline); line-height: var(--text-headline--line-height); letter-spacing: var(--text-headline--letter-spacing);"
+        >
+          What shipped.
+        </h1>
+        <p class="max-w-2xl pb-12 pt-6 text-lg leading-relaxed text-ink-soft">
+          Public milestones across the open-source packages, Veritio Cloud, and
+          this site. Full detail lives in the
+          <a href="https://github.com/getveritio/veritio" target="_blank" rel="noopener noreferrer" class="text-accent">open-source repository</a>.
+        </p>
+      </div>
+    </section>
+
+    <Section tone="raised">
+      <div class="flex flex-col">
+        {entries.map((e) => (
+          <article class="grid gap-2 border-b border-line py-6 first:border-t sm:grid-cols-[160px_1fr] sm:gap-6">
+            <div class="flex items-baseline gap-3 sm:flex-col sm:gap-1.5">
+              <time datetime={e.date} class="font-mono text-[12px] text-ink-muted">{e.date}</time>
+              <span class="font-mono text-[10px] uppercase tracking-[0.14em] text-accent">{e.tag}</span>
+            </div>
+            <div>
+              <h2 class="text-base font-semibold text-ink">{e.title}</h2>
+              <p class="mt-1.5 max-w-3xl text-base leading-relaxed text-ink-soft">{e.body}</p>
+            </div>
+          </article>
+        ))}
+      </div>
+    </Section>
+  </main>
+
+  <Footer />
+</BaseLayout>

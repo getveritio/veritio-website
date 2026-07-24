@@ -1,0 +1,158 @@
+---
+/**
+ * Korean pricing page (/ko/pricing), localized from src/pages/pricing.astro.
+ * Prices mirror veritio-cloud src/billing/plans.ts (USD) — the EN page and
+ * plans.ts are the source of truth; change them together.
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro'
+import Nav from '../../components/Nav.astro'
+import Footer from '../../components/Footer.astro'
+
+const registerUrl = 'https://console.getveritio.com/register'
+const headline =
+  'font-size: var(--text-headline); line-height: var(--text-headline--line-height); letter-spacing: var(--text-headline--letter-spacing);'
+
+const plans = [
+  { name: 'Pro', monthly: '$29', annual: '$24.17', for: '1인용' },
+  { name: 'Team', monthly: '$99', annual: '$82.50', for: '실무 팀용' },
+  { name: 'Compliance', monthly: '$499', annual: '$415.83', for: '감사 대상 조직용' },
+  { name: 'Enterprise', monthly: '협의', annual: '—', for: '협의 조건' },
+]
+
+const rows = [
+  { label: '프로젝트', values: ['3', '3', '10', '무제한'] },
+  { label: '월 이벤트', values: ['100,000', '500,000', '5,000,000', '협의'] },
+  { label: '초과분(10만 건당)', values: ['$10, 한도의 2배까지', '$10, 한도의 2배까지', '$10, 한도의 2배까지', '협의'] },
+  { label: '보존 기간', values: ['90일', '365일', '5년', '협의'] },
+  { label: '내보내기 번들', values: ['월 5회', '무제한', '무제한', '협의'] },
+  { label: '포함 시트', values: ['1', '5', '25', '협의'] },
+  { label: '추가 시트', values: ['—', '월 $15', '월 $15', '협의'] },
+]
+
+const included = [
+  ['해시 체인 감사 추적', '모든 이벤트가 테넌트별 시퀀스에 고정되어 누구든 재검증할 수 있습니다'],
+  ['가입 시 리전 선택', '테넌트 데이터는 조직 생성 시 선택한 리전에 저장됩니다 — EU 관할권, US, APAC'],
+  ['에이전트·AI 캡처', '에이전트 세션, 코드 변경, 배포를 일급 증거로 기록'],
+  ['서명된 내보내기 번들', '리뷰, DSAR 대응, 조사를 위한 vevb-1 번들'],
+  ['리스크 스코어링', '공개 정책 veritio.reference.v1 기반의 단계별 결정적 점수'],
+  ['팀 초대', '모든 조직에서 역할 기반 멤버십'],
+]
+
+const notes = [
+  '결제는 아직 시작되지 않았습니다. 지금 만든 조직은 Pro 플랜 한도로 무료로 운영되며, 결제 오픈 시 플랜을 선택합니다. 그때까지 카드가 필요 없습니다.',
+  '연간 결제는 10개월 가격으로 1년을 선결제합니다.',
+  '초과분은 무한정 청구되지 않습니다: 월 한도의 2배에 도달하면 월이 리셋되거나 플랜이 바뀔 때까지 수집이 안전하게 차단됩니다.',
+  '추가(append)만 과금 대상입니다 — 읽기, 대시보드, 내보내기, 검증은 무료입니다. 에이전트, 훅, CI, API 키는 시트가 아닙니다.',
+]
+---
+
+<BaseLayout
+  title="요금 — Veritio Cloud"
+  description="Veritio Cloud 플랜: Pro $29, Team $99, Compliance $499, Enterprise 협의. 오픈 소스 스택 셀프 호스팅은 무료입니다. 컴플라이언스 증적을 지원하며, 컴플라이언스를 보장하지 않습니다."
+>
+  <Nav />
+
+  <main>
+    <section>
+      <div class="container">
+        <div class="border-b border-line py-3 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-muted">
+          Veritio Cloud · 요금
+        </div>
+        <h1
+          class="max-w-[14ch] pt-12 font-medium text-ink sm:pt-16"
+          style="font-size: var(--text-display); line-height: var(--text-display--line-height); letter-spacing: var(--text-display--letter-spacing);"
+        >
+          요금.
+        </h1>
+        <p class="mt-6 max-w-[56ch] pb-14 text-lg leading-relaxed text-ink-soft">
+          네 가지 플랜, 하나의 프로토콜. 모든 티어가 같은 해시 체인 에비던스
+          레이어를 실행하며, 요금은 볼륨·보존 기간·시트에서만 다릅니다. 오픈
+          소스 스택의 셀프 호스팅은 무료이며 앞으로도 그렇습니다. Veritio는
+          컴플라이언스 증적을 지원할 뿐, 조직을 컴플라이언트하게 만들지
+          않습니다.
+        </p>
+      </div>
+    </section>
+
+    <section class="border-t border-line-strong">
+      <div class="container py-14 sm:py-16">
+        <div class="overflow-x-auto">
+          <table class="w-full border-collapse text-left align-top">
+            <thead>
+              <tr class="border-b border-line-strong">
+                <th scope="col" class="w-[168px] min-w-[150px] py-5 pr-4 align-bottom">
+                  <span class="font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-ink-muted">플랜</span>
+                </th>
+                {
+                  plans.map((plan) => (
+                    <th scope="col" class="min-w-[176px] border-l border-line px-5 py-5 align-bottom font-normal">
+                      <div class="font-serif text-[22px] font-medium leading-none text-ink">{plan.name}</div>
+                      <div class="mt-2 font-mono text-[11px] leading-relaxed text-ink-muted">{plan.for}</div>
+                      <div class="mt-4 font-mono text-[26px] font-medium leading-none text-ink">{plan.monthly}</div>
+                      <div class="mt-2 font-mono text-[11px] leading-relaxed text-ink-muted">
+                        {plan.annual === '—' ? '문의하기' : `월 요금 · 연간 결제 시 ${plan.annual}`}
+                      </div>
+                    </th>
+                  ))
+                }
+              </tr>
+            </thead>
+            <tbody>
+              {
+                rows.map((row) => (
+                  <tr class="border-b border-line">
+                    <th scope="row" class="py-4 pr-4 text-left text-sm font-medium text-ink">{row.label}</th>
+                    {row.values.map((v) => (
+                      <td class="border-l border-line px-5 py-4 font-mono text-[13px] text-ink-soft">{v}</td>
+                    ))}
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <div class="mt-8 flex flex-wrap gap-3">
+          <a href={registerUrl} target="_blank" rel="noopener noreferrer" class="doc-btn doc-btn--solid">
+            계정 만들기 ↗
+          </a>
+          <a href="/ko/cloud" class="doc-btn">Cloud 더 알아보기</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="border-t border-line bg-surface-raised">
+      <div class="container py-14 sm:py-16">
+        <h2 class="max-w-2xl font-semibold text-ink" style={headline}>모든 플랜에 포함</h2>
+        <div class="mt-8 grid gap-x-10 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
+          {
+            included.map(([title, body]) => (
+              <div class="border-t border-line pt-4">
+                <h3 class="text-base font-semibold text-ink">{title}</h3>
+                <p class="mt-2 text-[15px] leading-relaxed text-ink-soft">{body}</p>
+              </div>
+            ))
+          }
+        </div>
+
+        <h2 class="mt-14 max-w-2xl font-semibold text-ink" style={headline}>결제 안내</h2>
+        <ul class="mt-6 flex max-w-3xl flex-col gap-3">
+          {
+            notes.map((n) => (
+              <li class="border-l-2 border-line-strong pl-4 text-[15px] leading-relaxed text-ink-soft">{n}</li>
+            ))
+          }
+        </ul>
+
+        <p class="mt-10 max-w-3xl border-l-2 border-accent pl-4 text-[15px] leading-relaxed text-ink-soft">
+          Veritio가 우리 조직을 컴플라이언트하게 만들어 주나요? 아니요.
+          Veritio는 검증 가능한 컴플라이언스 증적 — 해시 체인 감사 추적과
+          서명된 내보내기 번들 — 을 생성합니다. 조직의 컴플라이언스 여부는
+          도구가 아니라 프레임워크에 따라 감사인이 판단합니다.
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <Footer />
+</BaseLayout>

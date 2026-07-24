@@ -12,11 +12,30 @@ import '../styles/global.css'
  * changes. Keep marketing copy here evidence-support-shaped: Veritio supports
  * compliance evidence; it does not make anyone compliant.
  */
+import {
+  localeFromPathname,
+  basePath,
+  localizePath,
+  translatedPaths,
+  locales,
+  ogLocale,
+} from '../i18n'
+
 const {
   title = 'Veritio',
   description = 'Protocol-first evidence support for audit trails, change provenance, and governance workflows.',
   jsonLd = [],
 } = Astro.props
+
+const locale = localeFromPathname(Astro.url.pathname)
+const pageBase = basePath(Astro.url.pathname)
+// hreflang alternates only for pages that actually have all locales.
+const alternates = translatedPaths.includes(pageBase)
+  ? locales.map((l) => ({
+      lang: l,
+      href: new URL(localizePath(pageBase, l), Astro.site).href,
+    }))
+  : []
 
 const canonical = new URL(Astro.url.pathname, Astro.site).href
 const ogImage = new URL('/og.png', Astro.site).href
@@ -46,12 +65,16 @@ const siteJsonLd = [
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang={locale}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
+    {alternates.map((a) => <link rel="alternate" hreflang={a.lang} href={a.href} />)}
+    {alternates.length > 0 && (
+      <link rel="alternate" hreflang="x-default" href={new URL(pageBase, Astro.site).href} />
+    )}
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="sitemap" href="/sitemap-index.xml" />
     <meta name="theme-color" content="#f8faf7" />
@@ -59,7 +82,7 @@ const siteJsonLd = [
 
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Veritio" />
-    <meta property="og:locale" content="en_US" />
+    <meta property="og:locale" content={ogLocale[locale]} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonical} />

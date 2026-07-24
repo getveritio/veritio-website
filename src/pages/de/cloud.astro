@@ -1,0 +1,183 @@
+---
+/**
+ * German Cloud page (/de/cloud), localized from src/pages/cloud.astro.
+ * Same claims discipline: managed service is optional, OSS stands alone.
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro'
+import Nav from '../../components/Nav.astro'
+import Footer from '../../components/Footer.astro'
+import Section from '../../components/Section.astro'
+import { Image } from 'astro:assets'
+import dashboardShot from '../../assets/console-dashboard.png'
+import episodesShot from '../../assets/console-episodes.png'
+import changesShot from '../../assets/console-changes.png'
+import exportsShot from '../../assets/console-exports.png'
+
+const cloudRegister = 'https://console.getveritio.com/register'
+const ossRepo = 'https://github.com/getveritio/veritio'
+const headline =
+  'font-size: var(--text-headline); line-height: var(--text-headline--line-height); letter-spacing: var(--text-headline--letter-spacing);'
+
+const tour = [
+  {
+    label: 'Operations',
+    title: 'Die Woche, bewertet',
+    body: 'Ein operatives Gesamtbild: Episoden nach Risiko über die letzten sieben Tage, governierte Änderungen vor der Integritätsprüfung, KI-Request-Kosten und der letzte Export. Der Evidence-Stream spielt jedes Episoden-Rollup Schritt für Schritt nach.',
+    shot: dashboardShot,
+    alt: 'Veritio-Cloud-Operations-Konsole: Evidence-Stream mit Risiko-Scores und Hash-Kette pro Ereignis, Risiko-Zeitleiste einer kritischen Episode sowie Panels für Episoden nach Risiko und letzte Änderungen.',
+  },
+  {
+    label: 'Episoden',
+    title: 'Triage nach Risiko, nicht nach Log-Volumen',
+    body: 'Jede Aktivitäts-Episode hängt an einer Episode-ID und trägt ein abgeleitetes Risiko-Rollup — Peak, Velocity, Schritte und Zeitspanne. Sortieren Sie die Woche nach dem, was wirklich einen Reviewer braucht.',
+    shot: episodesShot,
+    alt: 'Veritio-Cloud-Episodenliste: sechzig Aktivitäts-Episoden mit Low- und Critical-Risiko-Rollups, Schrittzahlen, Sessions und UTC-Zeitspannen.',
+  },
+  {
+    label: 'Governierte Änderungen',
+    title: 'Änderungen mit Absicht und Autorität',
+    body: 'Eine governierte Änderung hält fest, wer sie ausgelöst hat, unter welcher Autorität, mit Eingangs- und Ausgangs-Revisionen und Assertions — die Produkteinheit oberhalb roher Audit-Events, hash-verkettet verifiziert.',
+    shot: changesShot,
+    alt: 'Veritio-Cloud-Änderungsansicht: fünf aufgezeichnete Datentabellen-Änderungen mit auslösendem Benutzer, Status, Outputs, Inputs und dem Badge „Hash-chain verified".',
+  },
+  {
+    label: 'Exporte',
+    title: 'Nachweise zum Übergeben',
+    body: 'Fordern Sie ein Bundle für einen beliebigen Zeitraum und Projektumfang an. Jeder Export erscheint mit Manifest-Hash, Region und Download — unabhängig verifizierbar mit dem Open-Source-Verifier.',
+    shot: exportsShot,
+    alt: 'Veritio-Cloud-Exporte: zwei fertige Export-Bundles mit Manifest-Hashes, Zeiträumen, EU-Region-Badges und Download-Aktionen.',
+  },
+]
+
+const capabilities = [
+  ['Verwalteter Ingest', 'Ein gehosteter Endpunkt nimmt Ihre Nachweise entgegen — Sie betreiben keine Pipeline.'],
+  ['Scoped Keys', 'Getrennte Tokens für Ingest-, Lese-, Export- und Admin-Autorität.'],
+  ['Append-only-Speicher', 'Dauerhafte, unveränderliche Evidence-Speicherung, für Sie betrieben.'],
+  ['Graph-Projektion', 'Nachweise werden automatisch in einen verbundenen Graphen projiziert.'],
+  ['Exporte', 'Export-Bundles auf Abruf erzeugen und ausliefern.'],
+  ['Regionale Speicherung', 'Region bei der Registrierung wählen — EU-Jurisdiktion, US oder APAC.'],
+]
+---
+
+<BaseLayout
+  title="Veritio Cloud — Gehostete Evidence-Operations"
+  description="Veritio Cloud ist der optionale verwaltete Dienst für Veritio. Gleiches offenes Protokoll, plus verwaltete Infrastruktur und Betrieb für Evidence-Workflows."
+>
+  <Nav />
+
+  <section
+    class="py-20 sm:py-28"
+    style="background-image: linear-gradient(180deg, rgb(248 250 247 / 86%), rgb(248 250 247 / 97%)), url('/evidence-grid.svg'); background-size: cover;"
+  >
+    <div class="container">
+      <span class="eyebrow">Veritio Cloud · Optionaler verwalteter Dienst</span>
+      <h1
+        class="mt-5 max-w-4xl font-semibold text-ink"
+        style="font-size: var(--text-display); line-height: var(--text-display--line-height); letter-spacing: var(--text-display--letter-spacing);"
+      >
+        Gehostete Evidence-Operations, zu Ihren Bedingungen.
+      </h1>
+      <p class="mt-6 max-w-2xl text-lg leading-relaxed text-ink-soft">
+        Veritio Cloud ist der optionale verwaltete Weg, Veritio zu betreiben —
+        und er ist jetzt offen. Es spricht dasselbe offene Protokoll wie SDK
+        und selbst gehosteter Server und ergänzt verwaltete Infrastruktur und
+        Betrieb. Der Open-Source-Weg funktioniert für sich allein — Cloud ist
+        da, wenn Sie ihn nicht selbst betreiben möchten.
+      </p>
+      <div class="mt-9 flex flex-wrap gap-3">
+        <a href={cloudRegister} target="_blank" rel="noopener noreferrer" class="doc-btn doc-btn--solid">
+          Konto erstellen ↗
+        </a>
+        <a href="/de/pricing" class="doc-btn">Preise ansehen</a>
+        <a href={ossRepo} target="_blank" rel="noopener noreferrer" class="doc-btn">
+          Open-Source-SDK nutzen
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <Section id="tour" tone="raised" bordered>
+    <span class="eyebrow">Konsolen-Tour</span>
+    <h2 class="mt-4 max-w-2xl font-semibold text-ink" style={headline}>
+      Die Konsole, wie sie wirklich aussieht
+    </h2>
+    <p class="mt-4 max-w-2xl text-base leading-relaxed text-ink-soft">
+      Aufnahmen aus einer Referenz-Installation mit der offenen Risiko-Policy.
+      Durchgehend Demonstrationsdaten.
+    </p>
+
+    <div class="mt-12 flex flex-col gap-16">
+      {
+        tour.map((t) => (
+          <div>
+            <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+              <span class="font-mono text-[11px] uppercase tracking-[0.16em] text-accent">{t.label}</span>
+              <h3 class="text-lg font-semibold text-ink">{t.title}</h3>
+            </div>
+            <p class="mt-2 max-w-2xl text-base leading-relaxed text-ink-soft">{t.body}</p>
+            <div class="mt-5 overflow-hidden rounded-xl" style="background: #0c1a14; border: 1px solid #c6bda1;">
+              <Image
+                src={t.shot}
+                alt={t.alt}
+                widths={[720, 1440, 2880]}
+                sizes="(min-width: 1200px) 1116px, 100vw"
+                quality={90}
+                loading="lazy"
+                class="block h-auto w-full"
+              />
+            </div>
+          </div>
+        ))
+      }
+    </div>
+  </Section>
+
+  <Section id="capabilities">
+    <span class="eyebrow">Verwaltete Fähigkeiten</span>
+    <h2 class="mt-4 max-w-2xl font-semibold text-ink" style={headline}>
+      Was der gehostete Dienst ergänzt
+    </h2>
+    <div class="mt-8 grid gap-x-10 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
+      {
+        capabilities.map(([title, body]) => (
+          <div class="border-t border-line pt-4">
+            <h3 class="text-base font-semibold text-ink">{title}</h3>
+            <p class="mt-2 text-[15px] leading-relaxed text-ink-soft">{body}</p>
+          </div>
+        ))
+      }
+    </div>
+  </Section>
+
+  <section class="border-t border-line bg-evergreen py-16 text-surface sm:py-20">
+    <div class="container">
+      <h2 class="max-w-2xl font-semibold" style={headline}>
+        Gehostetes Veritio gewünscht?
+      </h2>
+      <p class="mt-4 max-w-2xl text-base leading-relaxed text-surface/80">
+        Veritio Cloud ist jetzt offen. Region bei der Registrierung wählen und
+        heute mit verifizierbaren Nachweisen starten — keine Karte, solange
+        das Billing im Pre-Launch ist.
+      </p>
+      <div class="mt-8 flex flex-wrap items-center gap-4">
+        <a
+          href={cloudRegister}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="doc-btn"
+          style="border-color: var(--color-surface); color: var(--color-surface);"
+        >
+          Konto erstellen ↗
+        </a>
+        <a
+          href="/de/pricing"
+          class="font-mono text-[13px] font-medium uppercase tracking-[0.08em] text-surface/85 no-underline hover:text-surface"
+        >
+          Preise ansehen →
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <Footer />
+</BaseLayout>
