@@ -4,6 +4,49 @@ import Nav from '../components/Nav.astro'
 import Footer from '../components/Footer.astro'
 import Section from '../components/Section.astro'
 import FeatureCard from '../components/FeatureCard.astro'
+import { Image } from 'astro:assets'
+import dashboardShot from '../assets/console-dashboard.png'
+import episodesShot from '../assets/console-episodes.png'
+import changesShot from '../assets/console-changes.png'
+import exportsShot from '../assets/console-exports.png'
+
+/* Console tour: real captures from a reference deployment (demonstration
+   data, masked identities). Keep alts descriptive — the images carry the
+   product claims, the captions stay factual. */
+const tour = [
+  {
+    label: 'Operations',
+    title: 'The week, scored',
+    body:
+      'One operational picture: episodes by risk over the last seven days, governed changes awaiting integrity checks, AI request spend, and the last export. The evidence stream replays each episode rollup step by step.',
+    shot: dashboardShot,
+    alt: 'Veritio Cloud Operations console: evidence stream with per-event risk scores and hash chain, a critical episode risk timeline, and panels for episodes by risk and latest changes.',
+  },
+  {
+    label: 'Episodes',
+    title: 'Triage by risk, not by log volume',
+    body:
+      'Every activity episode is threaded by one episode id and carries a derived risk rollup — peak, velocity, steps, and span. Sort the week by what actually needs a reviewer.',
+    shot: episodesShot,
+    alt: 'Veritio Cloud episodes list: sixty activity episodes with low and critical risk rollups, step counts, sessions, and UTC spans.',
+  },
+  {
+    label: 'Governed changes',
+    title: 'Changes with intent and authority',
+    body:
+      'A governed change records who initiated it, under what authority, with input and output revisions and assertions — the product unit above raw audit events, hash-chain verified.',
+    shot: changesShot,
+    alt: 'Veritio Cloud governed changes: five recorded data-table changes with initiating user, status, outputs, inputs, and a hash-chain verified badge.',
+  },
+  {
+    label: 'Exports',
+    title: 'Evidence you can hand over',
+    body:
+      'Request a bundle for any range and project scope. Each export lands with its manifest hash, region, and a download — verifiable independently with the open-source verifier.',
+    shot: exportsShot,
+    alt: 'Veritio Cloud exports: two ready export bundles with manifest hashes, date ranges, EU region badges, and download actions.',
+  },
+]
 
 const cloudMailto = 'mailto:hello@getveritio.com?subject=Veritio%20Cloud'
 const cloudRegister = 'https://console.getveritio.com/register'
@@ -76,6 +119,50 @@ const icon = {
       </div>
     </div>
   </section>
+
+  <Section id="tour" tone="raised" bordered>
+    <span class="eyebrow">Console tour</span>
+    <h2
+      class="mt-4 max-w-2xl font-semibold text-ink"
+      style="font-size: var(--text-headline); line-height: var(--text-headline--line-height); letter-spacing: var(--text-headline--letter-spacing);"
+    >
+      The console, as it actually looks
+    </h2>
+    <p class="mt-4 max-w-2xl text-base leading-relaxed text-ink-soft">
+      Captures from a reference deployment running the open risk policy.
+      Demonstration data throughout.
+    </p>
+
+    <div class="mt-12 flex flex-col gap-16">
+      {
+        tour.map((t) => (
+          <div>
+            <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+              <span class="font-mono text-[11px] uppercase tracking-[0.16em] text-accent">
+                {t.label}
+              </span>
+              <h3 class="text-lg font-semibold text-ink">{t.title}</h3>
+            </div>
+            <p class="mt-2 max-w-2xl text-base leading-relaxed text-ink-soft">{t.body}</p>
+            <div
+              class="mt-5 overflow-hidden rounded-xl"
+              style="background: #0c1a14; border: 1px solid #c6bda1;"
+            >
+              <Image
+                src={t.shot}
+                alt={t.alt}
+                widths={[720, 1440, 2880]}
+                sizes="(min-width: 1200px) 1116px, 100vw"
+                quality={90}
+                loading="lazy"
+                class="block h-auto w-full"
+              />
+            </div>
+          </div>
+        ))
+      }
+    </div>
+  </Section>
 
   <Section id="capabilities">
     <span class="eyebrow">Managed capabilities</span>

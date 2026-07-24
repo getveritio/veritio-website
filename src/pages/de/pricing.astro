@@ -1,0 +1,158 @@
+---
+/**
+ * German pricing page (/de/pricing), localized from src/pages/pricing.astro.
+ * Prices mirror veritio-cloud src/billing/plans.ts (USD) — the EN page and
+ * plans.ts are the source of truth; change them together.
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro'
+import Nav from '../../components/Nav.astro'
+import Footer from '../../components/Footer.astro'
+
+const registerUrl = 'https://console.getveritio.com/register'
+const headline =
+  'font-size: var(--text-headline); line-height: var(--text-headline--line-height); letter-spacing: var(--text-headline--letter-spacing);'
+
+const plans = [
+  { name: 'Pro', monthly: '$29', annual: '$24.17', for: 'für eine Person' },
+  { name: 'Team', monthly: '$99', annual: '$82.50', for: 'für ein Arbeitsteam' },
+  { name: 'Compliance', monthly: '$499', annual: '$415.83', for: 'für auditierte Organisationen' },
+  { name: 'Enterprise', monthly: 'Individuell', annual: '—', for: 'verhandelte Konditionen' },
+]
+
+const rows = [
+  { label: 'Projekte', values: ['3', '3', '10', 'Unbegrenzt'] },
+  { label: 'Events / Monat', values: ['100.000', '500.000', '5.000.000', 'Individuell'] },
+  { label: 'Mehrverbrauch je 100k', values: ['$10, bis 2× Kontingent', '$10, bis 2× Kontingent', '$10, bis 2× Kontingent', 'Individuell'] },
+  { label: 'Aufbewahrung', values: ['90 Tage', '365 Tage', '5 Jahre', 'Individuell'] },
+  { label: 'Export-Bundles', values: ['5 / Monat', 'Unbegrenzt', 'Unbegrenzt', 'Individuell'] },
+  { label: 'Enthaltene Seats', values: ['1', '5', '25', 'Individuell'] },
+  { label: 'Zusätzlicher Seat', values: ['—', '$15 / Monat', '$15 / Monat', 'Individuell'] },
+]
+
+const included = [
+  ['Hash-verketteter Audit-Trail', 'jedes Event fest in einer per-Tenant-Sequenz, die jede Partei nachprüfen kann'],
+  ['Regionswahl bei Registrierung', 'Tenant-Daten liegen in der bei der Organisationserstellung gewählten Region — EU-Jurisdiktion, US oder APAC'],
+  ['Agent- und KI-Capture', 'Agent-Sessions, Code-Änderungen und Deployments als vollwertige Nachweise'],
+  ['Signierte Export-Bundles', 'vevb-1-Bundles für Reviews, DSAR-Antworten und Untersuchungen'],
+  ['Risiko-Scoring', 'deterministische Scores je Schritt aus der offenen Policy veritio.reference.v1'],
+  ['Team-Einladungen', 'rollenbasierte Mitgliedschaft in jeder Organisation'],
+]
+
+const notes = [
+  'Das Billing ist noch nicht live. Heute erstellte Organisationen laufen kostenlos mit Pro-Limits und wählen einen Plan, sobald das Billing startet; bis dahin ist keine Karte nötig.',
+  'Jährliche Abrechnung: ein volles Jahr im Voraus zum Preis von zehn Monaten.',
+  'Mehrverbrauch ist nie unbegrenzt: Beim Doppelten des Monatskontingents schließt der Ingest, bis der Monat zurücksetzt oder der Plan wechselt.',
+  'Gezählt werden nur Appends — Lesen, Dashboards, Exporte und Verifikation sind kostenlos. Agents, Hooks, CI und API-Keys sind keine Seats.',
+]
+---
+
+<BaseLayout
+  title="Preise — Veritio Cloud"
+  description="Veritio-Cloud-Pläne: Pro $29, Team $99, Compliance $499, Enterprise individuell. Self-Hosting des Open-Source-Stacks ist kostenlos. Unterstützt Compliance-Nachweise; macht nicht compliant."
+>
+  <Nav />
+
+  <main>
+    <section>
+      <div class="container">
+        <div class="border-b border-line py-3 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-muted">
+          Veritio Cloud · Preise
+        </div>
+        <h1
+          class="max-w-[14ch] pt-12 font-medium text-ink sm:pt-16"
+          style="font-size: var(--text-display); line-height: var(--text-display--line-height); letter-spacing: var(--text-display--letter-spacing);"
+        >
+          Preise.
+        </h1>
+        <p class="mt-6 max-w-[56ch] pb-14 text-lg leading-relaxed text-ink-soft">
+          Vier Pläne, ein Protokoll. Jede Stufe betreibt denselben
+          hash-verketteten Evidence-Layer; die Tarife unterscheiden sich nur in
+          Volumen, Aufbewahrung und Seats. Self-Hosting des Open-Source-Stacks
+          ist kostenlos — und bleibt es. Veritio unterstützt
+          Compliance-Nachweise; es macht eine Organisation nicht compliant.
+        </p>
+      </div>
+    </section>
+
+    <section class="border-t border-line-strong">
+      <div class="container py-14 sm:py-16">
+        <div class="overflow-x-auto">
+          <table class="w-full border-collapse text-left align-top">
+            <thead>
+              <tr class="border-b border-line-strong">
+                <th scope="col" class="w-[168px] min-w-[150px] py-5 pr-4 align-bottom">
+                  <span class="font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-ink-muted">Plan</span>
+                </th>
+                {
+                  plans.map((plan) => (
+                    <th scope="col" class="min-w-[176px] border-l border-line px-5 py-5 align-bottom font-normal">
+                      <div class="font-serif text-[22px] font-medium leading-none text-ink">{plan.name}</div>
+                      <div class="mt-2 font-mono text-[11px] leading-relaxed text-ink-muted">{plan.for}</div>
+                      <div class="mt-4 font-mono text-[26px] font-medium leading-none text-ink">{plan.monthly}</div>
+                      <div class="mt-2 font-mono text-[11px] leading-relaxed text-ink-muted">
+                        {plan.annual === '—' ? 'Kontakt aufnehmen' : `pro Monat · ${plan.annual} bei jährlicher Zahlung`}
+                      </div>
+                    </th>
+                  ))
+                }
+              </tr>
+            </thead>
+            <tbody>
+              {
+                rows.map((row) => (
+                  <tr class="border-b border-line">
+                    <th scope="row" class="py-4 pr-4 text-left text-sm font-medium text-ink">{row.label}</th>
+                    {row.values.map((v) => (
+                      <td class="border-l border-line px-5 py-4 font-mono text-[13px] text-ink-soft">{v}</td>
+                    ))}
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <div class="mt-8 flex flex-wrap gap-3">
+          <a href={registerUrl} target="_blank" rel="noopener noreferrer" class="doc-btn doc-btn--solid">
+            Konto erstellen ↗
+          </a>
+          <a href="/de/cloud" class="doc-btn">Mehr über Cloud</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="border-t border-line bg-surface-raised">
+      <div class="container py-14 sm:py-16">
+        <h2 class="max-w-2xl font-semibold text-ink" style={headline}>In jedem Plan enthalten</h2>
+        <div class="mt-8 grid gap-x-10 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
+          {
+            included.map(([title, body]) => (
+              <div class="border-t border-line pt-4">
+                <h3 class="text-base font-semibold text-ink">{title}</h3>
+                <p class="mt-2 text-[15px] leading-relaxed text-ink-soft">{body}</p>
+              </div>
+            ))
+          }
+        </div>
+
+        <h2 class="mt-14 max-w-2xl font-semibold text-ink" style={headline}>Hinweise zur Abrechnung</h2>
+        <ul class="mt-6 flex max-w-3xl flex-col gap-3">
+          {
+            notes.map((n) => (
+              <li class="border-l-2 border-line-strong pl-4 text-[15px] leading-relaxed text-ink-soft">{n}</li>
+            ))
+          }
+        </ul>
+
+        <p class="mt-10 max-w-3xl border-l-2 border-accent pl-4 text-[15px] leading-relaxed text-ink-soft">
+          Macht Veritio meine Organisation compliant? Nein. Veritio erzeugt
+          verifizierbare Compliance-Nachweise — hash-verkettete Audit-Trails
+          und signierte Export-Bundles. Ob eine Organisation compliant ist,
+          entscheiden Prüfer anhand eines Rahmenwerks, nicht ein Werkzeug.
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <Footer />
+</BaseLayout>

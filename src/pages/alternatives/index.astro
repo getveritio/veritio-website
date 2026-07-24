@@ -1,0 +1,55 @@
+---
+/** Index of comparison pages — honest, approach-level, dated. */
+import BaseLayout from '../../layouts/BaseLayout.astro'
+import Nav from '../../components/Nav.astro'
+import Footer from '../../components/Footer.astro'
+import Section from '../../components/Section.astro'
+import { alternatives, lastReviewed } from '../../data/alternatives'
+---
+
+<BaseLayout
+  title="Veritio alternatives & comparisons — audit trails, evidence, AI governance"
+  description="How Veritio compares to AWS CloudTrail, WorkOS Audit Logs, Langfuse, and rolling your own audit tables. Honest, approach-level comparisons, reviewed and dated."
+>
+  <Nav />
+
+  <main>
+    <section>
+      <div class="container">
+        <div class="border-b border-line py-3 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-muted">
+          Comparisons
+        </div>
+        <h1
+          class="max-w-[20ch] pt-12 font-medium text-ink"
+          style="font-size: var(--text-headline); line-height: var(--text-headline--line-height); letter-spacing: var(--text-headline--letter-spacing);"
+        >
+          How Veritio compares.
+        </h1>
+        <p class="max-w-2xl pb-12 pt-6 text-lg leading-relaxed text-ink-soft">
+          Different tools answer different questions. These pages compare
+          approaches honestly — including when the other tool is the right
+          choice. Last reviewed {lastReviewed}.
+        </p>
+      </div>
+    </section>
+
+    <Section tone="raised">
+      <div class="flex flex-col">
+        {alternatives.map((alt) => (
+          <a
+            href={`/alternatives/${alt.slug}`}
+            class="group border-b border-line py-6 no-underline first:border-t"
+          >
+            <div class="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 class="text-lg font-semibold text-ink group-hover:text-accent">{alt.heading}</h2>
+              <span class="font-mono text-[11px] uppercase tracking-[0.12em] text-ink-muted">Read →</span>
+            </div>
+            <p class="mt-2 max-w-3xl text-base leading-relaxed text-ink-soft">{alt.metaDescription}</p>
+          </a>
+        ))}
+      </div>
+    </Section>
+  </main>
+
+  <Footer />
+</BaseLayout>

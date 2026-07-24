@@ -1,0 +1,174 @@
+---
+/**
+ * German landing page (/de). A focused localization of the EN dossier
+ * landing (src/pages/index.astro): cover, real console capture, the
+ * situation, the canvas, and the Cloud pitch. Keep claims aligned with the
+ * EN page — evidence support, never automatic compliance.
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro'
+import Nav from '../../components/Nav.astro'
+import Footer from '../../components/Footer.astro'
+import { Image } from 'astro:assets'
+import consoleShot from '../../assets/console-dashboard.png'
+import episodeShot from '../../assets/episode-canvas.png'
+
+const displayStyle =
+  'font-size: var(--text-display); line-height: var(--text-display--line-height); letter-spacing: var(--text-display--letter-spacing);'
+const headlineStyle =
+  'font-size: var(--text-headline); line-height: var(--text-headline--line-height); letter-spacing: var(--text-headline--letter-spacing);'
+---
+
+<BaseLayout
+  title="Veritio — Evidence-Graph für Audit-Trails, KI-Änderungen und Governance"
+  description="Open-Source-Evidence-Layer: Anwendungsereignisse, Agent-Sessions, Code-Änderungen und Deployments als hash-verkettete, unabhängig verifizierbare Audit-Events aufzeichnen, verknüpfen und exportieren."
+>
+  <Nav />
+
+  <main>
+    <!-- COVER -->
+    <section>
+      <div class="container">
+        <div class="border-b border-line py-3 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-muted">
+          Open-Source-Evidence-Layer
+        </div>
+
+        <h1 class="max-w-[17ch] pt-12 font-medium text-ink sm:pt-16" style={displayStyle}>
+          Wer was getan hat, wie riskant es war — und der Beweis dazu.
+        </h1>
+
+        <div class="grid gap-8 pb-12 pt-8 lg:grid-cols-[1fr_auto] lg:items-end">
+          <p class="max-w-2xl text-lg leading-relaxed text-ink-soft sm:text-xl">
+            Veritio zeichnet Anwendungsereignisse, Agent-Sessions,
+            Code-Änderungen und Deployments als hash-verkettete Audit-Events
+            auf — mit Herkunft und deterministischem Risiko-Score für jeden
+            Schritt. Jeder kann sie unabhängig verifizieren und exportieren.
+            Unterstützung durch Nachweise für Reviews und
+            Untersuchungen, <em>keine</em> automatische Compliance.
+          </p>
+          <div class="flex flex-wrap items-center gap-3">
+            <a
+              href="https://github.com/getveritio/veritio"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="doc-btn doc-btn--solid"
+            >
+              Auf GitHub ansehen ↗
+            </a>
+            <a href="/examples" class="doc-btn">Beispiele ansehen</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- BEWEISSTÜCK A -->
+    <section>
+      <div class="container pb-16 sm:pb-20">
+        <div
+          class="relative overflow-hidden rounded-xl"
+          style="aspect-ratio: 2880 / 1634; background: #0c1a14; border: 1px solid #c6bda1; width: min(100vw - 32px, 1520px); margin-inline: calc((100% - min(100vw - 32px, 1520px)) / 2);"
+        >
+          <Image
+            src={consoleShot}
+            alt="Veritio-Cloud-Konsole im Dark Mode: Operations-Dashboard mit Evidence-Stream aus hash-verketteten Tool-Aufrufen, Code-Änderungen und Deployments, jeweils mit Risiko-Score, darüber die Risiko-Zeitleiste einer kritischen Episode."
+            widths={[760, 1520, 2880]}
+            sizes="(min-width: 1600px) 1520px, calc(100vw - 32px)"
+            quality={90}
+            loading="eager"
+            class="block h-full w-full object-cover object-top"
+          />
+        </div>
+
+        <p class="mt-3 font-mono text-[11.5px] leading-relaxed tracking-[0.02em] text-ink-muted">
+          Veritio Cloud · Operations-Konsole — Aufnahme aus einer
+          Referenz-Installation mit <code class="inline">@veritio/core</code>-Risiko-Scoring
+          unter der Policy <code class="inline">veritio.reference.v1</code>.
+          Demonstrationsdaten.
+        </p>
+      </div>
+    </section>
+
+    <!-- DIE AUSGANGSLAGE -->
+    <section class="border-t border-line-strong bg-surface-raised">
+      <div class="container py-16 sm:py-20">
+        <h2 class="max-w-[24ch] font-medium text-ink" style={headlineStyle}>
+          Software liefert sich heute selbst aus.
+        </h2>
+        <p class="mt-6 max-w-2xl text-lg leading-relaxed text-ink-soft">
+          Ein Agent schreibt die Migration. Eine Pipeline gibt sie frei. Ein
+          Service deployt sie nachts um drei in die Produktion. Die Arbeit ist
+          real — und ebenso real sind die Fragen danach: <em>Wer hat das getan,
+          unter wessen Review, und wie gefährlich war es?</em>
+        </p>
+        <p class="mt-5 max-w-2xl text-base leading-relaxed text-ink-soft">
+          Anwendungs-Logs beantworten das nicht. Sie rotieren, werden
+          umgeschrieben und gehören dem, der die Datenbank kontrolliert.
+          Veritio macht aus jeder Aktion stattdessen einen Datensatz: eine
+          Herkunft — User, Service oder KI-Agent —, einen deterministischen
+          Risiko-Score und einen Hash, der ihn unveränderlich in die Sequenz
+          einschließt. Nachweise statt Logs.
+        </p>
+      </div>
+    </section>
+
+    <!-- CLOUD -->
+    <section class="border-t border-line bg-evergreen py-16 text-surface sm:py-20">
+      <div class="container">
+        <h2 class="max-w-2xl font-semibold" style={headlineStyle}>
+          Oder wir betreiben es für Sie.
+        </h2>
+        <p class="mt-4 max-w-2xl text-base leading-relaxed text-surface/80">
+          Veritio Cloud ist der verwaltete Weg, dasselbe offene Protokoll zu
+          betreiben: Wir übernehmen Ingest, Speicherung, Aufbewahrung und
+          Exporte — Sie behalten Nachweise, die jeder verifizieren kann, ohne
+          uns vertrauen zu müssen. Der Open-Source-Weg funktioniert immer auch
+          allein.
+        </p>
+
+        <div
+          class="mt-10 overflow-hidden rounded-xl"
+          style="aspect-ratio: 2880 / 1480; background: #0c1a14; border: 1px solid rgba(246, 243, 234, 0.22);"
+        >
+          <Image
+            src={episodeShot}
+            alt="Veritio-Cloud-Episoden-Canvas: Ereignisse einer kritischen Episode — Security-Risk, Tool-Aufrufe, eine Code-Änderung und ein Deployment — als verbundene Karten, mit dem kritischen Risiko-Rollup der Episode."
+            widths={[760, 1520, 2880]}
+            sizes="(min-width: 1280px) 1180px, 100vw"
+            quality={90}
+            loading="lazy"
+            class="block h-full w-full object-cover object-top"
+          />
+        </div>
+        <p class="mt-3 font-mono text-[11.5px] leading-relaxed tracking-[0.02em] text-surface/60">
+          Dieselben Datensätze auf dem Episoden-Canvas von Veritio Cloud —
+          Scores und Kette, visuell statt als Liste. Demonstrationsdaten.
+        </p>
+
+        <div class="mt-8 flex flex-wrap items-center gap-4">
+          <a
+            href="https://console.getveritio.com/register"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="doc-btn"
+            style="border-color: var(--color-surface); color: var(--color-surface);"
+          >
+            Konto erstellen ↗
+          </a>
+          <a
+            href="/de/pricing"
+            class="font-mono text-[13px] font-medium uppercase tracking-[0.08em] text-surface/85 no-underline hover:text-surface"
+          >
+            Preise ansehen →
+          </a>
+          <a
+            href="/de/cloud"
+            class="font-mono text-[13px] font-medium uppercase tracking-[0.08em] text-surface/60 no-underline hover:text-surface"
+          >
+            Mehr über Cloud
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <Footer />
+</BaseLayout>

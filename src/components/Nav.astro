@@ -4,16 +4,35 @@
  * navigation, square-cornered GitHub action. Shared by all pages; active
  * state is computed at build time — no client JS.
  */
+import {
+  localeFromPathname,
+  basePath,
+  localizePath,
+  translatedPaths,
+  navStrings,
+  type Locale,
+} from '../i18n'
+
 const { pathname } = Astro.url
+const locale = localeFromPathname(pathname)
+const pageBase = basePath(pathname)
+const t = navStrings[locale]
+
 const links = [
-  { href: '/', label: 'Overview' },
-  { href: '/cloud', label: 'Cloud' },
-  { href: '/pricing', label: 'Pricing' },
-  { href: '/docs', label: 'Docs' },
-  { href: '/examples', label: 'Examples' },
+  { href: localizePath('/', locale), base: '/', label: t.overview },
+  { href: localizePath('/cloud', locale), base: '/cloud', label: t.cloud },
+  { href: localizePath('/pricing', locale), base: '/pricing', label: t.pricing },
+  { href: '/docs', base: '/docs', label: t.docs },
+  { href: '/examples', base: '/examples', label: t.examples },
 ]
-const isActive = (href: string) =>
-  href === '/' ? pathname === '/' : pathname.startsWith(href)
+const isActive = (base: string) =>
+  base === '/' ? pageBase === '/' : pageBase.startsWith(base)
+
+// Language switcher: link to this page's translation when it exists, else
+// to the locale's home page.
+const switchTarget = (l: Locale) =>
+  translatedPaths.includes(pageBase) ? localizePath(pageBase, l) : localizePath('/', l)
+const langs: Locale[] = ['en', 'de', 'ko']
 ---
 
 <nav class="border-b border-line-strong bg-surface">
@@ -40,11 +59,11 @@ const isActive = (href: string) =>
             href={link.href}
             class:list={[
               'no-underline transition-colors hover:text-accent',
-              isActive(link.href)
+              isActive(link.base)
                 ? 'border-b border-accent pb-0.5 text-accent'
                 : 'text-ink-muted',
             ]}
-            aria-current={isActive(link.href) ? 'page' : undefined}
+            aria-current={isActive(link.base) ? 'page' : undefined}
           >
             {link.label}
           </a>
@@ -56,8 +75,27 @@ const isActive = (href: string) =>
         rel="noopener noreferrer"
         class="text-ink-muted no-underline transition-colors hover:text-accent"
       >
-        Sign in
+        {t.signIn}
       </a>
+      <span class="flex items-center gap-1.5 text-[11px]" aria-label="Language">
+        {
+          langs.map((l, i) => (
+            <>
+              {i > 0 && <span class="text-line-strong">·</span>}
+              <a
+                href={switchTarget(l)}
+                hreflang={l}
+                class:list={[
+                  'no-underline transition-colors hover:text-accent',
+                  l === locale ? 'text-accent' : 'text-ink-muted',
+                ]}
+              >
+                {l.toUpperCase()}
+              </a>
+            </>
+          ))
+        }
+      </span>
       <a
         href="https://github.com/getveritio/veritio"
         target="_blank"
