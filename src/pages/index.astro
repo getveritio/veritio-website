@@ -6,17 +6,16 @@
  * catching tampering, 04 getting started, closing with the Veritio Cloud
  * pitch (the paid service — sold, not footnoted, but always optional). Mono is
  * reserved for data/labels, serif for prose; hairline rules instead of cards.
- * The Remotion island is the page's only client JS and paints over a static
- * server-rendered fallback.
+ * Both exhibits are real console captures (demonstration data) — the page
+ * ships no client JavaScript.
  */
 import BaseLayout from '../layouts/BaseLayout.astro'
 import Nav from '../components/Nav.astro'
 import Footer from '../components/Footer.astro'
 import CodeBlock from '../components/CodeBlock.astro'
-import HeroPlayer from '../components/hero/HeroPlayer.tsx'
-import HeroConsoleFallback from '../components/hero/HeroConsoleFallback.astro'
-import CanvasPlayer from '../components/hero/CanvasPlayer.tsx'
-import CanvasFallback from '../components/hero/CanvasFallback.astro'
+import { Image } from 'astro:assets'
+import consoleShot from '../assets/console-dashboard.png'
+import episodeShot from '../assets/episode-canvas.png'
 
 const quickstartCode = `import { MemoryAuditStore, createAuditEvent } from "@veritio/core";
 
@@ -206,21 +205,25 @@ const headlineStyle =
     <section>
       <div class="container pb-16 sm:pb-20">
         <div
-          class="relative overflow-hidden"
-          style="aspect-ratio: 1120 / 640; background: #0c1a14; border: 1px solid #c6bda1;"
+          class="relative overflow-hidden rounded-xl"
+          style="aspect-ratio: 2880 / 1634; background: #0c1a14; border: 1px solid #c6bda1; width: min(100vw - 32px, 1520px); margin-inline: calc((100% - min(100vw - 32px, 1520px)) / 2);"
         >
-          <div class="absolute inset-0">
-            <HeroConsoleFallback />
-          </div>
-          <div class="absolute inset-0">
-            <HeroPlayer client:only="react" />
-          </div>
+          <Image
+            src={consoleShot}
+            alt="Veritio Cloud console in dark mode: the Operations dashboard with an evidence stream of hash-linked tool calls, code changes, and deploys, each with a risk score, above a critical episode's risk timeline."
+            widths={[760, 1520, 2880]}
+            sizes="(min-width: 1600px) 1520px, calc(100vw - 32px)"
+            quality={90}
+            loading="eager"
+            class="block h-full w-full object-cover object-top"
+          />
         </div>
 
         <p class="mt-3 font-mono text-[11.5px] leading-relaxed tracking-[0.02em] text-ink-muted">
-          Risk scores computed with <code class="inline">@veritio/core</code> ·
-          policy <code class="inline">veritio.reference.v1</code> · signal sets from
-          the public conformance fixtures. Hash values illustrative.
+          Veritio Cloud · Operations console — captured from a reference
+          deployment running <code class="inline">@veritio/core</code> risk
+          scoring under policy <code class="inline">veritio.reference.v1</code>.
+          Demonstration data.
         </p>
       </div>
     </section>
@@ -446,26 +449,25 @@ const headlineStyle =
           </ul>
         </div>
 
-        <!--
-          The same episode, tracked visually: Cloud's activity canvas. The
-          static fallback sits under the client:only island in one reserved
-          box — identical degradation contract to the hero console.
-        -->
+        <!-- The same episode, tracked visually: a real capture of Cloud's episode canvas. -->
         <div class="mt-14">
           <div
-            class="relative overflow-hidden"
-            style="aspect-ratio: 1120 / 520; background: #0c1a14; border: 1px solid rgba(246, 243, 234, 0.22);"
+            class="relative overflow-hidden rounded-xl"
+            style="aspect-ratio: 2880 / 1480; background: #0c1a14; border: 1px solid rgba(246, 243, 234, 0.22);"
           >
-            <div class="absolute inset-0">
-              <CanvasFallback />
-            </div>
-            <div class="absolute inset-0">
-              <CanvasPlayer client:only="react" />
-            </div>
+            <Image
+              src={episodeShot}
+              alt="Veritio Cloud episode canvas: a critical activity episode's events — security risk, tool calls, a code change, and a deployment — laid out as connected cards, with the episode's critical-risk rollup in the corner."
+              widths={[760, 1520, 2880]}
+              sizes="(min-width: 1280px) 1180px, 100vw"
+              quality={90}
+              loading="lazy"
+              class="block h-full w-full object-cover object-top"
+            />
           </div>
           <p class="mt-3 font-mono text-[11.5px] leading-relaxed tracking-[0.02em] text-surface/60">
-            The recording from above on Veritio Cloud's activity canvas — the
-            same records and scores, tracked visually instead of as a list.
+            The same records on Veritio Cloud's episode canvas — scores and
+            chain, tracked visually instead of as a list. Demonstration data.
           </p>
         </div>
       </div>
