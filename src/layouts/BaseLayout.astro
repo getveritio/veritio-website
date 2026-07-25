@@ -20,6 +20,8 @@ import {
   locales,
   ogLocale,
 } from '../i18n'
+import { UMAMI_SCRIPT_URL, UMAMI_WEBSITE_ID } from '../config/analytics'
+import CookieBanner from '../components/CookieBanner.astro'
 
 const {
   title = 'Veritio',
@@ -100,9 +102,14 @@ const siteJsonLd = [
 
     <script type="application/ld+json" set:html={JSON.stringify(siteJsonLd)} />
 
+    <!-- Umami: cookieless, aggregate-only analytics — not consent-gated by
+         design (see the analytics spec). GA4 lives behind CookieBanner. -->
+    <script is:inline defer src={UMAMI_SCRIPT_URL} data-website-id={UMAMI_WEBSITE_ID}></script>
+
     <title>{title}</title>
   </head>
   <body>
     <slot />
+    <CookieBanner />
   </body>
 </html>

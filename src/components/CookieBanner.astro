@@ -1,0 +1,150 @@
+---
+/**
+ * GDPR consent banner for Google Analytics only. Umami is cookieless and
+ * deliberately not gated (see the analytics design spec). GA4 runs in
+ * "basic" consent mode: gtag.js is never requested until the visitor
+ * accepts, and never again after a decline. Choice persists in
+ * localStorage under `veritio-consent`; bump CONSENT_VERSION in the script
+ * below to re-prompt everyone after a material policy change. Footer
+ * elements with [data-cookie-settings] re-open the banner so consent can
+ * be withdrawn as easily as it was given.
+ */
+import { localeFromPathname, cookieBannerStrings } from '../i18n'
+
+const locale = localeFromPathname(Astro.url.pathname)
+const t = cookieBannerStrings[locale]
+---
+
+<div
+  id="cookie-banner"
+  hidden
+  role="region"
+  aria-label={t.ariaLabel}
+  class="fixed inset-x-0 bottom-0 z-50 border-t border-line-strong bg-surface shadow-[0_-4px_24px_rgba(0,0,0,0.08)]"
+>
+  <div class="container flex flex-col gap-4 py-5 sm:flex-row sm:items-center sm:justify-between">
+    <p class="max-w-2xl text-[14px] leading-relaxed text-ink-soft">
+      {t.message}{' '}
+      <a class="text-ink hover:text-accent" href="/legal/privacy">{t.privacy}</a>
+    </p>
+    <div class="flex shrink-0 items-center gap-3">
+      <button type="button" id="cookie-decline" class="doc-btn">{t.decline}</button>
+      <button type="button" id="cookie-accept" class="doc-btn doc-btn--solid">{t.accept}</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  import { GA_MEASUREMENT_ID } from '../config/analytics'
+
+  const CONSENT_KEY = 'veritio-consent'
+  const CONSENT_VERSION = 1
+
+  type Choice = 'granted' | 'denied'
+
+  const banner = document.getElementById('cookie-banner')!
+  const acceptBtn = document.getElementById('cookie-accept')!
+  const declineBtn = document.getElementById('cookie-decline')!
+
+  function readChoice(): Choice | null {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(CONSENT_KEY) ?? 'null')
+      if (parsed?.v === CONSENT_VERSION && (parsed.ga === 'granted' || parsed.ga === 'denied')) {
+        return parsed.ga
+      }
+    } catch {
+      /* corrupt or unavailable storage → treat as no choice */
+    }
+    return null
+  }
+
+  function saveChoice(ga: Choice) {
+    try {
+      localStorage.setItem(CONSENT_KEY, JSON.stringify({ v: CONSENT_VERSION, ga }))
+    } catch {
+      /* private mode without storage: banner will re-appear next visit */
+    }
+  }
+
+  declare global {
+    interface Window {
+      dataLayer?: unknown[]
+      gtag?: (...args: unknown[]) => void
+    }
+  }
+
+  let gaLoaded = false
+  function loadGa() {
+    if (gaLoaded) return
+    gaLoaded = true
+    window.dataLayer = window.dataLayer || []
+    window.gtag = function gtag() {
+      // GA reads arguments objects, not spread arrays.
+      // eslint-disable-next-line prefer-rest-params
+      window.dataLayer!.push(arguments)
+    }
+    window.gtag('consent', 'default', {
+      ad_storage: 'denied',
+      ad_user_data: 'denied',
+      ad_personalization: 'denied',
+      analytics_storage: 'granted',
+    })
+    window.gtag('js', new Date())
+    window.gtag('config', GA_MEASUREMENT_ID)
+    const s = document.createElement('script')
+    s.async = true
+    s.src = `https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`
+    document.head.appendChild(s)
+  }
+
+  /** Best-effort removal of _ga* cookies when consent is withdrawn. */
+  function clearGaCookies() {
+    const expiry = 'expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'
+    const parts = location.hostname.split('.')
+    const domains = [location.hostname]
+    if (parts.length >= 2) domains.push('.' + parts.slice(-2).join('.'))
+    for (const raw of document.cookie.split(';')) {
+      const name = raw.split('=')[0]?.trim()
+      if (!name?.startsWith('_ga')) continue
+      document.cookie = `${name}=; ${expiry}`
+      for (const domain of domains) {
+        document.cookie = `${name}=; ${expiry}; domain=${domain}`
+      }
+    }
+  }
+
+  acceptBtn.addEventListener('click', () => {
+    saveChoice('granted')
+    banner.hidden = true
+    if (gaLoaded) {
+      // Re-accept after a mid-session withdrawal: gtag.js is already present,
+      // so flipping the consent signal back is all that's needed.
+      window.gtag?.('consent', 'update', { analytics_storage: 'granted' })
+    } else {
+      loadGa()
+    }
+  })
+
+  declineBtn.addEventListener('click', () => {
+    saveChoice('denied')
+    banner.hidden = true
+    if (gaLoaded) {
+      // Withdrawal mid-session: stop collection and drop GA's cookies.
+      window.gtag?.('consent', 'update', { analytics_storage: 'denied' })
+      clearGaCookies()
+    }
+  })
+
+  for (const el of document.querySelectorAll('[data-cookie-settings]')) {
+    el.addEventListener('click', () => {
+      banner.hidden = false
+      // Move focus into the revealed region so the reopen is perceivable to
+      // screen-reader and keyboard users.
+      acceptBtn.focus()
+    })
+  }
+
+  const choice = readChoice()
+  if (choice === null) banner.hidden = false
+  else if (choice === 'granted') loadGa()
+</script>

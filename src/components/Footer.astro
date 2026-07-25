@@ -4,11 +4,12 @@
  * compliance disclaimer (required copy — Veritio provides evidence support,
  * never automatic compliance). Shared by all pages; static.
  */
-import { localeFromPathname, localizePath, footerStrings } from '../i18n'
+import { localeFromPathname, localizePath, footerStrings, cookieBannerStrings } from '../i18n'
 
 const year = 2026
 const locale = localeFromPathname(Astro.url.pathname)
 const t = footerStrings[locale]
+const cookieSettingsLabel = cookieBannerStrings[locale].settings
 ---
 
 <footer class="border-t border-line-strong bg-surface-sunken">
@@ -59,6 +60,13 @@ const t = footerStrings[locale]
         <li><a class="text-ink-soft no-underline hover:text-accent" href="/legal/terms">Terms of Service</a></li>
         <li><a class="text-ink-soft no-underline hover:text-accent" href="/legal/privacy">Privacy Policy</a></li>
         <li><a class="text-ink-soft no-underline hover:text-accent" href="/legal/dpa">Data Processing Agreement</a></li>
+        <li>
+          <button
+            type="button"
+            data-cookie-settings
+            class="cursor-pointer text-ink-soft transition-colors hover:text-accent"
+          >{cookieSettingsLabel}</button>
+        </li>
       </ul>
       <p class="mt-4 max-w-xs text-[13px] leading-relaxed text-ink-muted">
         {t.disclaimer}

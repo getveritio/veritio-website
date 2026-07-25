@@ -11,7 +11,8 @@ export default defineConfig({
     defaultLocale: 'en',
     locales: ['en', 'de', 'ko'],
   },
-  // Fully static, no client JS. sitemap emits /sitemap-index.xml at build time;
+  // Fully static; the only client JS is the analytics/consent script pair
+  // (Umami + CookieBanner). sitemap emits /sitemap-index.xml at build time;
   // it is submitted to Google
   // Search Console (sc-domain:getveritio.com), so keep the integration in place.
   integrations: [sitemap()],
