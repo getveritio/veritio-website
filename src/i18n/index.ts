@@ -43,6 +43,43 @@ export const navStrings: Record<Locale, { overview: string; cloud: string; prici
   ko: { overview: '개요', cloud: '클라우드', pricing: '요금', docs: '문서', examples: '예제', signIn: '로그인' },
 }
 
+export const cookieBannerStrings: Record<Locale, {
+  ariaLabel: string
+  message: string
+  privacy: string
+  accept: string
+  decline: string
+  settings: string
+}> = {
+  en: {
+    ariaLabel: 'Cookie consent',
+    message:
+      'This site uses cookieless, anonymous analytics (Umami) by default. With your consent, we also enable Google Analytics, which sets cookies and sends usage data to Google.',
+    privacy: 'Privacy Policy',
+    accept: 'Accept',
+    decline: 'Decline',
+    settings: 'Cookie settings',
+  },
+  de: {
+    ariaLabel: 'Cookie-Einwilligung',
+    message:
+      'Diese Website nutzt standardmäßig eine cookielose, anonyme Webanalyse (Umami). Mit Ihrer Einwilligung aktivieren wir zusätzlich Google Analytics; dabei werden Cookies gesetzt und Nutzungsdaten an Google übertragen.',
+    privacy: 'Datenschutzerklärung',
+    accept: 'Akzeptieren',
+    decline: 'Ablehnen',
+    settings: 'Cookie-Einstellungen',
+  },
+  ko: {
+    ariaLabel: '쿠키 동의',
+    message:
+      '이 웹사이트는 기본적으로 쿠키 없는 익명 분석 도구(Umami)를 사용합니다. 동의하시면 Google Analytics도 활성화되며, 이 경우 쿠키가 설정되고 사용 데이터가 Google로 전송됩니다.',
+    privacy: '개인정보 처리방침',
+    accept: '동의',
+    decline: '거부',
+    settings: '쿠키 설정',
+  },
+}
+
 export const footerStrings: Record<Locale, {
   blurb: string
   product: string
