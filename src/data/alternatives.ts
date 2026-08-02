@@ -65,11 +65,13 @@ export interface Alternative {
 }
 
 /** Default Veritio-side chain for the hero panel — a realistic episode:
- * agent session, tool call, code change, deploy, human approval. */
+ * agent session, tool call, code change, deploy, human approval. Labels are
+ * shortened for the narrow pane (full protocol actions carry an `agent.` /
+ * `code.` prefix). */
 const defaultChain: VsPanel['chain'] = [
-  { action: 'agent.session.started', risk: '0.05' },
-  { action: 'agent.tool.called', risk: '0.18' },
-  { action: 'code.change.recorded', risk: '0.34' },
+  { action: 'session.started', risk: '0.05' },
+  { action: 'tool.called', risk: '0.18' },
+  { action: 'change.recorded', risk: '0.34' },
   { action: 'deploy.completed', risk: '0.41' },
   { action: 'approval.granted', risk: '0.12' },
 ]
