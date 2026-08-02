@@ -216,8 +216,12 @@ const barShadow = 'lg:shadow-[0_1px_2px_rgba(16,35,27,0.05),0_16px_40px_-16px_rg
           <a
             href={link.href}
             class:list={[
-              'flex items-center justify-between border-b border-surface/10 py-4 text-[19px] no-underline first:border-t',
-              isActive(link.base) ? 'font-medium text-white' : 'text-surface/75',
+              // border-y + -mt-px collapse neighboring rules into one line;
+              // the active row's brighter borders paint on top via z-10.
+              'relative -mt-px flex items-center justify-between border-y py-4 text-[19px] no-underline first:mt-0',
+              isActive(link.base)
+                ? 'z-10 border-surface/45 font-medium text-white'
+                : 'border-surface/10 text-surface/60',
             ]}
             aria-current={isActive(link.base) ? 'page' : undefined}
           >
