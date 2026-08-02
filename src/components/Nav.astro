@@ -81,16 +81,18 @@ const barShadow = 'lg:shadow-[0_1px_2px_rgba(16,35,27,0.05),0_16px_40px_-16px_rg
           <strong class="text-[21px] font-semibold tracking-tight text-ink">Veritio</strong>
         </a>
 
-        <!-- Desktop links -->
-        <div class="hidden items-center gap-1 lg:flex">
+        <!-- Desktop links; the sliding underline is one indicator element,
+             moved by the nav script (hover follows, mouseleave returns to
+             the active link). -->
+        <div class="relative hidden items-center gap-1 lg:flex" data-nav-links>
           {
             links.map((link) => (
               <a
                 href={link.href}
                 class:list={[
-                  'relative rounded-lg px-3.5 py-2 text-[15px] no-underline transition-colors',
+                  'rounded-lg px-3.5 py-2 text-[15px] no-underline transition-colors',
                   isActive(link.base)
-                    ? 'font-medium text-ink after:absolute after:inset-x-3.5 after:-bottom-[13px] after:h-[2px] after:bg-ink'
+                    ? 'font-medium text-ink'
                     : 'text-ink-soft hover:bg-surface-sunken/50 hover:text-ink',
                 ]}
                 aria-current={isActive(link.base) ? 'page' : undefined}
@@ -99,6 +101,11 @@ const barShadow = 'lg:shadow-[0_1px_2px_rgba(16,35,27,0.05),0_16px_40px_-16px_rg
               </a>
             ))
           }
+          <span
+            data-nav-indicator
+            class="absolute -bottom-[13px] left-0 h-[2px] w-0 bg-ink opacity-0 transition-[transform,width,opacity] duration-300 ease-out motion-reduce:transition-none"
+            aria-hidden="true"
+          ></span>
         </div>
 
         <!-- Desktop right cluster -->
@@ -291,4 +298,40 @@ const barShadow = 'lg:shadow-[0_1px_2px_rgba(16,35,27,0.05),0_16px_40px_-16px_rg
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && menu && !menu.classList.contains('hidden')) setOpen(false)
   })
+
+  // Desktop sliding underline: follows the hovered link, returns to the
+  // active one (or fades out on pages with no active link) on mouseleave.
+  const linksWrap = document.querySelector<HTMLElement>('[data-nav-links]')
+  const indicator = document.querySelector<HTMLElement>('[data-nav-indicator]')
+  const activeLink = linksWrap?.querySelector<HTMLElement>('a[aria-current="page"]') ?? null
+
+  // The visual line is inset 14px (px-3.5) from the link edges.
+  function moveTo(link: HTMLElement | null) {
+    if (!indicator) return
+    if (!link) {
+      indicator.style.opacity = '0'
+      return
+    }
+    indicator.style.transform = `translateX(${link.offsetLeft + 14}px)`
+    indicator.style.width = `${link.offsetWidth - 28}px`
+    indicator.style.opacity = '1'
+  }
+
+  if (linksWrap && indicator) {
+    // Skip the enter animation on initial placement (and after reflows).
+    const settle = () => {
+      indicator.style.transition = 'none'
+      moveTo(activeLink)
+      void indicator.offsetWidth
+      indicator.style.transition = ''
+    }
+    settle()
+    document.fonts?.ready.then(settle)
+    window.addEventListener('resize', settle)
+
+    linksWrap.querySelectorAll<HTMLElement>('a').forEach((link) => {
+      link.addEventListener('mouseenter', () => moveTo(link))
+    })
+    linksWrap.addEventListener('mouseleave', () => moveTo(activeLink))
+  }
 </script>
