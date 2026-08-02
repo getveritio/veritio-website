@@ -216,10 +216,8 @@ const barShadow = 'lg:shadow-[0_1px_2px_rgba(16,35,27,0.05),0_16px_40px_-16px_rg
           <a
             href={link.href}
             class:list={[
-              'flex items-center justify-between border-b border-surface/10 py-4 text-[19px] no-underline',
-              isActive(link.base)
-                ? 'rounded-lg border border-surface/15 bg-surface/5 px-4 font-medium text-[#a9d5be]'
-                : 'text-surface',
+              'flex items-center justify-between border-b border-surface/10 py-4 text-[19px] no-underline first:border-t',
+              isActive(link.base) ? 'font-medium text-white' : 'text-surface/75',
             ]}
             aria-current={isActive(link.base) ? 'page' : undefined}
           >
