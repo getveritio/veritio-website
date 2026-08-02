@@ -90,7 +90,7 @@ const barShadow = 'lg:shadow-[0_1px_2px_rgba(16,35,27,0.05),0_16px_40px_-16px_rg
                 class:list={[
                   'relative rounded-lg px-3.5 py-2 text-[15px] no-underline transition-colors',
                   isActive(link.base)
-                    ? 'bg-surface-sunken font-medium text-ink after:absolute after:inset-x-3.5 after:-bottom-[13px] after:h-[2px] after:bg-ink'
+                    ? 'font-medium text-ink after:absolute after:inset-x-3.5 after:-bottom-[13px] after:h-[2px] after:bg-ink'
                     : 'text-ink-soft hover:bg-surface-sunken/50 hover:text-ink',
                 ]}
                 aria-current={isActive(link.base) ? 'page' : undefined}
