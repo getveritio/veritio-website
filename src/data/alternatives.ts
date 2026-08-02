@@ -3,7 +3,20 @@
  * honest, approach-level comparisons only — concede what the other tool does
  * well, date the review, never claim compliance outcomes, and only state
  * Veritio behavior that exists in the OSS repo or the hosted console.
+ * Competitor claims must trace to primary sources (vendor docs/pricing pages,
+ * source repos) checked at `lastReviewed` time.
+ *
+ * Hero images are pre-rendered PNGs (see scripts/generate-alt-images.mjs);
+ * the SVG sources live in assets-src/alternatives and are not shipped.
  */
+import type { ImageMetadata } from 'astro'
+import imgCloudtrail from '../assets/alternatives/aws-cloudtrail-vs-veritio-application-evidence.png'
+import imgWorkos from '../assets/alternatives/workos-audit-logs-vs-veritio-open-source-evidence.png'
+import imgLangfuse from '../assets/alternatives/langfuse-vs-veritio-llm-observability-vs-evidence.png'
+import imgDiy from '../assets/alternatives/diy-audit-tables-vs-veritio-tamper-evident-chain.png'
+import imgLangsmith from '../assets/alternatives/langsmith-vs-veritio-tracing-vs-evidence.png'
+import imgAuditkit from '../assets/alternatives/auditkit-vs-veritio-audit-log-sdk.png'
+
 export interface Alternative {
   slug: string
   name: string
@@ -22,9 +35,11 @@ export interface Alternative {
   /** When Veritio fits better. */
   chooseUs: string
   table: { dimension: string; them: string; veritio: string }[]
+  /** Pre-rendered comparison diagram shown under the page header. */
+  image?: { src: ImageMetadata; alt: string }
 }
 
-export const lastReviewed = 'July 2026'
+export const lastReviewed = 'August 2026'
 
 export const alternatives: Alternative[] = [
   {
@@ -59,6 +74,10 @@ export const alternatives: Alternative[] = [
       { dimension: 'Hosting', them: 'AWS only', veritio: 'Self-hosted (OSS) or managed' },
       { dimension: 'Export audience', them: 'Your AWS tooling', veritio: 'Anyone, via open bundle + verifier' },
     ],
+    image: {
+      src: imgCloudtrail,
+      alt: 'Layer diagram showing AWS CloudTrail recording infrastructure control-plane events below, and Veritio recording application, AI-agent, change, and deployment evidence above — complementary audit layers.',
+    },
   },
   {
     slug: 'workos-audit-logs',
@@ -92,6 +111,10 @@ export const alternatives: Alternative[] = [
       { dimension: 'AI agent modeling', them: 'Generic events', veritio: 'Sessions, tool calls, changes, deploys, episodes' },
       { dimension: 'Customer-facing portal', them: 'Built-in admin portal', veritio: 'Console for your team; exports for others' },
     ],
+    image: {
+      src: imgWorkos,
+      alt: 'Diagram contrasting WorkOS Audit Logs as a hosted API with Veritio’s open-source evidence layer: events flowing into a vendor-attested store versus a hash-linked chain on your own Postgres with an offline verifier.',
+    },
   },
   {
     slug: 'langfuse',
@@ -100,18 +123,19 @@ export const alternatives: Alternative[] = [
     metaTitle: 'Langfuse alternative for AI agent evidence — Veritio',
     metaDescription:
       'Langfuse is open-source LLM observability: traces, evals, prompt management. Veritio records agent activity as hash-linked, risk-scored evidence for reviews — they solve different problems.',
-    what: 'Langfuse is an open-source LLM engineering platform: tracing for LLM apps, evaluations, prompt management, and cost tracking. Teams use it to debug and improve LLM applications in development and production.',
+    what: 'Langfuse is an open-source LLM engineering platform: tracing for LLM apps, evaluations, prompt management, and cost tracking. Teams use it to debug and improve LLM applications in development and production. In January 2026 Langfuse was acquired by ClickHouse, which has publicly committed to keeping the MIT core and self-hosting available.',
     strengths: [
       'Deep LLM-native tracing: spans, generations, token usage, latencies.',
       'Evaluation tooling (LLM-as-judge, datasets, scores) built in.',
       'Prompt management with versioning and deployment.',
-      'Open source with a generous self-hosting story, popular integrations.',
+      'MIT-licensed core with a real self-hosting story and 100+ integrations, OpenTelemetry-native.',
     ],
     differences: [
       'Different question: observability asks "why did the model answer this way?" — evidence asks "who did what, under whose authority, and can you prove it later?"',
       'Veritio records beyond the model call: code changes, deployments, human approvals, and security-relevant actions join agent sessions in one hash-linked chain.',
-      'Records are tamper-evident and exportable for independent verification — built for reviews and investigations rather than debugging.',
+      'Records are tamper-evident and exportable for independent verification — built for reviews and investigations rather than debugging. Langfuse’s audit logs are an Enterprise-gated feature that covers admin actions on the Langfuse platform itself (API keys, prompts, projects), not your application’s or agents’ activity, and carries no cryptographic verification.',
       'Deterministic risk scoring ranks episodes for human attention; a canvas view reconstructs the episode for reviewers.',
+      'Self-hosting Veritio’s authoritative store needs only the Postgres you already run; a production Langfuse deployment runs Postgres, ClickHouse, Redis/Valkey, and S3-compatible blob storage.',
     ],
     chooseThem:
       'You are building or operating an LLM application and need to debug traces, run evals, and manage prompts. That is what Langfuse is for, and Veritio does not replace it.',
@@ -122,9 +146,15 @@ export const alternatives: Alternative[] = [
       { dimension: 'Records', them: 'Traces, generations, evals', veritio: 'Hash-linked audit events & episodes' },
       { dimension: 'Beyond the model call', them: 'App-level traces', veritio: 'Code changes, deploys, approvals, security events' },
       { dimension: 'Tamper evidence', them: '—', veritio: 'Hash chain + open verifier' },
+      { dimension: 'Audit logs', them: 'Enterprise-gated; Langfuse admin actions only', veritio: 'Core feature; your app & agent activity' },
       { dimension: 'Risk model', them: 'Eval scores (quality)', veritio: 'Deterministic risk policy (governance)' },
-      { dimension: 'Open source', them: 'Yes', veritio: 'Yes (core), managed cloud optional' },
+      { dimension: 'Self-host footprint', them: 'Postgres + ClickHouse + Redis + S3', veritio: 'Your Postgres (authoritative store)' },
+      { dimension: 'Open source', them: 'Yes (MIT core, ee/ licensed)', veritio: 'Yes (core), managed cloud optional' },
     ],
+    image: {
+      src: imgLangfuse,
+      alt: 'Diagram comparing Langfuse LLM observability traces with Veritio hash-linked evidence records: a trace tree for debugging on the left, a tamper-evident audit chain with risk scores and an offline verifier on the right.',
+    },
   },
   {
     slug: 'diy-audit-tables',
@@ -158,5 +188,85 @@ export const alternatives: Alternative[] = [
       { dimension: 'Risk scoring', them: 'Roll your own', veritio: 'Deterministic policy, 0–1 per event' },
       { dimension: 'Long-term cost', them: 'Accretes ad hoc', veritio: 'Maintained open protocol' },
     ],
+    image: {
+      src: imgDiy,
+      alt: 'Diagram of a homegrown audit_events table where a row was silently rewritten, next to a Veritio hash-linked chain where the same edit visibly breaks the chain at the tampered record.',
+    },
+  },
+  {
+    slug: 'langsmith',
+    name: 'LangSmith',
+    heading: 'Veritio vs LangSmith: agent evidence vs LLM tracing & evals',
+    metaTitle: 'LangSmith alternative for AI agent evidence — Veritio',
+    metaDescription:
+      'LangSmith is LangChain’s platform for tracing, evals, and agent deployment. Veritio records agent activity as hash-linked, risk-scored evidence anyone can verify offline — different problems, honestly compared.',
+    what: 'LangSmith is LangChain’s commercial platform for building and operating LLM applications: tracing and observability, evaluations, prompt engineering, and agent deployment. It is the natural companion to LangChain and LangGraph, though it works with other frameworks too.',
+    strengths: [
+      'First-class tracing for LangChain/LangGraph apps — agent steps, tool calls, and graph state render naturally.',
+      'Evaluations, dataset management, and human feedback queues built into the same workflow.',
+      'Prompt engineering tools and a deployment path (cloud, hybrid, or self-hosted on enterprise plans).',
+      'Low-friction start: free single-seat Developer tier, then $39 per seat on Plus (as of August 2026).',
+    ],
+    differences: [
+      'Different question: LangSmith asks "is the application behaving well?" — Veritio asks "who did what, under whose authority, and can you prove it later?"',
+      'LangSmith is a proprietary platform; self-hosting is an enterprise-plan option. Veritio’s protocol, SDKs, storage, and verifier are Apache-licensed open source that run on your own Postgres without an account.',
+      'Veritio records are hash-linked and export to an open bundle format that a third party can verify offline with the open-source verifier — traces and dashboards are not evidence a reviewer can independently check.',
+      'Veritio captures the activity around the model too: code changes, deployments, approvals, and security-relevant actions join agent sessions in one chain, with deterministic risk scores for triage.',
+    ],
+    chooseThem:
+      'You build on LangChain or LangGraph and need to debug traces, run evals, and ship agents with an integrated toolchain. That is LangSmith’s home turf, and Veritio does not replace it.',
+    chooseUs:
+      'You need a durable, independently verifiable record of what AI agents and the humans around them did — for governance reviews, customer questions, or incident reconstruction. Running both is a reasonable setup.',
+    table: [
+      { dimension: 'Primary question', them: 'Is the app behaving well?', veritio: 'Who did what, and can you prove it?' },
+      { dimension: 'Records', them: 'Traces, evals, feedback', veritio: 'Hash-linked audit events & episodes' },
+      { dimension: 'Source model', them: 'Proprietary SaaS', veritio: 'Apache-licensed open core' },
+      { dimension: 'Self-hosting', them: 'Enterprise plans', veritio: 'Yes, on your Postgres — no account' },
+      { dimension: 'Tamper evidence', them: '—', veritio: 'Hash chain + open verifier' },
+      { dimension: 'Beyond the model call', them: 'App-level traces', veritio: 'Code changes, deploys, approvals, security events' },
+      { dimension: 'Risk model', them: 'Eval scores (quality)', veritio: 'Deterministic risk policy (governance)' },
+    ],
+    image: {
+      src: imgLangsmith,
+      alt: 'Diagram comparing LangSmith tracing and evaluation of an agent run with Veritio’s hash-linked evidence chain covering the same run plus code changes, deployment, and human approval events.',
+    },
+  },
+  {
+    slug: 'auditkit',
+    name: 'AuditKit',
+    heading: 'Veritio vs AuditKit: two takes on tamper-evident audit logs',
+    metaTitle: 'AuditKit alternative — open-source evidence layer with agent provenance | Veritio',
+    metaDescription:
+      'AuditKit (auditkit.dev) is an AGPL audit-log SDK with hash chains and Merkle proofs. Veritio is an Apache-licensed evidence protocol that also records AI-agent activity. An honest comparison.',
+    what: 'AuditKit (auditkit.dev) is a new audit-logging SDK, first released in June 2026, offering SHA-256 hash-chained logs with Merkle proofs, SDKs for TypeScript, Python, Go, and Java, SIEM streaming, and an embeddable log viewer, under an AGPLv3 core with paid tiers. Note the name collision: an unrelated, Apache-licensed SOC 2 compliance scanner CLI also goes by AuditKit (auditkit.io) — this page is about the audit-log SDK.',
+    strengths: [
+      'Closest neighbour in spirit: hash-chained, tenant-scoped audit logs as a developer product, not an afterthought.',
+      'Merkle-proof verification (on paid tiers) and SIEM streaming to Splunk, Datadog, Elastic, or S3.',
+      'An embeddable React viewer for showing audit history inside your product.',
+      'SOC 2-oriented exports and policy templates aimed squarely at the B2B compliance checklist.',
+    ],
+    differences: [
+      'AI-agent activity is a first-class subject in Veritio: agent sessions, tool calls, code changes, and deployments are modeled and hash-chained with provenance, not just generic actor/action rows. AuditKit records standard application audit context.',
+      'Licensing: Veritio’s core protocol, SDKs, storage helpers, and verifier are Apache-2.0; AuditKit’s core is AGPLv3 with commercial tiers, and some verification features sit behind paid plans.',
+      'Veritio is protocol-first: TypeScript, Python, and Go SDKs produce byte-identical hashes and risk scores, pinned by public conformance fixtures — the format outlives any one vendor or SDK.',
+      'Evidence leaves the system: signed export bundles verify offline with the open verifier, no vendor account or running service required. Veritio also ships deterministic risk scoring under a published policy for review triage.',
+    ],
+    chooseThem:
+      'You want a batteries-included audit-log feature for a classic B2B SaaS — viewer, SIEM streaming, SOC 2 exports — and the AGPL-plus-paid-tiers model fits how you ship. It is a young project, so evaluate maturity against your own bar.',
+    chooseUs:
+      'You need one evidence layer for both application activity and AI-agent provenance, an Apache-licensed protocol with cross-language conformance, and exports a third party can verify without trusting you or any vendor.',
+    table: [
+      { dimension: 'Integrity model', them: 'SHA-256 chain + Merkle proofs', veritio: 'SHA-256 hash chain + signed export bundles' },
+      { dimension: 'Independent verification', them: 'Merkle proofs (paid tiers)', veritio: 'Open-source offline verifier, free' },
+      { dimension: 'AI agent modeling', them: 'Generic events', veritio: 'Sessions, tool calls, changes, deploys, episodes' },
+      { dimension: 'Risk model', them: '—', veritio: 'Deterministic 0–1 scoring per policy' },
+      { dimension: 'License', them: 'AGPLv3 core + commercial tiers', veritio: 'Apache-2.0 core + optional managed cloud' },
+      { dimension: 'SDK parity', them: 'TS, Python, Go, Java', veritio: 'TS, Python, Go — byte-identical, fixture-pinned' },
+      { dimension: 'First released', them: 'June 2026', veritio: '2026, protocol + fixtures public from day one' },
+    ],
+    image: {
+      src: imgAuditkit,
+      alt: 'Two-axis map comparing AuditKit and Veritio: both offer hash-chained application audit logs, but Veritio additionally covers AI-agent provenance — sessions, tool calls, code changes, and deployments — under an Apache-2.0 protocol.',
+    },
   },
 ]
