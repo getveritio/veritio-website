@@ -38,6 +38,8 @@ const isActive = (base: string) =>
 const switchTarget = (l: Locale) =>
   translatedPaths.includes(pageBase) ? localizePath(pageBase, l) : localizePath('/', l)
 const langs: Locale[] = ['en', 'de', 'ko']
+// Round flags from public/flags (circle-flags, MIT — see README there).
+const flagOf: Record<Locale, string> = { en: '/flags/gb.svg', de: '/flags/de.svg', ko: '/flags/kr.svg' }
 
 const ossRepo = 'https://github.com/getveritio/veritio'
 const consoleUrl = 'https://console.getveritio.com/login'
@@ -58,8 +60,8 @@ const barShadow = 'lg:shadow-[0_1px_2px_rgba(16,35,27,0.05),0_16px_40px_-16px_rg
   >{t.viewOnGitHub} ↗</a>
 </div>
 
-<header class="sticky top-0 z-50 lg:top-4">
-  <div class="lg:container">
+<header class="sticky top-0 z-50">
+  <div class="lg:mx-auto lg:max-w-[1180px] lg:px-gutter lg:pt-4">
     <nav
       class:list={[
         'border-b border-line-strong bg-surface lg:rounded-2xl lg:border lg:border-line lg:bg-surface-raised',
@@ -104,7 +106,8 @@ const barShadow = 'lg:shadow-[0_1px_2px_rgba(16,35,27,0.05),0_16px_40px_-16px_rg
           <span class="h-5 w-px bg-line" aria-hidden="true"></span>
 
           <details class="relative">
-            <summary class="flex cursor-pointer list-none items-center gap-1.5 rounded-lg px-2 py-1.5 text-[14px] font-medium text-ink-soft transition-colors hover:text-ink [&::-webkit-details-marker]:hidden">
+            <summary class="flex cursor-pointer list-none items-center gap-2 rounded-lg px-2 py-1.5 text-[14px] font-medium text-ink-soft transition-colors hover:text-ink [&::-webkit-details-marker]:hidden">
+              <img src={flagOf[locale]} alt="" width="17" height="17" class="rounded-full" />
               {locale.toUpperCase()}
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
             </summary>
@@ -115,10 +118,11 @@ const barShadow = 'lg:shadow-[0_1px_2px_rgba(16,35,27,0.05),0_16px_40px_-16px_rg
                     href={switchTarget(l)}
                     hreflang={l}
                     class:list={[
-                      'block rounded-md px-3 py-2 text-[13.5px] no-underline transition-colors',
+                      'flex items-center gap-2.5 rounded-md px-3 py-2 text-[13.5px] no-underline transition-colors',
                       l === locale ? 'bg-surface-sunken font-medium text-ink' : 'text-ink-soft hover:bg-surface-sunken/60 hover:text-ink',
                     ]}
                   >
+                    <img src={flagOf[l]} alt="" width="17" height="17" class="rounded-full" />
                     {l.toUpperCase()}
                   </a>
                 ))
@@ -230,17 +234,18 @@ const barShadow = 'lg:shadow-[0_1px_2px_rgba(16,35,27,0.05),0_16px_40px_-16px_rg
       <div class="flex items-center justify-between border-b border-surface/10 py-4 text-[17px] text-surface">
         <span class="flex items-center gap-3">
           <svg class="text-surface/70" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.7 3.8 9S14.5 18.4 12 21c-2.5-2.6-3.8-5.7-3.8-9S9.5 5.6 12 3z"/></svg>
-          <span class="flex items-center gap-3">
+          <span class="flex items-center gap-4">
             {
               langs.map((l) => (
                 <a
                   href={switchTarget(l)}
                   hreflang={l}
                   class:list={[
-                    'no-underline',
+                    'flex items-center gap-1.5 no-underline',
                     l === locale ? 'font-semibold text-[#a9d5be]' : 'text-surface/70',
                   ]}
                 >
+                  <img src={flagOf[l]} alt="" width="16" height="16" class="rounded-full" />
                   {l.toUpperCase()}
                 </a>
               ))
