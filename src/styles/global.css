@@ -77,8 +77,12 @@ body {
   margin: 0;
 }
 
-a {
-  color: inherit;
+/* In @layer base so Tailwind's (later-layered) text-color utilities win on
+ * anchors — unlayered, this rule silently overrode them. */
+@layer base {
+  a {
+    color: inherit;
+  }
 }
 
 /* Shared utilities */
@@ -133,6 +137,32 @@ a {
   background: var(--color-accent-strong);
   border-color: var(--color-accent-strong);
   color: var(--color-surface);
+}
+
+/* Buttons on dark (surface-invert) bands, e.g. the comparison pages' closing
+ * section. Defined here because the unlayered `a { color: inherit }` rule
+ * above beats Tailwind's layered text-color utilities on anchors. */
+.doc-btn--invert {
+  border-color: color-mix(in srgb, var(--color-surface) 35%, transparent);
+  color: var(--color-surface);
+}
+
+.doc-btn--invert:hover {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--color-surface) 75%, transparent);
+  color: var(--color-surface);
+}
+
+.doc-btn--invert-solid {
+  background: var(--color-surface);
+  border-color: var(--color-surface);
+  color: var(--color-evergreen);
+}
+
+.doc-btn--invert-solid:hover {
+  background: var(--color-surface-raised);
+  border-color: var(--color-surface-raised);
+  color: var(--color-evergreen);
 }
 
 /* Frame for Astro <Code> blocks (Shiki, build-time). */

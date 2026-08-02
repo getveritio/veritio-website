@@ -27,6 +27,10 @@ const {
   title = 'Veritio',
   description = 'Protocol-first evidence support for audit trails, change provenance, and governance workflows.',
   jsonLd = [],
+  // Optional per-page 1200×630 raster card (root-relative path under public/,
+  // e.g. /og/langfuse.png). Falls back to the sitewide og.png.
+  ogImage: ogImagePath = '/og.png',
+  ogImageAlt = 'Veritio — evidence graph for audit trails and governance',
 } = Astro.props
 
 const locale = localeFromPathname(Astro.url.pathname)
@@ -40,8 +44,7 @@ const alternates = translatedPaths.includes(pageBase)
   : []
 
 const canonical = new URL(Astro.url.pathname, Astro.site).href
-const ogImage = new URL('/og.png', Astro.site).href
-const ogImageAlt = 'Veritio — evidence graph for audit trails and governance'
+const ogImage = new URL(ogImagePath, Astro.site).href
 
 const siteJsonLd = [
   {
