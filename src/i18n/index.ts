@@ -37,10 +37,35 @@ export const ogLocale: Record<Locale, string> = {
   ko: 'ko_KR',
 }
 
-export const navStrings: Record<Locale, { overview: string; cloud: string; pricing: string; docs: string; examples: string; signIn: string }> = {
-  en: { overview: 'Overview', cloud: 'Cloud', pricing: 'Pricing', docs: 'Docs', examples: 'Examples', signIn: 'Sign in' },
-  de: { overview: 'Überblick', cloud: 'Cloud', pricing: 'Preise', docs: 'Docs', examples: 'Beispiele', signIn: 'Anmelden' },
-  ko: { overview: '개요', cloud: '클라우드', pricing: '요금', docs: '문서', examples: '예제', signIn: '로그인' },
+export const navStrings: Record<Locale, {
+  overview: string
+  cloud: string
+  pricing: string
+  docs: string
+  examples: string
+  signIn: string
+  startFree: string
+  menu: string
+  openMenu: string
+  closeMenu: string
+  banner: string
+  viewOnGitHub: string
+}> = {
+  en: {
+    overview: 'Overview', cloud: 'Cloud', pricing: 'Pricing', docs: 'Docs', examples: 'Examples',
+    signIn: 'Sign in', startFree: 'Start free', menu: 'Menu', openMenu: 'Open menu', closeMenu: 'Close menu',
+    banner: 'Open-source. Self-hosted. Compliance by design.', viewOnGitHub: 'View on GitHub',
+  },
+  de: {
+    overview: 'Überblick', cloud: 'Cloud', pricing: 'Preise', docs: 'Docs', examples: 'Beispiele',
+    signIn: 'Anmelden', startFree: 'Kostenlos starten', menu: 'Menü', openMenu: 'Menü öffnen', closeMenu: 'Menü schließen',
+    banner: 'Open Source. Self-Hosted. Compliance by Design.', viewOnGitHub: 'Auf GitHub ansehen',
+  },
+  ko: {
+    overview: '개요', cloud: '클라우드', pricing: '요금', docs: '문서', examples: '예제',
+    signIn: '로그인', startFree: '무료로 시작', menu: '메뉴', openMenu: '메뉴 열기', closeMenu: '메뉴 닫기',
+    banner: '오픈 소스. 셀프 호스팅. 컴플라이언스 중심 설계.', viewOnGitHub: 'GitHub에서 보기',
+  },
 }
 
 export const cookieBannerStrings: Record<Locale, {

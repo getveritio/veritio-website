@@ -77,8 +77,12 @@ body {
   margin: 0;
 }
 
-a {
-  color: inherit;
+/* In @layer base so Tailwind's (later-layered) text-color utilities win on
+ * anchors — unlayered, this rule silently overrode them. */
+@layer base {
+  a {
+    color: inherit;
+  }
 }
 
 /* Shared utilities */
