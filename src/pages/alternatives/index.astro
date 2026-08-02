@@ -1,5 +1,8 @@
 ---
-/** Index of comparison pages — honest, approach-level, dated. */
+/** Index of comparison pages — honest, approach-level, dated. Entries show
+ * the pre-rendered comparison diagrams as thumbnails (also keeps the artwork
+ * indexable for image search). */
+import { Image } from 'astro:assets'
 import BaseLayout from '../../layouts/BaseLayout.astro'
 import Nav from '../../components/Nav.astro'
 import Footer from '../../components/Footer.astro'
@@ -38,13 +41,27 @@ import { alternatives, lastReviewed } from '../../data/alternatives'
         {alternatives.map((alt) => (
           <a
             href={`/alternatives/${alt.slug}`}
-            class="group border-b border-line py-6 no-underline first:border-t"
+            class="group flex flex-col gap-6 border-b border-line py-8 no-underline first:border-t sm:flex-row sm:items-center"
           >
-            <div class="flex flex-wrap items-baseline justify-between gap-2">
-              <h2 class="text-lg font-semibold text-ink group-hover:text-accent">{alt.heading}</h2>
-              <span class="font-mono text-[11px] uppercase tracking-[0.12em] text-ink-muted">Read →</span>
+            {alt.image && (
+              <div class="w-full shrink-0 border border-line bg-surface-sunken p-1 sm:w-64">
+                <Image
+                  src={alt.image.src}
+                  alt={alt.image.alt}
+                  widths={[320, 640]}
+                  sizes="(min-width: 640px) 256px, 100vw"
+                  quality={85}
+                  class="h-auto w-full"
+                />
+              </div>
+            )}
+            <div>
+              <div class="flex flex-wrap items-baseline justify-between gap-2">
+                <h2 class="text-lg font-semibold text-ink group-hover:text-accent">{alt.heading}</h2>
+                <span class="font-mono text-[11px] uppercase tracking-[0.12em] text-ink-muted">Read →</span>
+              </div>
+              <p class="mt-2 max-w-3xl text-base leading-relaxed text-ink-soft">{alt.metaDescription}</p>
             </div>
-            <p class="mt-2 max-w-3xl text-base leading-relaxed text-ink-soft">{alt.metaDescription}</p>
           </a>
         ))}
       </div>

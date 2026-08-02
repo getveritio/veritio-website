@@ -17,6 +17,26 @@ import imgDiy from '../assets/alternatives/diy-audit-tables-vs-veritio-tamper-ev
 import imgLangsmith from '../assets/alternatives/langsmith-vs-veritio-tracing-vs-evidence.png'
 import imgAuditkit from '../assets/alternatives/auditkit-vs-veritio-audit-log-sdk.png'
 
+/** One row inside the hero panel's competitor pane. `tone: 'seal'` marks the
+ * row that tells the cautionary part of the story (e.g. the rewritten row). */
+export interface PanelRow {
+  name: string
+  detail?: string
+  tone?: 'seal'
+}
+
+/** Data for the hero "VS" panel — the page's signature element. The left pane
+ * shows the competitor's native view of the world; the right pane is always
+ * Veritio's evidence chain, so only its rows vary per page. */
+export interface VsPanel {
+  themSub: string
+  themTitle: string
+  themRows: PanelRow[]
+  themFoot: string
+  chain: { action: string; risk?: string }[]
+  usFoot: string
+}
+
 export interface Alternative {
   slug: string
   name: string
@@ -35,9 +55,24 @@ export interface Alternative {
   /** When Veritio fits better. */
   chooseUs: string
   table: { dimension: string; them: string; veritio: string }[]
-  /** Pre-rendered comparison diagram shown under the page header. */
+  /** Hero VS panel content. */
+  panel: VsPanel
+  /** One-line closer for the dark "stronger together" band. */
+  closing: string
+  /** Pre-rendered comparison diagram; used as the /alternatives index
+   * thumbnail (and kept indexable for image search). */
   image?: { src: ImageMetadata; alt: string }
 }
+
+/** Default Veritio-side chain for the hero panel — a realistic episode:
+ * agent session, tool call, code change, deploy, human approval. */
+const defaultChain: VsPanel['chain'] = [
+  { action: 'agent.session.started', risk: '0.05' },
+  { action: 'agent.tool.called', risk: '0.18' },
+  { action: 'code.change.recorded', risk: '0.34' },
+  { action: 'deploy.completed', risk: '0.41' },
+  { action: 'approval.granted', risk: '0.12' },
+]
 
 export const lastReviewed = 'August 2026'
 
@@ -74,6 +109,22 @@ export const alternatives: Alternative[] = [
       { dimension: 'Hosting', them: 'AWS only', veritio: 'Self-hosted (OSS) or managed' },
       { dimension: 'Export audience', them: 'Your AWS tooling', veritio: 'Anyone, via open bundle + verifier' },
     ],
+    panel: {
+      themSub: 'AWS control plane',
+      themTitle: 'Management events',
+      themRows: [
+        { name: 'iam:CreateRole' },
+        { name: 's3:PutBucketPolicy' },
+        { name: 'signin:ConsoleLogin' },
+        { name: 'kms:Decrypt' },
+        { name: 'ec2:RunInstances' },
+      ],
+      themFoot: 'Who called which AWS API',
+      chain: defaultChain,
+      usFoot: 'What your app and agents did',
+    },
+    closing:
+      'CloudTrail for your cloud account, Veritio for your application and its agents — two layers of one audit story.',
     image: {
       src: imgCloudtrail,
       alt: 'Layer diagram showing AWS CloudTrail recording infrastructure control-plane events below, and Veritio recording application, AI-agent, change, and deployment evidence above — complementary audit layers.',
@@ -111,6 +162,21 @@ export const alternatives: Alternative[] = [
       { dimension: 'AI agent modeling', them: 'Generic events', veritio: 'Sessions, tool calls, changes, deploys, episodes' },
       { dimension: 'Customer-facing portal', them: 'Built-in admin portal', veritio: 'Console for your team; exports for others' },
     ],
+    panel: {
+      themSub: 'Hosted audit-log API',
+      themTitle: 'POST /audit_logs/events',
+      themRows: [
+        { name: 'your app', detail: 'sends events' },
+        { name: 'vendor cloud', detail: 'attested' },
+        { name: 'admin portal', detail: 'viewing' },
+        { name: 'SIEM streaming', detail: 'Splunk' },
+      ],
+      themFoot: 'Integrity model: trust the vendor',
+      chain: defaultChain,
+      usFoot: 'Integrity model: verify the math',
+    },
+    closing:
+      'An audit-log tab is a feature. Verifiable evidence is an asset that outlives any vendor — including us.',
     image: {
       src: imgWorkos,
       alt: 'Diagram contrasting WorkOS Audit Logs as a hosted API with Veritio’s open-source evidence layer: events flowing into a vendor-attested store versus a hash-linked chain on your own Postgres with an offline verifier.',
@@ -151,6 +217,22 @@ export const alternatives: Alternative[] = [
       { dimension: 'Self-host footprint', them: 'Postgres + ClickHouse + Redis + S3', veritio: 'Your Postgres (authoritative store)' },
       { dimension: 'Open source', them: 'Yes (MIT core, ee/ licensed)', veritio: 'Yes (core), managed cloud optional' },
     ],
+    panel: {
+      themSub: 'Tracing & evaluation',
+      themTitle: 'Trace (debugging)',
+      themRows: [
+        { name: 'agent.run', detail: '8.4s' },
+        { name: 'llm.generation', detail: '1.2k tok' },
+        { name: 'tool.search', detail: '12 docs' },
+        { name: 'llm.generation', detail: '3.0k tok' },
+        { name: 'eval.judge', detail: '0.87' },
+      ],
+      themFoot: 'Answers: why did the model behave this way?',
+      chain: defaultChain,
+      usFoot: 'Answers: who did what — and can you prove it?',
+    },
+    closing:
+      'Many teams run both: Langfuse for observability, Veritio for verifiable evidence. Different questions, better answers.',
     image: {
       src: imgLangfuse,
       alt: 'Diagram comparing Langfuse LLM observability traces with Veritio hash-linked evidence records: a trace tree for debugging on the left, a tamper-evident audit chain with risk scores and an offline verifier on the right.',
@@ -188,6 +270,21 @@ export const alternatives: Alternative[] = [
       { dimension: 'Risk scoring', them: 'Roll your own', veritio: 'Deterministic policy, 0–1 per event' },
       { dimension: 'Long-term cost', them: 'Accretes ad hoc', veritio: 'Maintained open protocol' },
     ],
+    panel: {
+      themSub: 'audit_events table',
+      themTitle: 'Mutable rows',
+      themRows: [
+        { name: '1040 · user.role.updated', detail: '14:02:11' },
+        { name: '1041 · invoice.deleted', detail: '14:02:58' },
+        { name: '1042 · user.read', detail: 'rewritten — no trace', tone: 'seal' },
+        { name: '1043 · user.invited', detail: '14:07:44' },
+      ],
+      themFoot: 'Append-only by convention',
+      chain: defaultChain,
+      usFoot: 'The same edit breaks the chain — visibly',
+    },
+    closing:
+      'Keep your table for debugging. Add a chain for the day someone asks for proof.',
     image: {
       src: imgDiy,
       alt: 'Diagram of a homegrown audit_events table where a row was silently rewritten, next to a Veritio hash-linked chain where the same edit visibly breaks the chain at the tampered record.',
@@ -226,6 +323,22 @@ export const alternatives: Alternative[] = [
       { dimension: 'Beyond the model call', them: 'App-level traces', veritio: 'Code changes, deploys, approvals, security events' },
       { dimension: 'Risk model', them: 'Eval scores (quality)', veritio: 'Deterministic risk policy (governance)' },
     ],
+    panel: {
+      themSub: 'Tracing, evals & deployment',
+      themTitle: 'Trace & evals',
+      themRows: [
+        { name: 'plan', detail: 'graph node' },
+        { name: 'tool: search', detail: 'graph node' },
+        { name: 'respond', detail: 'graph node' },
+        { name: 'eval: correctness', detail: '0.91' },
+        { name: 'eval: helpfulness', detail: '0.88' },
+      ],
+      themFoot: 'Answers: is the application behaving well?',
+      chain: defaultChain,
+      usFoot: 'Answers: who did what — and can you prove it?',
+    },
+    closing:
+      'Many teams run both: LangSmith to build and evaluate, Veritio to prove what shipped.',
     image: {
       src: imgLangsmith,
       alt: 'Diagram comparing LangSmith tracing and evaluation of an agent run with Veritio’s hash-linked evidence chain covering the same run plus code changes, deployment, and human approval events.',
@@ -264,6 +377,22 @@ export const alternatives: Alternative[] = [
       { dimension: 'SDK parity', them: 'TS, Python, Go, Java', veritio: 'TS, Python, Go — byte-identical, fixture-pinned' },
       { dimension: 'First released', them: 'June 2026', veritio: '2026, protocol + fixtures public from day one' },
     ],
+    panel: {
+      themSub: 'Audit-log SDK (auditkit.dev)',
+      themTitle: 'Hash-chained log',
+      themRows: [
+        { name: 'SHA-256 chain', detail: 'tenant-scoped' },
+        { name: 'Merkle proofs', detail: 'paid tiers' },
+        { name: 'SDKs', detail: 'TS · Python · Go · Java' },
+        { name: 'SIEM streaming', detail: 'Splunk · Datadog · Elastic' },
+        { name: 'agent provenance', detail: 'not modeled', tone: 'seal' },
+      ],
+      themFoot: 'Classic application audit only',
+      chain: defaultChain,
+      usFoot: 'App and agent evidence in one chain',
+    },
+    closing:
+      'Both projects believe audit logs should be verifiable. Veritio extends that to what AI agents do.',
     image: {
       src: imgAuditkit,
       alt: 'Two-axis map comparing AuditKit and Veritio: both offer hash-chained application audit logs, but Veritio additionally covers AI-agent provenance — sessions, tool calls, code changes, and deployments — under an Apache-2.0 protocol.',
