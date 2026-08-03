@@ -9,18 +9,22 @@ import FeatureCard from '../../components/FeatureCard.astro'
 const claudeInstall = `/plugin marketplace add getveritio/veritio
 /plugin install veritio@veritio`
 
-const claudeLogin = `veritio login claude`
+const checkoutSetup = `git clone https://github.com/getveritio/veritio.git
+cd veritio
+bun install --frozen-lockfile
+bun run --cwd cli build`
 
-const codexLogin = `veritio login codex`
+const claudeLogin = `bun cli/dist/index.js login claude`
 
-const githubRepo = 'https://github.com/getveritio/veritio'
+const codexLogin = `bun cli/dist/index.js login codex`
+
 const pluginReadme =
   'https://github.com/getveritio/veritio/tree/main/plugins/veritio'
 
 const recorded = [
   {
-    title: 'Session start & end',
-    body: 'A tamper-evident record of when each agent session opened and closed.',
+    title: 'Session lifecycle',
+    body: 'Claude records session start/end; local Codex notify records a bounded turn-level session marker.',
   },
   {
     title: 'Prompts',
@@ -28,7 +32,7 @@ const recorded = [
   },
   {
     title: 'Tool calls & file changes',
-    body: 'Edits, writes, and Bash-driven changes captured as before/after hashes.',
+    body: 'Claude hooks capture edits and tools as hashes. Codex notify does not expose these details.',
   },
   {
     title: 'Query it back',
@@ -57,7 +61,7 @@ const breadcrumbJsonLd = [
 
 <BaseLayout
   title="Connect Claude Code & Codex — Veritio"
-  description="Give your Claude Code and Codex sessions a tamper-evident audit trail, recorded to Veritio Cloud, with a hosted MCP to query it back. One browser login, no pasted keys."
+  description="Connect local Claude Code and Codex CLI sessions to a bounded, local-first Veritio evidence trail. Hosted delivery is optional and never auto-drains a backlog."
   jsonLd={breadcrumbJsonLd}
 >
   <Nav />
@@ -66,26 +70,42 @@ const breadcrumbJsonLd = [
     <div class="container">
       <span class="eyebrow">Connect your agents</span>
       <p class="mt-3 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">
-        Updated <time datetime="2026-07-22">22 July 2026</time>
+        Updated <time datetime="2026-08-03">3 August 2026</time>
       </p>
       <h1
         class="mt-4 max-w-3xl font-semibold tracking-tight text-ink"
         style="font-size: var(--text-headline); line-height: var(--text-headline--line-height);"
       >
-        Claude Code & Codex in two minutes
+        Connect Claude Code & local Codex safely
       </h1>
       <p class="mt-5 max-w-2xl text-lg leading-relaxed text-ink-soft">
-        Record what your coding agents actually did — session by session, as a
-        hash-chained evidence trail — and query it back over MCP. One browser
-        login mints the credentials; you never paste a key.
+        Record what local coding agents actually did — session by session, as a
+        hash-chained evidence trail — and query it back over MCP. Capture is
+        local-first; hosted delivery is optional and bounded.
       </p>
       <p class="mt-4 max-w-2xl text-sm leading-relaxed text-ink-muted">
-        This is the hosted-connected path. The open-source SDK and the local
-        Workbench run fully offline without an account — see{' '}
+        This page covers offline capture and the optional hosted-connected path.
+        The open-source SDK and local Workbench run fully offline without an
+        account — see{' '}
         <a class="text-accent no-underline hover:text-accent-strong" href="/examples">Examples</a>.
       </p>
     </div>
   </section>
+
+  <Section id="availability" tone="sunken">
+    <h2 class="text-2xl font-semibold tracking-tight text-ink">Current availability</h2>
+    <p class="mt-3 max-w-2xl text-ink-soft">
+      <code class="inline">@veritio/claude-code</code> is published. The
+      <code class="inline">veritio</code> CLI and
+      <code class="inline">@veritio/codex</code> adapter are still
+      <strong class="text-ink"> repository-checkout previews</strong>. Keep the
+      checkout in place after Codex setup because its notify wrapper points to
+      the reviewed local adapter build.
+    </p>
+    <div class="mt-8 max-w-2xl">
+      <CodeBlock code={checkoutSetup} lang="bash" title="repository checkout" />
+    </div>
+  </Section>
 
   <Section id="claude-code">
     <h2 class="text-2xl font-semibold tracking-tight text-ink">Claude Code</h2>
@@ -97,35 +117,59 @@ const breadcrumbJsonLd = [
       <CodeBlock code={claudeInstall} lang="bash" title="Claude Code" />
     </div>
     <p class="mt-5 max-w-2xl text-sm leading-relaxed text-ink-soft">
-      The plugin ships <strong class="text-ink">disabled by default</strong>{' '}
-      because it connects to a hosted service. Enable it with
-      <code class="inline">/plugin</code>, then connect once to record evidence:
+      The plugin ships <strong class="text-ink">disabled by default</strong>.
+      Enable it with <code class="inline">/plugin</code> for local capture. To
+      opt into hosted delivery from the repository checkout, run:
     </p>
     <div class="mt-6 max-w-2xl">
       <CodeBlock code={claudeLogin} lang="bash" title="terminal" />
     </div>
     <p class="mt-5 max-w-2xl text-sm leading-relaxed text-ink-soft">
-      <code class="inline">veritio login</code> opens your browser, you approve
-      in the console, and it mints a scoped, revocable key and writes the
-      capture credentials — no key is ever pasted. For the read side, the hosted
-      MCP uses Claude Code's built-in OAuth: approve it once in
-      <code class="inline">/mcp</code> and Claude can query your evidence.
+      The command opens your browser, mints a scoped, revocable key after
+      approval, and prints the exact environment block to add to Claude settings
+      — no key is pasted into the command line. The plugin pins a reviewed
+      package version instead of resolving npm latest on every hook. For the
+      read side, approve the hosted MCP once in <code class="inline">/mcp</code>.
     </p>
   </Section>
 
   <Section id="codex" tone="sunken">
     <h2 class="text-2xl font-semibold tracking-tight text-ink">Codex CLI</h2>
     <p class="mt-3 max-w-2xl text-ink-soft">
-      Codex has no plugin system, so one command wires capture into its config —
-      preserving any notifier you already have, never replacing it.
+      Codex CLI has one notify slot. The checkout command writes a wrapper that
+      preserves any existing notifier and invokes the absolute reviewed adapter
+      build; it does not depend on an unpublished global binary.
     </p>
     <div class="mt-8 max-w-2xl">
       <CodeBlock code={codexLogin} lang="bash" title="terminal" />
     </div>
     <p class="mt-5 max-w-2xl text-sm leading-relaxed text-ink-soft">
-      Same browser device-login: approve in the console, and it writes the
-      capture credentials plus the Codex notify wrapper. Your existing
+      The adapter writes locally first. If hosted credentials are approved, one
+      turn makes at most one remote POST with a 10-second default and 30-second
+      maximum timeout. It has no automatic retry or backlog drain. Your existing
       <code class="inline">notify</code> command keeps running.
+    </p>
+  </Section>
+
+  <Section id="economic-safety">
+    <h2 class="text-2xl font-semibold tracking-tight text-ink">
+      Local, GitHub, and spend boundaries
+    </h2>
+    <p class="mt-3 max-w-2xl text-ink-soft">
+      Claude's model/API charges, Codex usage, GitHub Actions minutes, and
+      Veritio delivery are separate budgets. Veritio limits only its own
+      delivery: Claude queues are finite and never auto-drain; Codex sends one
+      bounded request per local CLI turn. Production stress and spool drains do
+      not belong in pull-request workflows.
+    </p>
+    <p class="mt-5 max-w-2xl text-sm leading-relaxed text-ink-soft">
+      For Claude Code GitHub Actions, use a narrow trigger, workflow concurrency,
+      <code class="inline">timeout-minutes</code>, and
+      <code class="inline">--max-turns</code>. Install an exact reviewed capture
+      version and keep credentials in GitHub Secrets. The local Codex notify
+      adapter does <strong class="text-ink">not</strong> claim capture of Codex
+      cloud tasks or GitHub code reviews because those products do not expose
+      the local CLI notify callback to this adapter.
     </p>
   </Section>
 
@@ -157,8 +201,8 @@ const breadcrumbJsonLd = [
         Read the details
       </h2>
       <p class="mt-3 text-ink-soft">
-        The plugin README covers the full event mapping, the env contract, and
-        requirements. Everything is open source.
+        The plugin README covers the full event mapping, delivery circuit,
+        GitHub-hosted boundaries, environment contract, and requirements.
       </p>
       <div class="mt-7 flex flex-wrap gap-3">
         <a
