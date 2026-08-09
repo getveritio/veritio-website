@@ -36,7 +36,7 @@ const recorded = [
   },
   {
     title: 'Query it back',
-    body: 'Ask your own audit trail questions over MCP — list and export sessions.',
+    body: 'Claude local evidence is queryable through its local MCP. Codex evidence needs optional hosted delivery before the hosted MCP can query it.',
   },
 ]
 
@@ -80,8 +80,9 @@ const breadcrumbJsonLd = [
       </h1>
       <p class="mt-5 max-w-2xl text-lg leading-relaxed text-ink-soft">
         Record what local coding agents actually did — session by session, as a
-        hash-chained evidence trail — and query it back over MCP. Capture is
-        local-first; hosted delivery is optional and bounded.
+        hash-chained evidence trail. Claude can query its local store over MCP;
+        local Codex needs optional hosted delivery before hosted MCP queries.
+        Capture is local-first; hosted delivery is optional and bounded.
       </p>
       <p class="mt-4 max-w-2xl text-sm leading-relaxed text-ink-muted">
         This page covers offline capture and the optional hosted-connected path.
@@ -101,6 +102,11 @@ const breadcrumbJsonLd = [
       <strong class="text-ink"> repository-checkout previews</strong>. Keep the
       checkout in place after Codex setup because its notify wrapper points to
       the reviewed local adapter build.
+    </p>
+    <p class="mt-4 max-w-2xl text-sm leading-relaxed text-ink-muted">
+      The marketplace hooks are pinned to <code class="inline">@veritio/claude-code@0.4.6</code>.
+      Publish and verify that exact registry version before releasing this plugin update; the pin
+      intentionally fails closed if the package is unavailable and never falls back to 0.4.5.
     </p>
     <div class="mt-8 max-w-2xl">
       <CodeBlock code={checkoutSetup} lang="bash" title="repository checkout" />
@@ -178,9 +184,10 @@ const breadcrumbJsonLd = [
       What gets recorded
     </h2>
     <p class="mt-3 max-w-2xl text-ink-soft">
-      Capture is <strong class="text-ink">hash-only</strong>: raw prompts, tool
-      inputs, and file contents are never stored — only stable ids and content
-      hashes, hash-chained so tampering is detectable.
+      Raw prompts, tool argument payloads, and file contents are not stored.
+      Stable ids and content hashes form the evidence trail. Claude may retain
+      raw file paths temporarily in local session state to pair pre/post edit
+      hashes; those paths are not sent as evidence metadata.
     </p>
     <div class="mt-8 grid gap-5 sm:grid-cols-2">
       {
