@@ -8,6 +8,7 @@
 import BaseLayout from '../../layouts/BaseLayout.astro'
 import Nav from '../../components/Nav.astro'
 import Footer from '../../components/Footer.astro'
+import EvidenceStreamPanel from '../../components/EvidenceStreamPanel.astro'
 import { Image } from 'astro:assets'
 import consoleShot from '../../assets/console-dashboard.png'
 import episodeShot from '../../assets/episode-canvas.png'
@@ -90,23 +91,32 @@ const headlineStyle =
     <!-- DIE AUSGANGSLAGE -->
     <section class="border-t border-line-strong bg-surface-raised">
       <div class="container py-16 sm:py-20">
-        <h2 class="max-w-[24ch] font-medium text-ink" style={headlineStyle}>
-          Software liefert sich heute selbst aus.
-        </h2>
-        <p class="mt-6 max-w-2xl text-lg leading-relaxed text-ink-soft">
-          Ein Agent schreibt die Migration. Eine Pipeline gibt sie frei. Ein
-          Service deployt sie nachts um drei in die Produktion. Die Arbeit ist
-          real — und ebenso real sind die Fragen danach: <em>Wer hat das getan,
-          unter wessen Review, und wie gefährlich war es?</em>
-        </p>
-        <p class="mt-5 max-w-2xl text-base leading-relaxed text-ink-soft">
-          Anwendungs-Logs beantworten das nicht. Sie rotieren, werden
-          umgeschrieben und gehören dem, der die Datenbank kontrolliert.
-          Veritio macht aus jeder Aktion stattdessen einen Datensatz: eine
-          Herkunft — User, Service oder KI-Agent —, einen deterministischen
-          Risiko-Score und einen Hash, der ihn unveränderlich in die Sequenz
-          einschließt. Nachweise statt Logs.
-        </p>
+        <div class="grid items-center gap-10 lg:grid-cols-[1fr_minmax(280px,0.95fr)]">
+          <div>
+            <h2 class="max-w-[24ch] font-medium text-ink" style={headlineStyle}>
+              Software liefert sich heute selbst aus.
+            </h2>
+            <p class="mt-6 max-w-2xl text-lg leading-relaxed text-ink-soft">
+              Ein Agent schreibt die Migration. Eine Pipeline gibt sie frei. Ein
+              Service deployt sie nachts um drei in die Produktion. Die Arbeit ist
+              real — und ebenso real sind die Fragen danach: <em>Wer hat das getan,
+              unter wessen Review, und wie gefährlich war es?</em>
+            </p>
+            <p class="mt-5 max-w-2xl text-base leading-relaxed text-ink-soft">
+              Anwendungs-Logs beantworten das nicht. Sie rotieren, werden
+              umgeschrieben und gehören dem, der die Datenbank kontrolliert.
+              Veritio macht aus jeder Aktion stattdessen einen Datensatz: eine
+              Herkunft — User, Service oder KI-Agent —, einen deterministischen
+              Risiko-Score und einen Hash, der ihn unveränderlich in die Sequenz
+              einschließt. Nachweise statt Logs.
+            </p>
+          </div>
+          <EvidenceStreamPanel
+            caption="Evidence stream · Demonstrationsdaten"
+            pauseLabel="Animation pausieren"
+            playLabel="Animation abspielen"
+          />
+        </div>
       </div>
     </section>
 

@@ -6,13 +6,14 @@
  * catching tampering, 04 getting started, closing with the Veritio Cloud
  * pitch (the paid service — sold, not footnoted, but always optional). Mono is
  * reserved for data/labels, serif for prose; hairline rules instead of cards.
- * Both exhibits are real console captures (demonstration data) — the page
- * ships no client JavaScript.
+ * Both exhibits are real console captures (demonstration data). The §01
+ * evidence-stream panel is a pre-rendered muted loop (no Remotion runtime).
  */
 import BaseLayout from '../layouts/BaseLayout.astro'
 import Nav from '../components/Nav.astro'
 import Footer from '../components/Footer.astro'
 import CodeBlock from '../components/CodeBlock.astro'
+import EvidenceStreamPanel from '../components/EvidenceStreamPanel.astro'
 import { Image } from 'astro:assets'
 import consoleShot from '../assets/console-dashboard.png'
 import episodeShot from '../assets/episode-canvas.png'
@@ -231,7 +232,7 @@ const headlineStyle =
     <!-- § 01 · THE SITUATION -->
     <section class="border-t border-line-strong bg-surface-raised">
       <div class="container py-16 sm:py-20">
-        <div>
+        <div class="grid items-center gap-10 lg:grid-cols-[1fr_minmax(280px,0.95fr)]">
           <div>
             <h2 class="max-w-[20ch] font-medium text-ink" style={headlineStyle}>
               Software ships itself now.
@@ -250,6 +251,7 @@ const headlineStyle =
               into sequence. Evidence, not logs.
             </p>
           </div>
+          <EvidenceStreamPanel />
         </div>
       </div>
     </section>

@@ -10,6 +10,8 @@
     "preview": "astro preview",
     "check": "astro check",
     "images:alt": "node scripts/generate-alt-images.mjs",
+    "remotion:studio": "bun --cwd remotion run studio",
+    "remotion:render": "bun --cwd remotion run render",
     "deploy": "astro build && wrangler deploy"
   },
   "dependencies": {

@@ -1,0 +1,23 @@
+{
+  "name": "veritio-website-remotion",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render": "bun run render:mp4 && bun run render:poster",
+    "render:mp4": "remotion render src/index.ts EvidenceStream ../public/media/evidence-stream.mp4 --codec=h264 --crf=32 --scaled-width=720 --muted",
+    "render:poster": "remotion still src/index.ts EvidenceStream ../public/media/evidence-stream-poster.jpg --frame=300 --scaled-width=720 --image-format=jpeg --jpeg-quality=82"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.386",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "remotion": "^4.0.386"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "typescript": "^5.8.0"
+  }
+}

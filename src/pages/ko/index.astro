@@ -7,6 +7,7 @@
 import BaseLayout from '../../layouts/BaseLayout.astro'
 import Nav from '../../components/Nav.astro'
 import Footer from '../../components/Footer.astro'
+import EvidenceStreamPanel from '../../components/EvidenceStreamPanel.astro'
 import { Image } from 'astro:assets'
 import consoleShot from '../../assets/console-dashboard.png'
 import episodeShot from '../../assets/episode-canvas.png'
@@ -87,22 +88,31 @@ const headlineStyle =
     <!-- 상황 -->
     <section class="border-t border-line-strong bg-surface-raised">
       <div class="container py-16 sm:py-20">
-        <h2 class="max-w-[24ch] font-medium text-ink" style={headlineStyle}>
-          이제 소프트웨어는 스스로 배포됩니다.
-        </h2>
-        <p class="mt-6 max-w-2xl text-lg leading-relaxed text-ink-soft">
-          에이전트가 마이그레이션을 작성하고, 파이프라인이 승인하고, 서비스가
-          새벽 3시에 프로덕션으로 배포합니다. 작업은 실재합니다 — 그리고 그
-          뒤에 따라오는 질문도 실재합니다. <em>누가 했는가, 누구의 리뷰
-          아래였는가, 얼마나 위험했는가?</em>
-        </p>
-        <p class="mt-5 max-w-2xl text-base leading-relaxed text-ink-soft">
-          애플리케이션 로그는 이 질문에 답하도록 만들어지지 않았습니다.
-          로테이션되고, 다시 쓰이고, 데이터베이스를 쥔 쪽의 소유입니다.
-          Veritio는 각 행동을 하나의 레코드로 만듭니다: 출처(사용자·서비스·AI
-          에이전트), 결정적 리스크 점수, 그리고 시퀀스에 고정하는 해시.
-          로그가 아니라 증거입니다.
-        </p>
+        <div class="grid items-center gap-10 lg:grid-cols-[1fr_minmax(280px,0.95fr)]">
+          <div>
+            <h2 class="max-w-[24ch] font-medium text-ink" style={headlineStyle}>
+              이제 소프트웨어는 스스로 배포됩니다.
+            </h2>
+            <p class="mt-6 max-w-2xl text-lg leading-relaxed text-ink-soft">
+              에이전트가 마이그레이션을 작성하고, 파이프라인이 승인하고, 서비스가
+              새벽 3시에 프로덕션으로 배포합니다. 작업은 실재합니다 — 그리고 그
+              뒤에 따라오는 질문도 실재합니다. <em>누가 했는가, 누구의 리뷰
+              아래였는가, 얼마나 위험했는가?</em>
+            </p>
+            <p class="mt-5 max-w-2xl text-base leading-relaxed text-ink-soft">
+              애플리케이션 로그는 이 질문에 답하도록 만들어지지 않았습니다.
+              로테이션되고, 다시 쓰이고, 데이터베이스를 쥔 쪽의 소유입니다.
+              Veritio는 각 행동을 하나의 레코드로 만듭니다: 출처(사용자·서비스·AI
+              에이전트), 결정적 리스크 점수, 그리고 시퀀스에 고정하는 해시.
+              로그가 아니라 증거입니다.
+            </p>
+          </div>
+          <EvidenceStreamPanel
+            caption="Evidence stream · 데모 데이터"
+            pauseLabel="애니메이션 일시정지"
+            playLabel="애니메이션 재생"
+          />
+        </div>
       </div>
     </section>
 
