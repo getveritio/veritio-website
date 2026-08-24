@@ -1,0 +1,96 @@
+---
+title: Installation
+description: Install the stable TypeScript package or use the source-backed Python and Go SDKs with explicit runtime requirements and verification steps.
+audience: [newcomer, developer]
+kind: tutorial
+searchIntent: Install a verified Veritio SDK release for TypeScript, Python, or Go and confirm the installed version.
+questions:
+  - How do I install Veritio for TypeScript?
+  - How do I use the verified Python or Go source revision?
+  - Which runtime versions does Veritio require?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7', 'Python SDK 0.0.1 at veritio@c4100ee', 'Go module at veritio@c4100ee']
+sourceRefs:
+  - https://www.npmjs.com/package/@veritio/core/v/0.4.7
+  - https://github.com/getveritio/veritio/tree/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/python
+  - https://github.com/getveritio/veritio/tree/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/go
+claimRefs: []
+sidebar:
+  order: 2
+---
+
+import { TabItem, Tabs } from '@astrojs/starlight/components'
+
+Install the SDK path you intend to run, then prove the public entrypoint loads. The examples on this site were verified against the exact releases and source revision shown in the page metadata.
+
+## Runtime requirements
+
+- TypeScript: Bun 1.3 or a current Node.js runtime with a package manager.
+- Python: Python 3.11 or newer and a checkout of the OSS repository.
+- Go: Go 1.22 or newer.
+
+## Install the verified build
+
+<Tabs syncKey="language">
+  <TabItem label="TypeScript">
+    ```sh
+    bun add @veritio/core@0.4.7
+    ```
+  </TabItem>
+  <TabItem label="Python">
+    The Python SDK is currently source-backed; do not assume a package-index release.
+
+    ```sh
+    git clone https://github.com/getveritio/veritio.git
+    git -C veritio checkout c4100ee7b678d0c6b227c67ae6ea1d8a1f373967
+    python3 -m pip install -e ./veritio/sdks/python
+    ```
+  </TabItem>
+  <TabItem label="Go">
+    ```sh
+    go get github.com/getveritio/veritio/sdks/go@c4100ee7b678d0c6b227c67ae6ea1d8a1f373967
+    ```
+  </TabItem>
+</Tabs>
+
+The Python installation checks out the verified commit before running editable installation. This prevents a local branch or newer `main` from silently changing the example underneath the page.
+
+## Prove the import boundary
+
+<Tabs syncKey="language">
+  <TabItem label="TypeScript">
+    ```sh
+    bun -e "import { createAuditEvent } from '@veritio/core'; console.log(typeof createAuditEvent)"
+    ```
+
+    Expected: `function`
+  </TabItem>
+  <TabItem label="Python">
+    ```sh
+    python3 -c "from veritio import create_audit_event; print(callable(create_audit_event))"
+    ```
+
+    Expected: `True`
+  </TabItem>
+  <TabItem label="Go">
+    ```sh
+    go list -m github.com/getveritio/veritio/sdks/go
+    ```
+
+    Expected: the module path followed by the resolved revision.
+  </TabItem>
+</Tabs>
+
+An import check proves package resolution only. It does not select storage, configure a hosted account, or validate your application's tenant boundary.
+
+## If installation fails
+
+| Symptom | Likely cause | Check |
+| --- | --- | --- |
+| TypeScript export is missing | A different package version was resolved | `bun pm ls @veritio/core` |
+| Python imports another checkout | `PYTHONPATH` or an older editable install wins | `python3 -c "import veritio; print(veritio.__file__)"` |
+| Go resolves a different revision | The module graph already pins another version | `go list -m -json github.com/getveritio/veritio/sdks/go` |
+
+Pin reviewed versions in production and keep server credentials out of browser bundles. Installation alone does not make an event trustworthy; authentication, authorization, and tenant resolution remain host responsibilities.
+
+With the import working, [record two audit events and verify their chain](/docs/start/record-first-event/).

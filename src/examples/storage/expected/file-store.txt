@@ -1,0 +1,19 @@
+{
+  "eventSequences": [
+    1,
+    2
+  ],
+  "reopenedEventCount": 2,
+  "verification": {
+    "ok": true,
+    "audit": {
+      "ok": true
+    },
+    "edges": {
+      "ok": true
+    },
+    "commits": {
+      "ok": true
+    }
+  }
+}

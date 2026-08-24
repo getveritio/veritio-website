@@ -1,0 +1,31 @@
+<script is:inline>
+  window.StarlightThemeProvider = (() => {
+    const storedTheme = typeof localStorage !== 'undefined' && localStorage.getItem('starlight-theme')
+    const theme = storedTheme === 'dark' ? 'dark' : 'light'
+    document.documentElement.dataset.theme = theme
+
+    /** Synchronizes the docs theme controls after page navigation. */
+    function updatePickers(nextTheme = theme) {
+      document.querySelectorAll('[data-docs-theme-toggle]').forEach((button) => {
+        const dark = nextTheme === 'dark'
+        button.textContent = dark ? 'Light' : 'Dark'
+        button.setAttribute('aria-label', dark ? 'Use light theme' : 'Use dark theme')
+      })
+    }
+
+    /** Persists one explicit light or dark choice. */
+    function toggle() {
+      const nextTheme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+      document.documentElement.dataset.theme = nextTheme
+      localStorage.setItem('starlight-theme', nextTheme)
+      updatePickers(nextTheme)
+    }
+
+    window.VeritioTheme = { toggle }
+    document.addEventListener('astro:page-load', () => updatePickers(document.documentElement.dataset.theme))
+
+    return {
+      updatePickers,
+    }
+  })()
+</script>

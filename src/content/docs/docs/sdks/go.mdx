@@ -1,0 +1,249 @@
+---
+title: Go SDK
+description: Use the Go module to create, hash, and score portable Veritio evidence, and avoid the zero-value, pointer, and stale-doc traps Go callers hit first.
+audience: [developer]
+kind: guide
+searchIntent: Work around Go-specific Veritio ergonomics — required policy arguments, pointer options, and unexported helpers.
+questions:
+  - What does the Veritio Go SDK support?
+  - Why does ScoreRiskSignals in Go require a policy argument?
+  - Which verification functions does the Go module actually export?
+  - How do I set an optional risk temperature in Go?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['Go module at veritio@c4100ee', '@veritio/core@0.4.7']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/go/event.go
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/go/risk.go
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/go/risk_policy.go
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/go/governed_change.go
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/go/go.mod
+claimRefs: []
+---
+
+import { Code } from '@astrojs/starlight/components'
+import quickstart from '../../../../examples/quickstart/go.go?raw'
+import expectedOutput from '../../../../examples/quickstart/expected/go.txt?raw'
+import riskParity from '../../../../examples/risk/parity.go?raw'
+import riskParityOutput from '../../../../examples/risk/expected/parity-go.txt?raw'
+import actionDraft from '../../../../examples/governed/action-draft.go?raw'
+import actionDraftOutput from '../../../../examples/governed/expected/action-draft-go.txt?raw'
+
+The Go module implements portable events, edges, record hashing, evidence commits, governed changes, templates, deterministic redaction, and risk scoring. At the verified revision it does not provide the TypeScript `AuditStore` or audit-record-chain verifier.
+
+The protocol semantics are identical to TypeScript and Python. The *ergonomics* are not. Go has no default arguments, no exceptions, and no way to spell an absent struct field, so three shapes that are invisible in the other SDKs become load-bearing here: required policy arguments, pointer-typed options, and the zero value.
+
+## Add the pinned module
+
+```sh
+go get github.com/getveritio/veritio/sdks/go@c4100ee7b678d0c6b227c67ae6ea1d8a1f373967
+```
+
+The module declares Go 1.22. Confirm the resolved revision with:
+
+```sh
+go list -m -json github.com/getveritio/veritio/sdks/go
+```
+
+## Create the shared event
+
+<Code code={quickstart} lang="go" title="src/examples/quickstart/go.go" />
+
+Run this file inside a module that depends on the pinned Veritio module:
+
+```sh
+go run .
+```
+
+<Code code={expectedOutput} lang="text" title="verified output" />
+
+The website verifier formats, compiles, tests, and runs this fixture in a temporary Go module before comparing its event-hash prefix with TypeScript and Python.
+
+## Errors are the whole fail-closed surface
+
+TypeScript throws and Python raises. Go returns `(T, error)`, and the second return value is where every fail-closed guarantee lives. `CreateAuditEvent`, `CanonicalJSON`, `HashAuditEvent`, `HashAuditRecord`, `NormalizeRiskSignals`, `ScoreRiskSignals`, `RollupEpisodeRisk`, `RiskPolicy`, `DefineEntity`, and `CreateGovernedActionDraft` all return one.
+
+```text
+TypeScript   throws        → an ignored error is impossible
+Python       raises        → an ignored error is impossible
+Go           returns error → an ignored error is a silent zero value
+```
+
+An ignored error hands you the zero value of the result type: an `AuditEvent` with an empty ID and no scope, or a `RiskAssessment` with `score=0`. A zero value is not a normalized event. Check every error and never treat the first return as usable until you have.
+
+`VerifyEvidenceCommits` is the exception. It returns `EvidenceCommitVerificationResult` — a value with `OK`, `Index`, and `Reason` — because a failed verification is an expected outcome, not a programming error. Read `result.OK`, not an error.
+
+## The risk policy argument is required
+
+This is the single largest divergence Go callers hit. The other two SDKs default the policy; Go does not.
+
+| SDK | Signature |
+| --- | --- |
+| TypeScript | `scoreRiskSignals(signals: RiskSignals, policy?: RiskScoringPolicy): RiskAssessment` |
+| Python | `score_risk_signals(signals, policy=DEFAULT_RISK_POLICY) -> dict` |
+| Go | `ScoreRiskSignals(signals RiskSignals, policy RiskScoringPolicy) (RiskAssessment, error)` |
+
+Go cannot express `policy?`, so the reference policy must be passed by name:
+
+```go
+assessment, err := veritio.ScoreRiskSignals(signals, veritio.DefaultRiskPolicy)
+if err != nil {
+	return err
+}
+```
+
+`RollupEpisodeRisk(steps, policy)` takes the same required argument for the same reason.
+
+### A zero-value policy scores NaN and bands as critical
+
+Because the argument is required, the compiler will not let you forget it — but it will happily accept a `RiskScoringPolicy` you never populated, from a struct field, a map miss, or an unchecked `RiskPolicy` call whose error you dropped.
+
+The result is not a zero score. It is worse:
+
+```text
+var zero veritio.RiskScoringPolicy
+ScoreRiskSignals({OperationType: "destructive"}, zero)
+
+  → score         NaN        (sat(0, 0) is 0/0)
+  → level         critical   (every band threshold is 0, so no comparison matches)
+  → policyVersion ""         (empty)
+  → error         nil        (signals were valid; the policy was never checked)
+```
+
+`ScoreRiskSignals` fails closed on bad *signals*, not on a bad *policy*. Nothing rejects the empty policy at scoring time.
+
+The net is one step downstream. `CreateSecurityRiskAssertion` runs `validateRiskConclusion`, which rejects a non-finite or out-of-range score before it can reach a canonical hash, and returns `conclusion.score must be a finite number in [0,1]`. That guard exists because a NaN or infinity would otherwise die as an unsanitized `json: unsupported value` inside `HashAssertionRecord`.
+
+So the failure mode is: a NaN score with a `critical` band travels through your own code, your logs, and your dashboards, and only surfaces when you try to turn it into evidence. Construct policies once, at a process boundary, and check the error.
+
+## Optional numbers are pointers, and `Float64` is the helper
+
+`RiskPolicyOptions.Temperature` is `*float64`, not `float64`. The pointer is deliberate: temperature `0.0` derives the lenient endpoints and is a legitimate value, so an absent knob has to be distinguishable from a supplied zero. The same rule governs every field in `RiskPolicyOverrides` — `MaxBoost`, the per-signal weights and saturation constants, and each band threshold are all `*float64`, where `nil` means "keep the derived value".
+
+Go does not let you take the address of a literal, so the module ships `Float64`:
+
+```go
+policy, err := veritio.RiskPolicy(veritio.RiskPolicyOptions{
+	Temperature: veritio.Float64(0.8),
+})
+// policy.PolicyVersion == "veritio.reference.v1+temp0.80"
+```
+
+Temperature is a multiple of `0.01` in `[0,1]`. `0.5` reproduces the reference policy byte-for-byte; lower is lenient, higher is strict. Derivation stamps a deterministic `veritio.reference.v1+tempX.XX` policy version so a hashed conclusion always names the constants that produced it.
+
+Overrides are different. Any override makes the policy hand-tuned, so `Overrides.PolicyVersion` becomes mandatory and `RiskPolicy` fails closed without it — an auto-generated `+tempX.XX` suffix must never misrepresent constants a caller replaced by hand.
+
+## Only `BandOf` is exported
+
+The four determinism primitives are the reason scores agree across languages. Their export status does not agree across languages.
+
+| Primitive | TypeScript | Python | Go |
+| --- | --- | --- | --- |
+| Clamp to `[0,1]` | `clamp01` | `clamp01` | `clamp01` (unexported) |
+| Round half-up to 4 decimals | `round4` | `round4` | `round4` (unexported) |
+| Saturating ratio `x/(x+k)` | `sat` | `_sat` (private) | `sat` (unexported) |
+| Score to band | `bandOf` | `band_of` | `BandOf` (exported) |
+
+`BandOf(score float64, bands RiskBands) RiskLevel` is the only one you can call. It uses inclusive lower bounds and returns `none` below the low band. Reach for it when you need to re-band a stored score under a different policy without rescoring.
+
+If you were planning to reimplement `round4` or `sat` in your own package to mirror a TypeScript helper: don't. They are unexported because they are protocol math, not utilities. `round4` uses integer floor math (`math.Floor(v*10000+0.5)/10000`) rather than a language rounding mode, and `RollupEpisodeRisk` decays momentum by repeated multiplication rather than `math.Pow`, precisely so the trailing digits match the other SDKs. A local reimplementation is a byte-divergence waiting to happen.
+
+## `RiskBands` carries no JSON tags
+
+`RiskBands` is a plain struct with exported fields and no struct tags:
+
+```go
+type RiskBands struct {
+	Low      float64
+	Medium   float64
+	High     float64
+	Critical float64
+}
+```
+
+Passing it straight to `encoding/json` emits `{"Low":0.05,...}` — Go field spellings, not the protocol key names the other SDKs write. When you need the protocol bytes, project the values into a map and run them through `CanonicalJSON`, which sorts keys and renders whole-valued floats as `1` rather than `1.0`. That is what the parity fixture does, and it is why its band line is comparable to the TypeScript and Python outputs instead of manufacturing a difference no hash would ever see.
+
+## Verified cross-language risk parity
+
+This fixture scores three pinned signal sets under `DefaultRiskPolicy` and prints every number through `CanonicalJSON`. Its stdout is byte-identical to the Python twin's expected output.
+
+<Code code={riskParity} lang="go" title="src/examples/risk/parity.go" />
+
+<Code code={riskParityOutput} lang="text" title="verified output" />
+
+Two details in that output are worth reading closely. The first scenario supplies only `OperationType`, and the `normalized` line shows the defaults being filled in — `reversibility=recoverable`, `envCriticality=production`, magnitudes `0`. In Go that sparse input is not an option type; it is the struct's zero value. `RiskSignals` has no way to distinguish "field omitted" from "field set to zero", which is exactly why `NormalizeRiskSignals` treats an empty enum as unset and a zero magnitude as unsupplied.
+
+The second detail: magnitudes are typed `float64` but normalization rejects anything fractional, negative, `NaN`, or infinite, and coerces IEEE-754 negative zero to positive zero so the metadata bytes render `0` rather than Go's `-0`. Pass integers.
+
+## Governed action drafts
+
+`CreateGovernedActionDraft` derives change and activity IDs, changed paths, revision evidence, event actions, edge relations, and the outbox entry from one pinned input. The Go derivation is byte-identical to the TypeScript and Python ones.
+
+<Code code={actionDraft} lang="go" title="src/examples/governed/action-draft.go" />
+
+<Code code={actionDraftOutput} lang="json" title="verified output" />
+
+The `draftIsInputOnly` block is the important part. `eventsCarryStoreAssignedSequence` and `eventsCarryRecordHash` are both `false`, and they are false structurally: `AuditEventInput` has no sequence or hash member, so a draft cannot present itself as an appended record. A draft becomes evidence only when its outbox entry is appended through a conforming store inside the same transaction.
+
+Note what the state commitment does with field capture. `internalNotes` is declared `omit`, so `omittedFieldPresent` is `false` — operator prose never reaches the commitment or the changed paths. `accountEmail` is declared `content_digest`, so it is committed as `sha256:aa69b0bc…` rather than as the address. Capture policy is hash-affecting: declare it identically across SDKs or the digests diverge.
+
+## Trap: a doc comment names two functions that do not exist
+
+`sdks/go/event.go` documents `VerifyEvidenceCommits` like this:
+
+```text
+Per-record integrity comes from
+VerifyAuditRecords/VerifyEvidenceEdgeRecords; compose both for end-to-end
+evidence verification.
+```
+
+Neither function exists in the Go module. Confirm it yourself:
+
+```sh
+grep -rn "func VerifyAuditRecords\|func VerifyEvidenceEdgeRecords" sdks/go/
+# no matches
+```
+
+The only exported verifier in the Go package is `VerifyEvidenceCommits`. The two named functions are TypeScript APIs; the comment was written against the protocol, not against the Go surface, and it will mislead you if you read it as a to-do list of local calls.
+
+The advice inside the comment is still correct as protocol guidance, and the gap it describes is real. `VerifyEvidenceCommits` proves the commit **ledger's** internal consistency only: sequence and previous-hash linkage per stream, member manifest, Merkle root, and commit hash. It deliberately does not reconcile member record hashes against independently verified records. A fabricated commit chain built over fabricated record hashes verifies `OK` in isolation.
+
+```text
+VerifyEvidenceCommits proves      the commit ledger links correctly
+VerifyEvidenceCommits cannot prove  the records those commits point at are genuine
+```
+
+For per-record integrity in a Go deployment today you either verify records through the TypeScript verifier, or reimplement the record walk against `HashAuditRecord` / `HashEvidenceEdgeRecord`, which the module does export. Treat an `OK` commit result as one half of end-to-end verification, never as the whole of it.
+
+## Supported capabilities
+
+| Area | Public Go APIs |
+| --- | --- |
+| Events and canonical JSON | `CreateAuditEvent`, `CanonicalJSON`, `HashAuditEvent`, `HashAuditRecord` |
+| Edges | `CreateEvidenceEdge`, `HashEvidenceEdge`, `HashEvidenceEdgeRecord` |
+| Evidence commits | `CreateEvidenceCommit`, `HashEvidenceCommit`, `VerifyEvidenceCommits` |
+| Idempotency digest | `HashIdempotencyKey` |
+| Governed changes | `DefineEntity`, `GovernedRevisionID`, `CreateGovernedChangeDraft`, `CreateGovernedActionDraft` |
+| Audit templates | Auth, organization, consent, subject request, retention, agent, review, CI, deployment, and runtime helpers |
+| Deterministic risk | `NormalizeRiskSignals`, `ScoreRiskSignals`, `RollupEpisodeRisk`, `WithRiskSignals`, `BandOf`, `RiskPolicy`, `Float64`, `DefaultRiskPolicy` |
+| Risk assertions | `CreateSecurityRiskAssertion`, `HashAssertionRecord`, `BuildSecurityRiskAssessedEvent` |
+
+## Known boundaries
+
+The module does **not** expose `AuditStore`, `MemoryAuditStore`, `CreateAuditRecorder`, `VerifyAuditRecords`, or `VerifyEvidenceEdgeRecords` at the verified revision. It also has no provenance recorder, so the `metadata.sessionId` and `metadata.activityEpisodeId` stamps and the agent-capture classifier remain TypeScript-only parity work.
+
+The Go SDK can create, hash, and score the same portable semantics as the other SDKs. Durable ordered persistence and full record-chain verification require a host implementation or the existing TypeScript and storage path until equivalent Go APIs land upstream. Check the [parity matrix](/docs/reference/parity-matrix/) before porting a TypeScript workflow, so a missing API surfaces at design time rather than halfway through the port.
+
+None of this establishes legal compliance. It produces evidence that a reviewer can check independently.
+
+## Verification commands
+
+Inside `sdks/go` at the pinned revision:
+
+```sh
+gofmt -d .
+go test ./...
+```
+
+In this website repository, `bun run verify:examples` repeats the format, compile, run, output, source-revision, content-hash, and cross-language checks for every Go fixture on this page.
+
+Continue with the [parity matrix](/docs/reference/parity-matrix/) to see which capabilities exist per language, the [risk policy reference](/docs/reference/risk-policy/) for the constants `DefaultRiskPolicy` pins, or the [event schema](/docs/reference/event-schema/) for the field names all three SDKs share.

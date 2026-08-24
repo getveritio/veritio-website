@@ -1,0 +1,197 @@
+---
+title: Evidence commit hashing
+description: Normative byte-level construction of veritio-merkle-v1 leaf, node, and commit digests so a third-party verifier can reproduce them.
+audience: [developer, operator, governance]
+kind: reference
+searchIntent: Reproduce veritio-merkle-v1 leaf, node, and EvidenceCommit digests byte for byte in an independent implementation.
+questions:
+  - How is the veritio-merkle-v1 recordsRoot computed?
+  - What happens to the last hash when a Merkle level has an odd number of entries?
+  - Why does a commit member need sha256 prefixed onto an audit record hash?
+  - Which reason does verifyEvidenceCommits return for a mid-stream commit?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/evidence-commit-hashing.md
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/index.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/conformance/evidence-commit.json
+claimRefs: []
+---
+
+import { Code } from '@astrojs/starlight/components'
+import merkleSource from '../../../../examples/commits/merkle-root.ts?raw'
+import merkleOutput from '../../../../examples/commits/expected/merkle-root.txt?raw'
+
+An `evidence.commit` binds a set of already-persisted records into one atomic append. Anyone holding those commits must be able to recompute `recordsRoot` and `hash` without reading SDK source, in any language, and get the same bytes. This page is the normative construction; where prose here and `spec/conformance/evidence-commit.json` could ever disagree, the fixture wins.
+
+Every digest below is SHA-256 over `veritio-json-v1` canonical bytes: object keys sorted recursively, missing members omitted, UTF-8, no HTML escaping. Key order in the literals shown here is irrelevant — canonicalization sorts them before hashing.
+
+## Three domain separators
+
+Commit hashing never hashes a bare payload. Each of the three digest kinds carries a `domain` field inside its own hash input:
+
+```text
+veritio-record-leaf-v1   one member  → leaf hash
+veritio-merkle-node-v1   two hashes  → interior node hash
+veritio-commit-v1        one commit  → commit hash
+```
+
+The separators exist so that two different structures can never produce the same digest even if their remaining bytes coincide. A leaf digest can never be replayed as a node digest, and neither can be replayed as a commit digest or as a v1 audit-record envelope hash, which carries no domain marker at all.
+
+## Member manifest normalization
+
+Normalization runs before any hashing, in both `createEvidenceCommit` and `verifyEvidenceCommits`. It is a fail-closed gate, not a repair step:
+
+1. `members` must be a non-empty array.
+2. Each member is reduced to exactly `index`, `recordType`, `recordId`, `recordHash`. Unknown fields are stripped and never reach the hash input.
+3. `index` must be a non-negative integer. `recordType` must be one of `audit.record`, `evidence.edge.record`, `entity.revision.record`, `activity.record`, `assertion.record`, `change.record`. `recordHash` must match `sha256:[a-f0-9]{64}` — lowercase hex only.
+4. Members are sorted by ascending `index`. After sorting, the indices must be contiguous from zero.
+5. A duplicate physical identity, formed as `recordType` + `NUL` + `recordId`, throws. Duplicates are never silently de-duplicated.
+
+Two consequences matter for callers. First, member order is protocol-canonical rather than caller-dependent: hand the same manifest to `createEvidenceCommit` in any array order and you get the same sorted `members`, the same root, and the same commit hash. Second, an incomplete manifest is a hard failure. Dropping a middle member leaves indices such as `[0, 2]`, which fails contiguity rather than quietly committing a smaller set.
+
+## Leaf construction
+
+Each normalized member becomes one leaf. `index` is part of the hashed payload, not merely a sort key:
+
+```text
+leaf = "sha256:" + sha256hex(canonicalJson({
+  domain:     "veritio-record-leaf-v1",
+  index:      member.index,
+  recordType: member.recordType,
+  recordId:   member.recordId,
+  recordHash: member.recordHash,
+}))
+```
+
+Because `index` is inside the leaf, moving a record to a different position changes its leaf hash and therefore the root. Position within the commit is itself committed evidence. Swapping the `index` fields of two members — leaving every `recordHash` intact — changes the root; the verifier reports `records_root_mismatch`.
+
+Canonicalized, the first member of the worked example below serializes to exactly these bytes:
+
+```json
+{"domain":"veritio-record-leaf-v1","index":0,"recordHash":"sha256:9a753cb23031b9c49445207da15e758613573de613c503ce4b758b2ced783c98","recordId":"evt_member_invited_01","recordType":"audit.record"}
+```
+
+## Merkle root
+
+`treeAlgorithm` is `veritio-merkle-v1`. Starting from the leaves in normalized member order, combine pairs left to right until one hash remains:
+
+```text
+node = "sha256:" + sha256hex(canonicalJson({
+  domain: "veritio-merkle-node-v1",
+  left:   level[i],
+  right:  level[i + 1] ?? level[i],
+}))
+```
+
+The `?? level[i]` is the odd rule: when a level has an odd count, its final hash is duplicated as its own right sibling. This applies at **every** level, not only the leaf level. A three-member commit only exercises it at the leaves, which is why implementations that special-case the leaf level still pass a three-member fixture and then diverge on five:
+
+```text
+3 members                          5 members
+L0 L1 L2                           L0 L1 L2 L3 L4
+ \  /   \                           \  /   \  /   \
+  n0    n1 = N(L2, L2)               n0    n1    n2 = N(L4, L4)
+   \    /                             \    /      |
+     root                              m0        m1 = N(n2, n2)
+                                         \       /
+                                           root
+```
+
+At five members the odd rule fires twice: once at the leaf level (`L4` duplicated) and once at the level above it (`n2` duplicated). Test any independent implementation at five and seven members, not three.
+
+### One-member commits
+
+The loop runs while more than one hash remains. A one-member commit therefore never enters it: `recordsRoot` **is** the leaf hash, unchanged, with no node hashing and no self-pairing. An implementation that pairs the single leaf with itself produces a different root and will fail conformance.
+
+## Commit hash
+
+The commit hash covers every commit field except `hash` itself, wrapped under its own domain:
+
+```text
+hash = "sha256:" + sha256hex(canonicalJson({
+  domain: "veritio-commit-v1",
+  commit: { …every commit field except hash… },
+}))
+```
+
+`commit` is the whole record: `recordType`, `schemaVersion`, `commitId`, `streamId`, `sequence`, `previousCommitHash`, the normalized `members` array, `recordCount`, `recordsRoot`, `canonicalization`, `hashAlgorithm`, `treeAlgorithm`, and `committedAt`. Because the stored `members` array is inside the hash input verbatim, reordering the persisted array without touching any `index` field leaves `recordsRoot` reproducible but breaks the commit hash — the verifier reports `hash_mismatch`, not `records_root_mismatch`.
+
+Chains are per `streamId`. A valid chain starts at `sequence: 1` with `previousCommitHash: null`, then increments the sequence by one and carries the previous commit's `hash`. Streams are independent; verifying one never reads another's state.
+
+## Algorithm-qualified versus bare hex
+
+This is the single most common integration error. Commit-level digests are **algorithm-qualified**: `sha256:` followed by 64 lowercase hex characters. v1 audit and edge record envelope hashes are **bare** 64-hex, and deliberately stay that way — introducing commits did not rewrite existing record hashes.
+
+```text
+record.hash                    9a753cb2…3c98            bare 64-hex
+member.recordHash              sha256:9a753cb2…3c98     qualified
+commit.recordsRoot             sha256:681c3111…c55a     qualified
+commit.hash                    sha256:739c10b0…90be     qualified
+commit.previousCommitHash      sha256:… or null         qualified
+```
+
+So a caller projecting persisted records into a manifest must write `sha256:${record.hash}` explicitly. Passing the bare hex through fails `cleanCommitMember` with a `TypeError` before anything is hashed.
+
+## Verified construction
+
+This fixture runs in CI and its output is byte-compared. It builds three real audit records, projects them into a manifest, and commits the same manifest twice in two deliberately different caller orderings.
+
+<Code code={merkleSource} lang="ts" title="src/examples/commits/merkle-root.ts" />
+
+<Code code={merkleOutput} lang="json" title="verified output" />
+
+What each field proves:
+
+- `recordChainVerification.ok` — the three member records are a genuine hash chain, so `member.recordHash` references real envelope digests rather than placeholder bytes.
+- `suppliedOrder` versus `canonicalMemberOrder` — the caller handed in `[2, 0, 1]`; normalization sorted to `[0, 1, 2]`.
+- `recordHash` values carry the `sha256:` prefix while the underlying record hashes are stored bare.
+- `recordsRoot` and `commitHash` — the published digests for this exact manifest.
+- `hashSelfConsistent` — `hashEvidenceCommit` recomputes the stored hash from the canonical fields.
+- `orderIndependent` — the reversed-order build produced the identical root and commit hash.
+
+### Reproducing the published root by hand
+
+The three leaves and the two interior nodes of that commit are:
+
+```text
+leaf0  sha256:c5de3dac039b687cc2138a0613b92e68fd70e25110be389795b911ae1e7a6c35
+leaf1  sha256:3386692ce8c50d5684adf491d3b2ab9c768ae468e9ba22b786b7723dbbac8800
+leaf2  sha256:ea5ad922a98e5c39a6a5bd11cfc933417ec63904dbc31a8650c7519a7e462191
+
+n0 = node(leaf0, leaf1)  sha256:65906cf888af6ec26209607575a292eb7e2f84797e8a1830be26f2d3833990a8
+n1 = node(leaf2, leaf2)  sha256:0d7d7ac2c105157f77216b6371f797d37e7e58ed78563eb8a0bcf2f0c6a21c65
+
+root = node(n0, n1)      sha256:681c3111295b88bd29d3f15a4ab1db830cd1c78fc984989b3590e9db3504c55a
+```
+
+That root is the `recordsRoot` in the checked output above. An independent implementation that reproduces these five intermediate digests is aligned with the reference implementations at the byte level, not merely at the API level.
+
+## Verification reasons
+
+`verifyEvidenceCommits` (TypeScript), `verify_evidence_commits` (Python), and `VerifyEvidenceCommits` (Go) return either `ok: true` or a single `index` and `reason`. The `index` is the zero-based position in the supplied array where the first failing invariant was observed. The nine reasons, in the order the checks run:
+
+| Reason | Check that failed |
+| --- | --- |
+| `unsupported_hash_algorithm` | `hashAlgorithm` is not `sha256` |
+| `unsupported_canonicalization` | `canonicalization` is not `veritio-json-v1` |
+| `unsupported_tree_algorithm` | `treeAlgorithm` is not `veritio-merkle-v1` |
+| `invalid_member_manifest` | missing or empty `streamId`, or the manifest failed normalization |
+| `previous_hash_mismatch` | `previousCommitHash` is not the last verified hash for that stream |
+| `sequence_mismatch` | `sequence` is not exactly one greater than the stream's last |
+| `record_count_mismatch` | `recordCount` disagrees with the normalized member count |
+| `records_root_mismatch` | the recomputed `veritio-merkle-v1` root differs from `recordsRoot` |
+| `hash_mismatch` | `hash` is not a string, or the recomputed commit hash differs |
+
+Two placements are worth memorizing. `invalid_member_manifest` covers both a structurally unusable stream key and any normalization throw, so a non-contiguous index set and an empty `streamId` surface under the same reason. And the previous-hash check runs **before** the sequence check.
+
+That ordering decides what a mid-stream slice reports. Hand the verifier commits 5 through 9 of a stream in isolation and it fails at index `0` with `previous_hash_mismatch`, not `sequence_mismatch`: fresh stream state starts at `previousHash: null`, and commit 5 carries a non-null parent, so the link check fails first. The reason names a missing predecessor, which is the accurate diagnosis — the slice is not a chain, it is a fragment. Fetch from `sequence: 1` or verify against a separately trusted tip.
+
+## What a valid result does not prove
+
+`verifyEvidenceCommits` proves the commit **ledger's** internal consistency: envelope algorithms, per-stream linkage, manifest shape, Merkle root, and commit hash. It deliberately does not reconcile `member.recordHash` against independently verified records. A fabricated commit chain over fabricated record hashes verifies `ok` in isolation, and so does a chain re-signed after substituting one member's `recordHash` — the ledger is self-consistent, it simply no longer describes the record it claims to.
+
+Per-record integrity is a separate proof, produced by `verifyAuditRecords` and `verifyEvidenceEdgeRecords`. End-to-end evidence verification composes both, as the reference server's `verify()` does: verify the records, verify the commits, then reconcile each `member.recordHash` against the corresponding verified record's `sha256:`-prefixed hash. Skipping the third step leaves the atomicity claim unanchored.
+
+A commit scopes its claim to ledger atomicity — "these records were appended together, in this order, under this stream" — not to record authenticity and not to the truthfulness of what any record asserts. Like the record chain, it makes tampering detectable rather than impossible; the append boundary still needs authorization, tenant isolation, and operational response.
+
+Continue with [Evidence commits](/docs/concepts/evidence-commits/) for when to cut a commit and the full tamper matrix, [Hash chain](/docs/concepts/hash-chain/) for the per-record construction commits build on, and the [verifier reference](/docs/reference/verifier/) to interpret results across every chain type.

@@ -1,0 +1,213 @@
+---
+title: TypeScript SDK
+description: The complete @veritio/core surface — events, edges, records, governed changes, risk math, templates, provenance, export bundles — and which parts exist only in TypeScript.
+audience: [developer]
+kind: guide
+searchIntent: Map the whole @veritio/core TypeScript surface and find which capabilities have no Python or Go equivalent.
+questions:
+  - What does the Veritio TypeScript SDK support?
+  - Which Veritio capabilities are TypeScript-only?
+  - How do I append and verify records in TypeScript?
+  - How do governed changes and risk scoring fit into @veritio/core?
+  - Which TypeScript APIs are safe to import publicly?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7', '@veritio/storage@0.4.7']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/index.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/governed-change.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/risk-score.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/risk.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/templates.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/provenance.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/export-bundle.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/export-bundle-chain-modes.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/package.json
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/storage/src/conformance.ts
+claimRefs: []
+---
+
+import { Code } from '@astrojs/starlight/components'
+import quickstart from '../../../../examples/quickstart/typescript.ts?raw'
+import expectedOutput from '../../../../examples/quickstart/expected/typescript.txt?raw'
+import agentSession from '../../../../examples/agents/expected/session-and-tool.txt?raw'
+import exportBundle from '../../../../examples/exports/expected/build-and-verify.txt?raw'
+import conformance from '../../../../examples/storage/expected/conformance-suite.txt?raw'
+
+`@veritio/core` is the reference implementation of the Veritio protocol and the widest of the three SDKs. It normalizes events and edges, hashes and verifies record envelopes and evidence commits, derives governed-change drafts, computes deterministic risk scores, builds audit-event templates, records agent provenance, and assembles portable export bundles. It never reads process environment variables and never opens a connection; the host injects storage at the application boundary.
+
+Python and Go implement the protocol math. They do not implement all of this. Four capability families below exist in TypeScript only, and each is marked.
+
+## Install the exact release
+
+```sh
+bun add @veritio/core@0.4.7
+```
+
+Keep storage, tenant resolution, and credentials in server-only modules. The pure risk math is the one part of the package that is safe in a browser bundle, and it has its own entry point.
+
+## Run one complete record
+
+<Code code={quickstart} lang="ts" title="src/examples/quickstart/typescript.ts" />
+
+```sh
+bun src/examples/quickstart/typescript.ts
+```
+
+<Code code={expectedOutput} lang="text" title="verified output" />
+
+The output proves that the event was appended at tenant-local sequence `1` and that the resulting record passes verification. The hash prefix also matches the checked Python and Go event fixtures.
+
+For the two-record chain and tamper exercise, follow [Record your first event](/docs/start/record-first-event/) and [Verify a chain](/docs/start/verify-a-chain/).
+
+## How the surface layers
+
+```text
+canonicalJson                      deterministic bytes
+        ↓
+createAuditEvent / createEvidenceEdge   normalized protocol objects
+        ↓
+AuditStore.append                  store-assigned sequence, previousHash, hash
+        ↓
+verifyAuditRecords                 chain verdict
+        ↓
+createEvidenceCommit               commit ledger over persisted record hashes
+        ↓
+buildExportBundle                  portable, offline-verifiable vevb-1 bundle
+```
+
+Every layer above the store consumes what the layer below produced. Nothing skips the store: a draft, a template, or a provenance call produces evidence *input*, and only an append through a conforming `AuditStore` turns it into a record with a sequence and a hash.
+
+## Primitives
+
+`canonicalJson(value: unknown): string` produces the `veritio-json-v1` bytes every hash is taken over. `createAuditEvent(input: AuditEventInput): AuditEvent` normalizes host input: it enforces dotted lowercase action names, requires `actor.id` and `target.id`, sorts `dataCategories`, coerces dates to ISO strings, and applies deterministic metadata redaction. Redaction is by key *name*, recursive, and happens before hashing, so a redacted value is redacted in the bytes and not merely in a view. See [Redaction](/docs/concepts/redaction/).
+
+`hashAuditEvent(event, previousHash?)` is the event-level link pinned by the cross-language fixtures. `hashAuditRecord(record)` recomputes the envelope digest with only the stored `hash` field removed, which is what verification compares against. `createEvidenceEdge` and `hashEvidenceEdge` / `hashEvidenceEdgeRecord` mirror all of this for the graph, with a closed vocabulary of 32 entity types and 37 relations exported as `EVIDENCE_ENTITY_TYPES` and `EVIDENCE_EDGE_RELATIONS`. `hashIdempotencyKey(tenantId, idempotencyKey)` binds a host key to its tenant so the same string cannot collide across chains.
+
+## Store contract
+
+```ts
+interface AuditStore {
+  append(event: AuditEvent, options?: {
+    idempotencyKey?: string
+    expectedPreviousHash?: string | null
+  }): Promise<AuditRecord>
+  list(scope: EvidenceScope & { tenantId: string }, options?: {
+    afterSequence?: number
+    limit?: number
+  }): Promise<AuditRecord[]>
+}
+```
+
+`append` returns an `AuditRecord` whose `sequence`, `previousHash`, `hash`, and `appendedAt` were assigned atomically by the store — the SDK does not compute them. `list` requires a non-empty tenant scope. `createAuditRecorder({ store })` wraps a store in the one-method `AuditRecorder` that adapters receive, so a framework package never holds a connection.
+
+`MemoryAuditStore` implements the contract for local examples and unit tests, including tenant isolation, idempotent replay, and expected-tip rejection. It implies no durability. Production storage must satisfy the [authoritative storage invariants](/docs/storage/overview/).
+
+## Governed changes and actions
+
+A governed change is the mutation-boundary workflow: declare an entity type once, then derive a full evidence draft from the before and after rows of a single database write.
+
+```ts
+defineEntity<Row>(definition: GovernedEntityDefinition<Row>): GovernedEntity<Row>
+createGovernedActionDraft<Row>(input: GovernedActionDraftInput<Row>): GovernedChangeDraft
+createGovernedChangeDraft<Row>(input: GovernedChangeDraftInput<Row>): GovernedChangeDraft
+governedRevisionId(entityType, entityId, stateDigest, changeId): string
+```
+
+`defineEntity` records an authority, a type, a `schemaRef`, a `fieldSetRef`, an `identity(row)` function, and a per-field `capture` policy. Four capture modes are implemented in all three SDKs — `omit`, `content_digest`, `keyed_digest`, `full`. The other four in the `CaptureMode` union (`randomized_digest`, `reference`, `redact`, `encrypt`) are reserved: selecting one fails closed at draft time rather than quietly producing a weaker commitment.
+
+`createGovernedActionDraft` is the helper most hosts call. It derives the change id, the activity id, the tenant-scoped idempotency hash, and the changed paths, then delegates to `createGovernedChangeDraft`, which owns the protocol event and edge semantics. The returned `GovernedChangeDraft` carries `changeRef`, `activityRef`, `entityRef`, a `revision` with its `stateCommitment` digest, the `events` and `edges` to append, and an `outboxEntry` stamped with `mutationBinding` and schema version `2026-06-23`.
+
+`governedRevisionId` content-addresses a revision by its state digest *and* by the change that produced it, so a rollback that restores byte-identical earlier state still yields a distinct revision id while a replay of the same change stays idempotent.
+
+Read [Governed changes](/docs/concepts/governed-changes/) for the model, follow [Governed actions](/docs/guides/governed-actions/) for the end-to-end write path, and use the [Governed change API reference](/docs/reference/governed-change-api/) for every field. `mergeVeritioMetadata` and the reserved context keys it protects are documented there; a caller that tries to set `metadata.changeId` itself is rejected.
+
+## Risk scoring
+
+Risk is deterministic protocol math, not a heuristic. It uses only clamp, floor, divide, and multiply — never `pow`, `exp`, or `log` — so TypeScript, Python, and Go emit byte-identical scores.
+
+```ts
+normalizeRiskSignals(signals: RiskSignals): RiskSignals
+scoreRiskSignals(signals: RiskSignals, policy?: RiskScoringPolicy): RiskAssessment
+rollupEpisodeRisk(steps: EpisodeRiskStep[], policy?: RiskScoringPolicy): EpisodeRiskRollup
+riskPolicy(options?: { temperature?: number; overrides?: RiskPolicyOverrides }): RiskScoringPolicy
+withRiskSignals(metadata, signals): Record<string, unknown>
+```
+
+`normalizeRiskSignals` fails closed. Unknown enum values throw; absent enums default to the most conservative class (`recoverable`, `production`); absent magnitudes default to `0` so an omitted signal can never score lower than an explicit zero. `scoreRiskSignals` returns the score, the band, the policy version, and the full ordered `factors` breakdown, which is what makes a score explainable rather than an opaque number. `rollupEpisodeRisk` carries momentum across a session with integer-window decay and takes the maximum of peak, velocity, and any fired frequency rule. `riskPolicy` derives a full policy from `DEFAULT_RISK_POLICY` by two-segment linear interpolation and stamps a `veritio.reference.v1+tempX.XX` version; any hand override makes `overrides.policyVersion` mandatory so a derived version string can never misrepresent tuned constants.
+
+The primitives `clamp01`, `round4`, `sat`, and `bandOf` are all exported. So is `DEFAULT_RISK_POLICY`, whose constants are the cross-language contract.
+
+Everything named above is crypto-free and available from the browser-safe `@veritio/core/risk-score` subpath. Importing it from the root barrel instead drags `node:crypto` into a client bundle. The server-only half lives in the root export: `createSecurityRiskAssertion`, `hashAssertionRecord`, and `buildSecurityRiskAssessedEvent`, which stamps the activity-episode id after caller metadata so a caller cannot shadow it.
+
+See [Risk scoring](/docs/concepts/risk-scoring/) for the model, the [risk policy reference](/docs/reference/risk-policy/) for every constant, and [Security risk assertions](/docs/guides/security-risk-assertions/) for the append-only assertion record.
+
+## Audit templates
+
+`auditTemplates` and the individual builders return an `AuditEventInput` with the protocol action string, actor, target, and metadata defaults already set — `authSessionCreatedTemplate`, `consentGrantedTemplate`, `filesChangedTemplate`, and 23 others grouped into the five sets named by `auditTemplateSets` (`auth`, `organization`, `data`, `agent`, `code`). Each accepts `activityEpisodeId` and `riskSignals` and stamps them consistently. `auditLogClassificationMetadata`, `detectAuditLogClassifiers`, `normalizeAuditLogVisibility`, and `normalizeAuditLogSurface` normalize the `logVisibility` and `logSurface` filter metadata without promoting those labels into protocol fields.
+
+Templates are the one shared capability with **no** conformance fixture in any language, so nothing byte-compares the emitted events across SDKs. Read [Audit templates](/docs/guides/audit-templates/) and the [template catalogue](/docs/reference/template-catalogue/) before depending on template parity in a mixed-language deployment.
+
+## Evidence commits
+
+`createEvidenceCommit(input)` binds an ordered manifest of already-persisted record hashes into a per-stream ledger with a `veritio-merkle-v1` records root. `verifyEvidenceCommits(commits)` checks sequence continuity, previous-commit linkage, manifest shape, the root, and the commit hash — and nothing else. It deliberately does not reconcile `member.recordHash` against independently verified records, so a fabricated commit chain over fabricated hashes verifies `ok` in isolation. Compose it with `verifyAuditRecords` for an end-to-end verdict. See [Evidence commits](/docs/concepts/evidence-commits/) and the [commit hashing reference](/docs/reference/evidence-commit-hashing/).
+
+## TypeScript-only: chain verification
+
+`verifyAuditRecords(records: readonly AuditRecord[]): VerificationResult` and `verifyEvidenceEdgeRecords` exist in this SDK alone. Python and Go can create and hash records; they cannot verify a record chain. `verifyEvidenceCommits` is the only one of the three verifiers present in all three languages, and it proves the least. A Go-side or Python-side commit pass is a statement about the ledger, not about the records under it.
+
+## TypeScript-only: provenance recorder
+
+`createProvenanceRecorder(sinks: ProvenanceSinks): ProvenanceRecorder` composes the primitives into the `agent.*`, `change.*`, `review.*`, `ci.*`, and `deploy.*` event families plus the edges that connect them. The host injects `recordEvent` and `recordEdge`; the recorder owns no storage. Every event a session emits carries `metadata.sessionId` and `metadata.activityEpisodeId`, applied after caller metadata so a caller cannot shadow the keys read models group on. Only hashes and stable ids should travel — a `Principal.display` is never redacted, and edges carry stable actor ids without it.
+
+<Code code={agentSession} lang="json" title="verified output" />
+
+`rawPromptStored: false` is the checked property: the session recorded a `promptHash`, and the serialized store contains no prompt text. See [Provenance recorder](/docs/ai/provenance-recorder/), [Agent events](/docs/ai/agent-events/), and [Activity episodes](/docs/concepts/activity-episodes/).
+
+## TypeScript-only: export bundles
+
+The `vevb-1` bundle is the portable evidence format.
+
+```ts
+buildExportBundle(input: ExportBundleInput): Promise<ExportBundle>
+signExportBundle(bundle, privateKey: CryptoKey, publicKey: CryptoKey): Promise<ExportBundle>
+serializeExportBundle(bundle): string
+parseExportBundle(text: string): ExportBundle
+verifyExportBundle(bundle, opts?: { publicKey?: CryptoKey; requireSignature?: boolean })
+  : Promise<ExportBundleVerificationReport>
+```
+
+`buildExportBundle` is a pure function of its input — no clock, no randomness — so the same records always produce byte-identical files. `verifyExportBundle` runs four independent gates offline: structure, integrity, chains, and signature. It reports content problems as sanitized issue strings rather than throwing.
+
+<Code code={exportBundle} lang="json" title="verified output" />
+
+The `chainScope` field decides how much a `valid` verdict proves. `full` is the strict claim that every tenant chain starts at sequence 1 and is gapless — the only scope in which nothing was removed. `windowed` and `filtered`, verified by `verifyAuditChainScoped` and `verifyEdgeChainScoped`, deliberately claim less; declaring the scope in the manifest is what keeps a partial export honest. See the [export format reference](/docs/reference/export-format/).
+
+## TypeScript-only: storage adapters
+
+`@veritio/storage@0.4.7` ships the authoritative store adapters (Postgres, Neon, MySQL, MariaDB, Mongo), the file store, the outbox dispatcher, and the derived object-archive and ClickHouse read-model tiers. `@veritio/storage/conformance` is the executable proof that a store may own ordering.
+
+<Code code={conformance} lang="json" title="verified output" />
+
+A store that does not pass all five checks must not be treated as authoritative. Derived tiers are never sequence owners. See [Storage conformance](/docs/storage/conformance/) and [Storage overview](/docs/storage/overview/).
+
+## Failure behavior
+
+- Missing tenant scope fails before append.
+- Reusing one idempotency key with different canonical event bytes raises an idempotency conflict.
+- Supplying a stale `expectedPreviousHash` raises a chain-tip mismatch.
+- Verification returns a structured failure at the first invalid record, with the array index and a stable reason.
+- Unsupported metadata numbers, non-finite values, bigints, and invalid action names fail during normalization.
+- A reserved capture mode or a `keyed_digest` field with no digest key fails at draft time.
+- A caller that tries to set a reserved Veritio context key in metadata is rejected.
+
+Thirty-five such guards across ten public surfaces are exercised by the [fail-closed catalogue](/docs/reference/troubleshooting/). Do not catch these errors and write a partial record. Reject or retry the host operation according to its transaction boundary.
+
+## Public import boundary
+
+Import from `@veritio/core` or a declared package export such as `@veritio/core/risk-score`. `@veritio/storage` declares `.` and `./conformance`. Internal source paths are not compatibility contracts. Framework adapters stay thin translators and receive a configured recorder; they do not become authoritative for the event model.
+
+## What a green TypeScript run proves
+
+A passing `verifyAuditRecords` result means the supplied records are internally consistent under the declared algorithms. It does not prove the host recorded every relevant event, and it does not prove an event's claim was true. Veritio produces compliance evidence; the completeness of that evidence is a property of your instrumentation, not of the SDK.
+
+Check the [parity matrix](/docs/reference/parity-matrix/) before porting any of this to [Python](/docs/sdks/python/) or [Go](/docs/sdks/go/), or continue with a [framework integration](/docs/frameworks/nextjs/).

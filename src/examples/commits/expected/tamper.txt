@@ -1,0 +1,102 @@
+{
+  "recordChain": {
+    "ok": true
+  },
+  "ledger": [
+    {
+      "commitId": "cmt_membership_01",
+      "sequence": 1,
+      "recordCount": 3,
+      "recordsRoot": "sha256:44444f427c38795087adae19e1348a9c0aa89a73597ed793d3915cb843600c49",
+      "previousCommitHash": null,
+      "hash": "sha256:3992cf8f6ab349c3610ba11afd67518c3878aebabe895f31413cb3a4a661ad27"
+    },
+    {
+      "commitId": "cmt_membership_02",
+      "sequence": 2,
+      "recordCount": 1,
+      "recordsRoot": "sha256:648d2d6977e9bb4949a046c99cc53860db9aee7f8c5ae57d0dd7cb26f3f38345",
+      "previousCommitHash": "sha256:3992cf8f6ab349c3610ba11afd67518c3878aebabe895f31413cb3a4a661ad27",
+      "hash": "sha256:fb4cd989d2d4009859758b36c8d156f6d2e622d7d87c6fd5a4d222e9dba60cf9"
+    }
+  ],
+  "previousHashLinked": true,
+  "cases": [
+    {
+      "case": "untampered",
+      "mutation": "none — the honest two-commit ledger",
+      "ok": true,
+      "index": null,
+      "reason": null
+    },
+    {
+      "case": "swapped_member_record_hash",
+      "mutation": "commit 1 members[0] and members[1] exchange recordHash",
+      "ok": false,
+      "index": 0,
+      "reason": "records_root_mismatch"
+    },
+    {
+      "case": "dropped_member_tail",
+      "mutation": "commit 1 loses its last member; recordCount still claims 3",
+      "ok": false,
+      "index": 0,
+      "reason": "record_count_mismatch"
+    },
+    {
+      "case": "dropped_member_middle",
+      "mutation": "commit 1 loses members[1], leaving indices [0, 2]",
+      "ok": false,
+      "index": 0,
+      "reason": "invalid_member_manifest"
+    },
+    {
+      "case": "reordered_member_indices",
+      "mutation": "commit 1 members[0] and members[1] exchange their index fields",
+      "ok": false,
+      "index": 0,
+      "reason": "records_root_mismatch"
+    },
+    {
+      "case": "reordered_member_array",
+      "mutation": "commit 1 members reversed in place, index fields untouched",
+      "ok": false,
+      "index": 0,
+      "reason": "hash_mismatch"
+    },
+    {
+      "case": "mutated_records_root",
+      "mutation": "commit 1 recordsRoot replaced with commit 2's root",
+      "ok": false,
+      "index": 0,
+      "reason": "records_root_mismatch"
+    },
+    {
+      "case": "broken_previous_hash_link",
+      "mutation": "commit 2 re-parented onto a fabricated previousCommitHash",
+      "ok": false,
+      "index": 1,
+      "reason": "previous_hash_mismatch"
+    }
+  ],
+  "ledgerScopeCaveat": {
+    "note": "verifyEvidenceCommits proves ledger consistency, not that members describe real records",
+    "resignedSubstitution": {
+      "ok": true
+    },
+    "reconciledAgainstRecords": [
+      {
+        "recordId": "evt_member_invited_01",
+        "boundToItsOwnRecord": false
+      },
+      {
+        "recordId": "evt_member_joined_01",
+        "boundToItsOwnRecord": true
+      },
+      {
+        "recordId": "evt_member_promoted_01",
+        "boundToItsOwnRecord": true
+      }
+    ]
+  }
+}

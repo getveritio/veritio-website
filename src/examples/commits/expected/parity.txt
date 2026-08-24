@@ -1,0 +1,45 @@
+{
+  "suppliedOrder": [
+    {
+      "index": 2,
+      "recordId": "evt_member_promoted_01"
+    },
+    {
+      "index": 0,
+      "recordId": "evt_member_invited_01"
+    },
+    {
+      "index": 1,
+      "recordId": "evt_member_joined_01"
+    }
+  ],
+  "canonicalMemberOrder": [
+    {
+      "index": 0,
+      "recordType": "audit.record",
+      "recordId": "evt_member_invited_01",
+      "recordHash": "sha256:9a753cb23031b9c49445207da15e758613573de613c503ce4b758b2ced783c98"
+    },
+    {
+      "index": 1,
+      "recordType": "audit.record",
+      "recordId": "evt_member_joined_01",
+      "recordHash": "sha256:376f6f2ea018a9fc6c946fcc7d61e358f8fc1ff82960bd66e0ff83c09327d300"
+    },
+    {
+      "index": 2,
+      "recordType": "audit.record",
+      "recordId": "evt_member_promoted_01",
+      "recordHash": "sha256:2fc2218e51e289d169e9de8d6915702c2b5c422789450c2bd3f7098d40f5a88f"
+    }
+  ],
+  "recordCount": 3,
+  "treeAlgorithm": "veritio-merkle-v1",
+  "recordsRoot": "sha256:681c3111295b88bd29d3f15a4ab1db830cd1c78fc984989b3590e9db3504c55a",
+  "commitHash": "sha256:739c10b06dccc577aa0ae9c38bd61ae204e6044f9ffdda7161142a00d0cd90be",
+  "hashSelfConsistent": true,
+  "orderIndependent": true,
+  "commitVerification": {
+    "ok": true
+  }
+}

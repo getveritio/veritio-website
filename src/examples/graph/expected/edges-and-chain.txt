@@ -1,0 +1,117 @@
+{
+  "edges": [
+    {
+      "id": "edge_change_part_of_activity",
+      "schemaVersion": "2026-06-13",
+      "occurredAt": "2026-08-09T10:00:00.000Z",
+      "from": {
+        "type": "change",
+        "id": "chg_subscription_sub_9f31"
+      },
+      "relation": "part_of",
+      "to": {
+        "type": "activity",
+        "id": "act_subscription_sub_9f31"
+      },
+      "metadata": {
+        "activityType": "billing.plan_change"
+      },
+      "scope": {
+        "tenantId": "org_acme",
+        "environment": "production"
+      }
+    },
+    {
+      "id": "edge_change_modified_file",
+      "schemaVersion": "2026-06-13",
+      "occurredAt": "2026-08-09T10:00:30.000Z",
+      "from": {
+        "type": "change",
+        "id": "chg_subscription_sub_9f31"
+      },
+      "relation": "modified",
+      "to": {
+        "type": "file",
+        "id": "file_billing_plan_ts",
+        "pathHash": "sha256:6f4b1c0d2a7e5839c1b0f2d3e4a5b6c7d8e9f0a1b2c3d4e5f60718293a4b5c6d"
+      },
+      "metadata": {
+        "changedPathCount": 2
+      },
+      "scope": {
+        "tenantId": "org_acme",
+        "environment": "production"
+      }
+    },
+    {
+      "id": "edge_change_reviewed_by_owner",
+      "schemaVersion": "2026-06-13",
+      "occurredAt": "2026-08-09T10:01:00.000Z",
+      "from": {
+        "type": "change",
+        "id": "chg_subscription_sub_9f31"
+      },
+      "relation": "reviewed_by",
+      "to": {
+        "type": "principal",
+        "id": "usr_owner",
+        "actorType": "user"
+      },
+      "metadata": {
+        "decision": "approved"
+      },
+      "scope": {
+        "tenantId": "org_acme",
+        "environment": "production"
+      }
+    }
+  ],
+  "chain": [
+    {
+      "edgeId": "edge_change_part_of_activity",
+      "sequence": 1,
+      "previousHash": null,
+      "edgeHash": "b558af701a039503c92f4c1b2c53e950e760d21a9ba0c5459f0884462c1c3566",
+      "recordHash": "30d530bbf0705bde64017c0532d31e7a6c5a6618d69bcea3a5b555bbf0960f62",
+      "recordHashRecomputes": true,
+      "edgeHashDiffersFromRecordHash": true,
+      "linksToPreviousRecordHash": true
+    },
+    {
+      "edgeId": "edge_change_modified_file",
+      "sequence": 2,
+      "previousHash": "30d530bbf0705bde64017c0532d31e7a6c5a6618d69bcea3a5b555bbf0960f62",
+      "edgeHash": "0459a135e087a603946492369b35afabce15108d9a4660c4f28624a36feedbaa",
+      "recordHash": "1a02ea70a099ad15764fca3b6565ef32ad9df8223fc3832c6a5450383c16c209",
+      "recordHashRecomputes": true,
+      "edgeHashDiffersFromRecordHash": true,
+      "linksToPreviousRecordHash": true
+    },
+    {
+      "edgeId": "edge_change_reviewed_by_owner",
+      "sequence": 3,
+      "previousHash": "1a02ea70a099ad15764fca3b6565ef32ad9df8223fc3832c6a5450383c16c209",
+      "edgeHash": "5539c3820457ae80cbdcc51887667760977bc4ae1c74b0573ef9bd44057875b7",
+      "recordHash": "022988fdc76e2f98f5c6fbaa882a16b43a98b8d859df4b4a3f89f21a2b87c6ca",
+      "recordHashRecomputes": true,
+      "edgeHashDiffersFromRecordHash": true,
+      "linksToPreviousRecordHash": true
+    }
+  ],
+  "verification": {
+    "ok": true
+  },
+  "tamper": {
+    "what": "edge[1].metadata.changedPathCount 2 -> 1, stored envelope hash left untouched",
+    "verification": {
+      "ok": false,
+      "index": 1,
+      "reason": "hash_mismatch"
+    },
+    "failedRecord": {
+      "edgeId": "edge_change_modified_file",
+      "storedHash": "1a02ea70a099ad15764fca3b6565ef32ad9df8223fc3832c6a5450383c16c209",
+      "recomputedHash": "59f3a2a960957fe9523cee7863e5a6f61bc6927e3ee1fb718bd53b8ca045bbf7"
+    }
+  }
+}

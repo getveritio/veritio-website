@@ -1,14 +1,11 @@
-@import "@fontsource-variable/newsreader/opsz.css";
-@import "@fontsource-variable/newsreader/opsz-italic.css";
-@import "@fontsource/ibm-plex-mono/400.css";
-@import "@fontsource/ibm-plex-mono/500.css";
-@import "@fontsource/ibm-plex-mono/600.css";
+@import "@fontsource-variable/geist/wght.css";
+@import "@fontsource-variable/geist-mono/wght.css";
 @import "tailwindcss";
 
 /*
  * Veritio design tokens — "evidence dossier" system: warm paper surfaces,
- * evergreen ink, a documentary serif (Newsreader) for prose and display, and
- * IBM Plex Mono for anything that is data, metadata, or a label. Hairline
+ * evergreen ink, Geist for clear interface and long-form reading, and Geist
+ * Mono only for code, metadata, and compact labels. Hairline
  * rules over boxes; color only where it carries meaning. Build-time only; no
  * client JS.
  */
@@ -39,21 +36,21 @@
   --color-code-bg: #f0ecdf;
   --color-code-border: #ddd6c2;
 
-  /* Typography — document serif + data mono. No Inter. */
-  --font-sans: "Newsreader Variable", "Newsreader", Georgia, "Times New Roman",
-    serif;
-  --font-serif: "Newsreader Variable", "Newsreader", Georgia, "Times New Roman",
-    serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas,
+  /* Typography — readable modern sans + restrained data mono. */
+  --font-sans: "Geist Variable", Geist, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  --font-serif: "Geist Variable", Geist, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono Variable", "SF Mono", ui-monospace, Menlo, Consolas,
     monospace;
 
-  /* Display type scale — serif carries larger sizes at tighter leading */
-  --text-display: clamp(44px, 6.5vw, 92px);
-  --text-display--line-height: 0.98;
-  --text-display--letter-spacing: -0.015em;
+  /* Display type scale — Geist stays compact without sacrificing legibility. */
+  --text-display: clamp(42px, 6vw, 82px);
+  --text-display--line-height: 1;
+  --text-display--letter-spacing: -0.04em;
   --text-headline: clamp(30px, 3.8vw, 50px);
   --text-headline--line-height: 1.05;
-  --text-headline--letter-spacing: -0.01em;
+  --text-headline--letter-spacing: -0.03em;
 
   /* Layout */
   --spacing-gutter: clamp(20px, 5vw, 72px);
@@ -61,12 +58,32 @@
 
 :root {
   color-scheme: light;
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-optical-sizing: auto;
   color: var(--color-ink);
   background: var(--color-surface);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-surface: #101a16;
+  --color-surface-raised: #15231d;
+  --color-surface-sunken: #0c1511;
+  --color-surface-invert: #e9e4d7;
+  --color-ink: #f1eee4;
+  --color-ink-soft: #cbc9bf;
+  --color-ink-muted: #9b9e96;
+  --color-evergreen: #86c4a7;
+  --color-accent: #86c4a7;
+  --color-accent-strong: #a8d9bf;
+  --color-accent-soft: #789b88;
+  --color-seal: #e57d6f;
+  --color-line: #334139;
+  --color-line-strong: #48584f;
+  --color-code-bg: #18261f;
+  --color-code-border: #3b4a42;
 }
 
 * {
@@ -75,6 +92,16 @@
 
 body {
   margin: 0;
+  min-width: 320px;
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+
+html { scroll-behavior: smooth; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
 
 /* In @layer base so Tailwind's (later-layered) text-color utilities win on
@@ -181,6 +208,15 @@ body {
   overflow-x: auto;
   border-radius: 0;
   background: transparent !important;
+}
+
+/* Shiki's GitHub-light defaults miss WCAG AA against the warm code surface. */
+:root:not([data-theme="dark"]) .code-frame pre.astro-code [style*="#D73A49"] {
+  color: #9f1730 !important;
+}
+
+:root:not([data-theme="dark"]) .code-frame pre.astro-code [style*="#6A737D"] {
+  color: #4d5951 !important;
 }
 
 /* Inline code in prose */

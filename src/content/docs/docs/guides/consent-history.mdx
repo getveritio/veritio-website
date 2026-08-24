@@ -1,0 +1,169 @@
+---
+title: Consent history
+description: Record consent grants and revocations as tamper-evident audit events, then reconstruct a groupable consent timeline from a verified record chain.
+audience: [developer, governance]
+kind: guide
+searchIntent: Record Veritio consent grant and revoke events and rebuild a consent timeline from a verified chain.
+questions:
+  - How do I record a consent grant and a revocation in Veritio?
+  - How do I reconstruct a consent history timeline from audit records?
+  - What lawful basis values does the Veritio event schema allow?
+  - Does the consent_7y retention label delete anything?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/templates.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/event.schema.json
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/index.ts
+claimRefs: []
+---
+
+import { Aside, Code } from '@astrojs/starlight/components'
+import consentExample from '../../../../examples/consent/grant-and-revoke.ts?raw'
+import consentOutput from '../../../../examples/consent/expected/grant-and-revoke.txt?raw'
+
+A consent decision is only useful later if you can show what was granted, when it was withdrawn, and that neither statement was edited afterwards. Veritio has no consent ledger API, no consent table, and no consent state machine. Consent is recorded as ordinary audit events built by two templates, grouped by a shared consent id, carrying a lawful-basis label and a retention label, and made tamper-evident by the same hash chain every other Veritio event uses.
+
+## Two templates, one resource
+
+`consentGrantedTemplate` and `consentRevokedTemplate` are thin wrappers over one internal builder. They differ only in the action string. Both resolve the target to the same resource:
+
+```text
+consentGrantedTemplate({ consentId: "cns_marketing_email_01" })
+  action  consent.granted
+  target  { type: "consent", id: "cns_marketing_email_01" }
+
+consentRevokedTemplate({ consentId: "cns_marketing_email_01" })
+  action  consent.revoked
+  target  { type: "consent", id: "cns_marketing_email_01" }   ← same resource
+```
+
+That shared target is the entire grouping mechanism. A consent-history screen selects on the tuple `(scope.tenantId, target.type, target.id)` and gets every lifecycle event for one consent, without a join table and without a hosted service. If a grant and its revocation use different `consentId` values, nothing in the protocol reconnects them; they become two unrelated one-event histories. Deriving the id from something stable in your own domain — the subject, the purpose, and the version of the notice they saw — is what keeps a history groupable across deploys.
+
+The templates stamp these defaults:
+
+```text
+purpose       consent_management
+lawfulBasis   consent
+retention     consent_7y
+target.type   consent
+metadata      subjectId, purposeId   (omitted entirely when not supplied)
+```
+
+Every one of those is overridable through the public `AuditEventInput` fields, so a template is a starting point and never a lock. Metadata is the exception worth knowing: the shared builder merges caller metadata with template metadata and gives the template final say over its reserved ids. A caller passing `metadata.subjectId` cannot shadow the `subjectId` derived from the template input. That is deliberate — grouping conventions must not be silently overwritten by application code.
+
+## Recording a grant and a revocation
+
+<Code code={consentExample} lang="ts" title="src/examples/consent/grant-and-revoke.ts" />
+
+```sh
+bun src/examples/consent/grant-and-revoke.ts
+```
+
+The checked fixture prints:
+
+<Code code={consentOutput} lang="json" title="verified output" />
+
+Ids and timestamps are pinned so this output stays reproducible. Record hashes and `appendedAt` are excluded from the projection on purpose: the store stamps wall-clock append time into the record hash input, so those values cannot be byte-compared in a fixture. The store still owns them.
+
+What each part of that output proves:
+
+- `action` distinguishes the two lifecycle points, and both use the protocol's dotted lowercase form rather than a hand-written string.
+- `target` is byte-identical across both events. `sameConsentResource: true` is the machine-checked version of the grouping claim above.
+- `purpose`, `lawfulBasis`, and `retention` are template defaults that landed on the event and are therefore inside the record hash. A later silent edit of any of them produces a verification failure rather than a quiet rewrite of history.
+- `metadata` contains only two opaque ids. `sameSubject: true` confirms the revocation belongs to the same data subject as the grant.
+- `sequences: [1, 2]` and `previousHashLinked: true` show the store assigned gapless tenant-local sequence numbers and linked the second record to the first record's hash.
+- `verification: { "ok": true }` is the verifier's statement that the two supplied records are internally consistent under the declared algorithms.
+
+## Lawful basis rides on the event, not on metadata
+
+`lawfulBasis` is a first-class top-level field on the audit event, constrained by an enum in `spec/event.schema.json` and by the `LawfulBasis` union in the SDK. The vocabulary is exactly seven values:
+
+```text
+consent
+contract
+legal_obligation
+vital_interests
+public_task
+legitimate_interests
+not_applicable
+```
+
+Because the schema sets `additionalProperties: false` and the field is an enum, an unrecognized basis fails validation instead of being stored as free text. Because the field is part of the normalized event, it is inside the canonical bytes that the record hash covers.
+
+The consent templates default to `consent`, which is correct for a record that exists precisely because a subject chose. Other templates in the same catalogue default differently — session and membership events default to `contract`, subject-request and retention events to `legal_obligation` — and any of them can be overridden per event. Veritio supplies the vocabulary and the determinism. Deciding which basis actually applies to your processing is your organization's decision, taken with your own counsel, and the field records that decision rather than validating it.
+
+## `consent_7y` is a label, not a schedule
+
+`retention` is typed as a plain string in the event schema. There is no enum, no parser, and no duration arithmetic anywhere in the SDK. `consent_7y` is simply the default label the consent templates stamp — a Veritio naming default that points at a seven-year class by convention. It is not a legal determination, not a promise about any jurisdiction, and not an instruction that anything will be deleted.
+
+Nothing in `@veritio/core` deletes records. Enforcement belongs to whatever system owns the authoritative store, and that system has to define the effective date, the time origin for eligibility, legal-hold behavior, derived-tier propagation, and what evidence a policy run produces. There is also a hard interaction with the chain: removing an interior record from a complete chain creates a sequence or previous-hash gap, and the verifier will correctly refuse to call the remainder intact. An intentional retention boundary therefore needs a deliberate verification design, not a `DELETE`. [Retention labels](/docs/concepts/retention/) covers that in full.
+
+## Subject and purpose ids must be opaque
+
+`subjectId`, `purposeId`, and `consentId` must be stable opaque identifiers. Never an email address, never a phone number, never a display name, never a freeform note.
+
+This is not a stylistic preference, and the SDK cannot rescue you from ignoring it. Redaction in Veritio is deterministic and key-name based:
+
+```text
+/(password|secret|token|api[_-]?key|authorization|email|phone|ssn)/i
+```
+
+`subjectId` does not match that pattern, and it must not — the whole point of the field is that it survives into the evidence so a history can be grouped. The consequence is direct: writing `subjectId: "alice@example.com"` puts that address through canonicalization and into the record hash verbatim. It is then permanent by construction, because the property that makes the record tamper-evident is the same property that makes it un-editable. A later erasure request cannot be satisfied by quietly rewriting the value.
+
+`consentId` is worse still, because it lives in `target.id` rather than in metadata, and the redactor never touches the target at all. The same applies to the optional `display` strings on actor and target, and to `actor.id`. In the fixture the actor is `usr_subject_9f2c41`, not a person's name.
+
+<Aside type="caution" title="Minimize before the SDK sees it">
+  A key-name redactor cannot read meaning. Allowlist the fields your evidence question actually needs, map every subject to a pseudonymous id at the application boundary, and pass only that id. See [Deterministic redaction](/docs/concepts/redaction/).
+</Aside>
+
+## Reconstructing the timeline
+
+A consent history has two distinct orderings and they answer different questions.
+
+```text
+occurredAt   when the subject acted            → business truth
+sequence     when the record was appended      → chain truth
+```
+
+The reconstruction that a history screen or a DSAR response should use is:
+
+1. Verify the records first, with `verifyAuditRecords`. An unverified list is not evidence.
+2. Filter to the tenant, `target.type === "consent"`, and the `target.id` you are reporting on.
+3. Sort by `occurredAt` ascending, breaking ties on `sequence`.
+4. Fold left. The last event in occurrence order is the current state.
+
+For the fixture that fold is unambiguous:
+
+```text
+seq 1   occurredAt 2026-08-09T10:00:00.000Z   consent.granted   → active
+seq 2   occurredAt 2026-08-14T16:30:00.000Z   consent.revoked   → revoked  (current)
+```
+
+The revocation supersedes the grant because it occurred later, not because it was appended later. Here the two orderings agree. When they disagree — a revocation recorded at the boundary but appended after a backfilled grant — that divergence is itself a finding. Surface it. Do not silently reorder records to make the timeline look tidy, and never re-append a corrected event under the same idempotency key expecting the old one to disappear.
+
+Superseding is a read-time projection, never a mutation. The grant record stays in the chain forever, and that is what lets you answer "what was true on 2026-08-11?" as well as "what is true now".
+
+## Fail-closed boundaries
+
+The consent path inherits the SDK's fail-closed behavior rather than adding its own. Each of these throws instead of producing a degraded record:
+
+- A missing or blank `actor.id`, `actor.type`, `target.id`, or `target.type`. An empty `consentId` fails here, before an event with an unusable grouping key can exist.
+- An action that does not match the dotted lowercase protocol pattern.
+- A missing `scope.tenantId` at append time. Consent evidence cannot be written into an unscoped chain.
+- An idempotency key replayed with different canonical event bytes. The store raises an idempotency conflict rather than choosing a winner. Replaying the exact same bytes returns the original record, which is what makes a retried consent write safe.
+- An `expectedPreviousHash` that no longer matches the tenant chain tip, which is how a concurrent writer is caught instead of silently interleaved.
+
+The fixture uses explicit keys — `consent:<consentId>:granted` and `consent:<consentId>:revoked` — so a retried request cannot append a duplicate grant.
+
+## What a consent history does not prove
+
+A verified consent chain is a narrow claim, and overreading it is the most common mistake.
+
+It proves the supplied records are internally consistent under the declared hashing and canonicalization, that they belong to one tenant chain in a gapless order, and that no byte of an included record changed after it was appended.
+
+It does not prove that the notice a subject saw said what you believe it said, unless you also recorded a digest of that notice version. It does not prove the subject understood it. It does not prove that every relevant consent event was recorded — an event that was never written leaves no gap, so completeness is a property of your instrumentation, not of the chain. It does not prove that downstream processors, caches, exports, or third parties actually stopped processing after the revocation; that requires its own evidence. And a locally consistent chain can still be replaced wholesale by an attacker who controls the entire store, which is why independently held exports and evidence commits matter.
+
+Veritio supports consent evidence. It does not guarantee legal compliance, and nothing on this page is legal advice. The tooling gives you deterministic, verifiable records; whether those records satisfy a particular obligation is a question for your own counsel.
+
+Continue with [Hash chain](/docs/concepts/hash-chain/) for the integrity mechanism these records rely on, [Retention labels](/docs/concepts/retention/) for why a label never deletes anything, and [DSAR fulfillment](/docs/guides/dsar-fulfillment/) for turning a subject's consent history into a response.

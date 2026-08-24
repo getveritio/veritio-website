@@ -1,0 +1,207 @@
+---
+title: SvelteKit
+description: Record SvelteKit form-action and endpoint evidence through the thin @veritio/sveltekit adapter while tenancy, authorization, and storage stay host-owned.
+audience: [developer]
+kind: guide
+searchIntent: Record SvelteKit form-action and +server.ts evidence through the thin @veritio/sveltekit adapter.
+questions:
+  - How do I record Veritio audit evidence from a SvelteKit form action?
+  - Where in a SvelteKit request should evidence be recorded?
+  - Why must evidence never be recorded from a SvelteKit load function?
+  - How do governed create, update, and delete flows differ from a plain audit event?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/sveltekit@0.0.4', '@veritio/core@0.4.7']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/adapters/sveltekit/src/index.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/adapters/sveltekit/README.md
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/adapters/svelte/src/index.ts
+  - https://github.com/getveritio/veritio/tree/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/examples/sveltekit-better-auth
+claimRefs: []
+---
+
+import { Code } from '@astrojs/starlight/components'
+import boundaryOutput from '../../../../examples/adapters/expected/server-boundary.txt?raw'
+
+A SvelteKit request can end in a form action, an endpoint handler, or a load function, and only two of those are places where evidence may be written. `@veritio/sveltekit` exists to make that boundary explicit: it turns one server-side operation into one `recorder.record` call and refuses to run without tenant scope and an actor. It owns nothing else.
+
+## Where the adapter sits
+
+The adapter is a translation step between framework state the host has already validated and the portable event contract in `@veritio/core`.
+
+```text
+browser request
+        ↓
+hooks.server.ts / +page.server.ts / +server.ts
+        ↓  host authenticates, resolves org membership, authorises the operation
+event.locals
+        ↓  resolveContext(input)  → SvelteKitVeritioContext
+adapter builds AuditEventInput (actor, action, target, scope, metadata)
+        ↓  recorder.record(event, appendOptions)
+@veritio/core → redaction → canonical JSON → SHA-256 → AuditStore
+```
+
+Everything above `resolveContext` is the application's responsibility. Everything below `recorder.record` is protocol and storage. The adapter is the narrow middle.
+
+## Install and construct the adapter once
+
+```sh
+npm install @veritio/sveltekit@0.0.4 @veritio/core@0.4.7
+```
+
+Build the recorder and the adapter in a module under `$lib/server`. SvelteKit treats that directory as server-only and fails the build if a client-reachable module imports from it, which turns "do not ship the store to the browser" from a convention into a compile-time error.
+
+```ts
+// src/lib/server/veritio.ts
+import { createAuditRecorder, MemoryAuditStore } from '@veritio/core'
+import { createSvelteKitVeritioAdapter } from '@veritio/sveltekit'
+
+const recorder = createAuditRecorder({ store: new MemoryAuditStore() })
+
+export const veritio = createSvelteKitVeritioAdapter({
+  recorder,
+  environment: 'production',
+  resolveContext: async (input) => {
+    const locals = input.locals as App.Locals
+    return {
+      tenantId: locals.organizationId,
+      actor: { type: 'user', id: locals.userId },
+      requestId: locals.requestId,
+    }
+  },
+})
+```
+
+`SvelteKitVeritioAdapterOptions` has exactly three fields. `recorder` is a configured `AuditRecorder` and is required. `environment` is a fallback label folded into `scope.environment` when a per-call context does not supply one; if neither does, the field is omitted rather than guessed. `resolveContext` is the host callback that produces tenant scope and actor identity.
+
+`MemoryAuditStore` keeps the snippet runnable. It is not an authoritative boundary — swap in a conforming store from [Postgres storage](/docs/storage/postgres/) before the records matter.
+
+## resolveContext receives framework state, not framework types
+
+The callback input is `SvelteKitVeritioRequestInput`: optional `event`, `locals`, `params`, and an escape hatch `context`. Both `event` and `locals` are typed `unknown` on purpose. The adapter never imports SvelteKit runtime APIs and never reaches into locals itself — `@sveltejs/kit` is an optional peer dependency — so the host narrows the type it already owns and returns a plain object.
+
+That object is `SvelteKitVeritioContext`: `tenantId`, `actor` (a `type` and an `id`), and optional `requestId`, `workspaceId`, and `environment`.
+
+Resolution order is: a per-call `context` wins; otherwise the configured `resolveContext` runs; if neither produces a value the adapter throws `TypeError: context or resolveContext is required`. The returned context is then validated before an event is built. Empty or non-string `tenantId`, `actor.type`, or `actor.id` each throw their own `<field> is required` error. An unauthenticated request therefore cannot produce a scopeless record — it produces an exception, and nothing is appended.
+
+## Record in an endpoint after the authorization check
+
+`recordEndpoint` is for `+server.ts` handlers. Place the call after authorization has passed and after the mutation has committed.
+
+```ts
+// src/routes/api/entries/+server.ts
+import { json, error, type RequestHandler } from '@sveltejs/kit'
+import { veritio } from '$lib/server/veritio'
+import { createEntry } from '$lib/server/entries'
+
+export const POST: RequestHandler = async ({ request, locals }) => {
+  if (!locals.userId) throw error(401, 'unauthenticated')
+  if (!locals.canWriteEntries) throw error(403, 'forbidden')
+
+  const entry = await createEntry(locals.organizationId, await request.json())
+
+  await veritio.recordEndpoint({
+    locals,
+    action: 'entry.created',
+    target: { type: 'entry', id: entry.id },
+    purpose: 'service_delivery',
+    lawfulBasis: 'contract',
+    retention: 'operational_2y',
+    idempotencyKey: `entry.created:${entry.id}`,
+    metadata: { source: 'api' },
+  })
+
+  return json(entry, { status: 201 })
+}
+```
+
+Ordering matters in both directions. Recording before the authorization check produces evidence of attempts the system rejected, mixed into the same chain as completed operations. Recording before the mutation commits produces evidence of a change that may never have happened.
+
+The `idempotencyKey` shorthand is merged into `AuditStoreAppendOptions` alongside anything passed in `append` (such as `expectedPreviousHash`). When neither is present the adapter passes `undefined` rather than an empty options object. A retried request that reuses the same key replays the existing record instead of forking a second entry into the tenant chain; see [transactional outbox](/docs/guides/transactional-outbox/) for the delivery side of that guarantee.
+
+## Wrap a form action so evidence follows success
+
+`recordAction` is the same code path as `recordEndpoint` under a name that documents the call site. For form actions, `withAction` is usually the better shape: it awaits the handler, records only if the handler resolves, and returns the handler's value.
+
+```ts
+// src/routes/entries/+page.server.ts
+import { fail, type Actions } from '@sveltejs/kit'
+import { veritio } from '$lib/server/veritio'
+import { renameEntry } from '$lib/server/entries'
+
+export const actions: Actions = {
+  rename: async ({ request, locals }) => {
+    if (!locals.canWriteEntries) return fail(403, { reason: 'forbidden' })
+
+    const form = await request.formData()
+    const entryId = String(form.get('entryId'))
+
+    const entry = await veritio.withAction(
+      {
+        locals,
+        action: 'entry.renamed',
+        target: { type: 'entry', id: entryId },
+        idempotencyKey: `entry.renamed:${entryId}:${locals.requestId}`,
+      },
+      () => renameEntry(locals.organizationId, entryId, String(form.get('title'))),
+    )
+
+    return { entry }
+  },
+}
+```
+
+Two failure modes are worth naming. If the handler rejects, `withAction` propagates the rejection and no record is written — a failed rename must not leave a completed-change event behind. If the handler resolves but the append then fails, the caller sees the append error even though the business mutation already committed. That is a real partial-success window, and it is the reason a governed change stages its evidence in the same transaction as the mutation instead of appending afterwards.
+
+Note also that `fail(...)` is a resolved value in SvelteKit, not a rejection. If a handler returns `fail(...)` for a validation error, `withAction` will still record. Validate before entering the wrapper, or record explicitly on the success branch.
+
+## What the adapter is not allowed to own
+
+The boundary contract is the same for every Veritio framework adapter, and it is checked rather than asserted. This fixture uses only `@veritio/core` — no adapter package is imported — because the host owns the configuration, so the boundary is provable without any adapter installed.
+
+<Code code={boundaryOutput} lang="json" title="verified output" />
+
+Three facts in that output define the SvelteKit adapter's limits. `recorderMethods` is `["record"]`, with no `store` and no `list`: an adapter can append evidence but cannot read another tenant's chain or reconfigure storage. `credentialShapedKeysCrossing` is empty: a deep key scan of everything handed across the boundary contains no connection string, password, or ingest key, so an adapter cannot forward a secret it was never given. And a forwarded `authorization` header still stores as `[redacted]`, because `createAuditEvent` applies [deterministic redaction](/docs/concepts/redaction/) before canonical JSON and hashing — the raw value never reaches the record hash.
+
+The adapter likewise does not compute changed paths, derive idempotency material, decide retention, or choose a lawful basis. `purpose`, `lawfulBasis`, `dataCategories`, and `retention` are pass-through fields that stay explicit host choices, because those are governance decisions the framework cannot infer from a request.
+
+## Load functions are reads, not evidence
+
+Never record from a load function, and never from browser-reachable code.
+
+A universal `+page.ts` load runs on the server for the first render and in the browser on every subsequent client-side navigation. Constructing an adapter there would require a recorder — and therefore a store handle and its credentials — inside a bundle shipped to the user. A server-only `+page.server.ts` load keeps the credentials safe, but still runs on prefetch and on every re-navigation, so recording there produces evidence for hovering a link and duplicates the same "event" on each visit. Loads are reads. Evidence describes decisions and changes.
+
+For client components that need to express intent, `@veritio/svelte` builds inert `data-veritio-*` attributes and actively rejects any input key matching recorder, store, scope, tenant, actor, metadata, or secret-like names with a `TypeError`. The attribute helper carries an action and a target; the server still decides whether anything is recorded.
+
+## Governed create, update, and delete
+
+A plain audit event states that something happened. A governed change also commits to what the entity looked like before and after. For create, update, and delete flows, call `createGovernedActionDraft` from `@veritio/core` inside the `$lib/server` module that owns the database mutation — not from the adapter.
+
+```ts
+const draft = createGovernedActionDraft<EntryRow>({
+  scope: { tenantId, environment: 'production' },
+  entity: projectEntry,      // defineEntity(...) with per-field capture modes
+  before,
+  after,
+  actionType: 'entry.updated',
+  activityType: 'entry.update',
+  initiatedBy: userRef(actorId),
+  performedBy: userRef(actorId),
+  producer: PRODUCER,
+  idempotencyKey: `entry:${entryId}:v${after.version}:update`,
+  mutationBinding: 'same_transaction',
+})
+```
+
+The draft returns `changeRef`, `activityRef`, `entityRef`, a `revision`, the `events` and `edges` to append, and an `outboxEntry`. Changed paths, revision commitments, and the tenant-scoped idempotency hash are derived by core from the entity declaration. Fields declared with `keyed_digest` capture — a customer email, for example — enter evidence as a keyed digest, so the record proves the value changed without disclosing it. The endpoint's job is to validate input, authorise, and hand `before` and `after` to the draft builder. See [governed changes](/docs/concepts/governed-changes/) for the model and [governed actions](/docs/guides/governed-actions/) for the wiring.
+
+## The reference application
+
+`examples/sveltekit-better-auth` is a runnable SvelteKit 2 app with Better Auth, a governed CRUD API at `src/routes/api/governed/+server.ts`, a governed agent session, a file-backed outbox, and optional server-to-server dispatch. Read it for the server-boundary discipline: identity and tenant are resolved in `$lib/server`, the browser never supplies a tenant id, and the HMAC material for keyed digests never leaves the server.
+
+Be aware of one thing when reading it. That example wires `@veritio/core` and `@veritio/better-auth` directly rather than going through `@veritio/sveltekit`, because its flows are governed changes and auth lifecycle hooks rather than plain per-request audit events. It demonstrates the boundary this page describes; it is not a usage sample of `createSvelteKitVeritioAdapter`. The adapter's own behaviour is pinned by its unit tests in `adapters/sveltekit/src/__tests__/`.
+
+## What a written record proves
+
+A successful append proves that a server-side handler, holding a validated tenant scope and actor, asserted this action against this target, and that the resulting record is chain-consistent under the declared algorithms. It does not prove the handler's authorization logic was correct, that the underlying mutation actually committed, or that every relevant operation in the application records at all. Coverage is a property of where you place the calls. Evidence supports a compliance argument; it is not itself a legal conclusion.
+
+Continue with [Better Auth](/docs/frameworks/better-auth/) to record session and organization lifecycle events, [governed actions](/docs/guides/governed-actions/) for the mutation boundary, or [verify a chain](/docs/start/verify-a-chain/) to check what the records assert.

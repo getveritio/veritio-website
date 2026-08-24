@@ -3,18 +3,18 @@ import BaseLayout from '../../layouts/BaseLayout.astro'
 import Nav from '../../components/Nav.astro'
 import Footer from '../../components/Footer.astro'
 
-const lastUpdated = '17 July 2026'
+const lastUpdated = '9 August 2026'
 
 const subprocessors = [
   {
     name: 'Cloudflare, Inc.',
     role: 'Application compute, object storage for evidence records, and transactional email delivery',
-    location: 'Region pinned to the customer’s chosen storage region',
+    location: 'Provider-operated infrastructure; location depends on the configured service and provider terms',
   },
   {
     name: 'Neon, Inc. (on Amazon Web Services)',
     role: 'Managed Postgres databases holding tenant metadata and evidence sequence state',
-    location: 'Region pinned to the customer’s chosen storage region',
+    location: 'Provider-operated infrastructure; location depends on the configured service and provider terms',
   },
   {
     name: 'Polar Software, Inc.',
@@ -28,8 +28,11 @@ const subprocessors = [
 <BaseLayout
   title="Data Processing Agreement — Veritio"
   description="The Article 28 GDPR terms under which Veritio Cloud processes tenant evidence data on behalf of its customers, with security measures, subprocessors, and transfer safeguards."
+  claimRefs={['cloud-identity-and-evidence-processing', 'cloud-security-controls', 'cloud-provider-configuration', 'cloud-export-requests']}
 >
   <Nav />
+
+  <main id="main-content">
 
   <section class="py-16 sm:py-20">
     <div class="container">
@@ -57,7 +60,7 @@ const subprocessors = [
       <div class="legal-doc">
         <p class="lede">
           This Data Processing Agreement (&ldquo;DPA&rdquo;) forms part of the
-          <a href="/legal/terms">Terms of Service</a> between the customer
+          <a href="/legal/terms/">Terms of Service</a> between the customer
           (&ldquo;Controller&rdquo;) and the Veritio entity operating Veritio
           Cloud (&ldquo;Processor&rdquo;). Where it conflicts with the Terms on
           the processing of personal data, this DPA prevails.
@@ -66,11 +69,11 @@ const subprocessors = [
         <p>
           The Processor under this agreement is <strong>Yan Malinovskiy</strong>
           (sole proprietor), Belchenstraße&nbsp;2, 79276 Reute, Germany (see
-          the <a href="/legal/imprint">Imprint</a>). This Data Processing
-          Agreement is accepted electronically as part of account creation —
-          opening a Veritio Cloud organization incorporates it into the
-          contract under the <a href="/legal/terms">Terms of Service</a>.
-          Enterprise customers may request a countersigned copy at
+          the <a href="/legal/imprint/">Imprint</a>). Creating a Veritio Cloud
+          organization does not by itself incorporate this DPA. It becomes
+          binding only when the parties accept it through an authorized
+          contracting process. Customers may request that process or a
+          countersigned copy at
           <a href="mailto:hello@getveritio.com">hello@getveritio.com</a>.
         </p>
 
@@ -143,8 +146,10 @@ const subprocessors = [
             detectable, and records are hash-revalidated on read.
           </li>
           <li>
-            <strong>Encryption</strong> — personal data is encrypted in transit
-            and at rest.
+            <strong>Transport and managed storage</strong> — production endpoints
+            use encrypted transport, while storage protections follow the
+            configured infrastructure providers and any separate signed
+            commitments.
           </li>
           <li>
             <strong>Tenant isolation and access controls</strong> — data is
@@ -152,9 +157,9 @@ const subprocessors = [
             security audit logging of sensitive actions.
           </li>
           <li>
-            <strong>Region pinning</strong> — data is stored in the
-            Controller&rsquo;s chosen region (EU, US, or APAC), with an EU
-            jurisdiction guarantee on object storage for the EU region.
+            <strong>Data minimization</strong> — product guidance favors stable
+            identifiers and deterministic redaction of configured sensitive
+            fields rather than unnecessary personal data.
           </li>
         </ul>
 
@@ -199,8 +204,8 @@ const subprocessors = [
           the parties rely on appropriate safeguards, including the European
           Commission&rsquo;s Standard Contractual Clauses, which are incorporated
           by reference for such transfers, together with any supplementary
-          measures required. Region pinning lets the Controller keep evidence
-          data within a chosen region.
+          measures required. A specific processing location is committed only
+          where it appears in a separate signed agreement.
         </p>
 
         <h2><span class="num">8</span> Assistance to the Controller</h2>
@@ -219,10 +224,11 @@ const subprocessors = [
         <h2><span class="num">9</span> Return and deletion</h2>
         <p>
           On termination, the Controller may export its evidence data as
-          verifiable bundles for <strong>30 days</strong>. After that window, the
-          Processor deletes or de-identifies the personal data it processes for
-          the Controller, except to the extent retention is required by law. This
-          reflects the append-only, verifiable nature of the evidence trail.
+          verifiable bundles for the period stated in its account terms or a
+          signed agreement. After that period, the Processor deletes or
+          de-identifies the personal data it processes for the Controller, except
+          to the extent retention is required by law. No fixed public export or
+          deletion window is promised on this page.
         </p>
 
         <h2><span class="num">10</span> Audits</h2>
@@ -252,6 +258,7 @@ const subprocessors = [
     </div>
   </section>
 
+  </main>
   <Footer />
 </BaseLayout>
 

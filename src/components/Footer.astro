@@ -26,12 +26,12 @@ const cookieSettingsLabel = cookieBannerStrings[locale].settings
         {t.product}
       </h3>
       <ul class="mt-4 space-y-2 text-[15px]">
-        <li><a class="text-ink-soft no-underline hover:text-accent" href={localizePath('/', locale)}>Overview</a></li>
-        <li><a class="text-ink-soft no-underline hover:text-accent" href={localizePath('/cloud', locale)}>Cloud</a></li>
-        <li><a class="text-ink-soft no-underline hover:text-accent" href="/examples">Examples</a></li>
-        <li><a class="text-ink-soft no-underline hover:text-accent" href="/docs/connect-agents">Connect agents</a></li>
-        <li><a class="text-ink-soft no-underline hover:text-accent" href="/alternatives">Comparisons</a></li>
-        <li><a class="text-ink-soft no-underline hover:text-accent" href="/changelog">Changelog</a></li>
+        <li><a class="text-ink-soft no-underline hover:text-accent" href={localizePath('/', locale) === '/' ? '/' : `${localizePath('/', locale)}/`}>Overview</a></li>
+        <li><a class="text-ink-soft no-underline hover:text-accent" href="/product/">Product</a></li>
+        <li><a class="text-ink-soft no-underline hover:text-accent" href={localizePath('/cloud', locale) + '/'}>Cloud</a></li>
+        <li><a class="text-ink-soft no-underline hover:text-accent" href="/examples/">Examples</a></li>
+        <li><a class="text-ink-soft no-underline hover:text-accent" href="/alternatives/">Comparisons</a></li>
+        <li><a class="text-ink-soft no-underline hover:text-accent" href="/changelog/">Changelog</a></li>
       </ul>
     </div>
 
@@ -47,7 +47,8 @@ const cookieSettingsLabel = cookieBannerStrings[locale].settings
             target="_blank"
             rel="noopener noreferrer">GitHub repository</a>
         </li>
-        <li><a class="text-ink-soft no-underline hover:text-accent" href="/docs/connect-agents">Connect Claude Code &amp; Codex</a></li>
+        <li><a class="text-ink-soft no-underline hover:text-accent" href="/open-source/">Open-source stack</a></li>
+        <li><a class="text-ink-soft no-underline hover:text-accent" href="/docs/ai/agent-events/">Connect Claude Code &amp; Codex</a></li>
       </ul>
     </div>
 
@@ -56,14 +57,15 @@ const cookieSettingsLabel = cookieBannerStrings[locale].settings
         {t.legal}
       </h3>
       <ul class="mt-4 space-y-2 text-[15px]">
-        <li><a class="text-ink-soft no-underline hover:text-accent" href="/legal/imprint">Imprint (Impressum)</a></li>
-        <li><a class="text-ink-soft no-underline hover:text-accent" href="/legal/terms">Terms of Service</a></li>
-        <li><a class="text-ink-soft no-underline hover:text-accent" href="/legal/privacy">Privacy Policy</a></li>
-        <li><a class="text-ink-soft no-underline hover:text-accent" href="/legal/dpa">Data Processing Agreement</a></li>
+        <li><a class="text-ink-soft no-underline hover:text-accent" href="/legal/imprint/">Imprint (Impressum)</a></li>
+        <li><a class="text-ink-soft no-underline hover:text-accent" href="/legal/terms/">Terms of Service</a></li>
+        <li><a class="text-ink-soft no-underline hover:text-accent" href="/legal/privacy/">Privacy Policy</a></li>
+        <li><a class="text-ink-soft no-underline hover:text-accent" href="/legal/dpa/">Data Processing Agreement</a></li>
         <li>
           <button
             type="button"
             data-cookie-settings
+            onclick="window.VeritioConsent?.settings(this)"
             class="cursor-pointer text-ink-soft transition-colors hover:text-accent"
           >{cookieSettingsLabel}</button>
         </li>

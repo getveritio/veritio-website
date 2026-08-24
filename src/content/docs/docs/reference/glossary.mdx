@@ -1,0 +1,150 @@
+---
+title: Glossary
+description: Precise one-paragraph definitions for every Veritio protocol, governed-change, episode, commit, risk, storage, export, and Cloud term, each linked to the page that owns it.
+audience: [newcomer, developer, operator, governance]
+kind: reference
+searchIntent: Look up the exact meaning of one Veritio term such as governed change, episode, commit, risk band, or chain scope.
+questions:
+  - What do AuditEvent, AuditRecord, and authoritative store mean?
+  - What is the difference between a change, an activity, and a revision?
+  - What is an activity episode, a records root, and a chain scope?
+  - Which terms describe evidence support without implying compliance?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7', '@veritio/storage@0.4.7', 'veritio@c4100ee']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/README.md
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/storage/README.md
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/governed-change.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/risk-score.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/risk-policy.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/evidence-commit-hashing.md
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/export-bundle.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/storage/src/outbox-types.ts
+claimRefs: []
+---
+
+import { Code } from '@astrojs/starlight/components'
+import governedDraftOutput from '../../../../examples/governed/expected/action-draft.txt?raw'
+import merkleRootOutput from '../../../../examples/commits/expected/merkle-root.txt?raw'
+
+Each entry gives the mechanism, not a paraphrase, and links to the page that owns the term. Where a word is overloaded elsewhere in the industry, the entry says what Veritio specifically means by it.
+
+## Protocol and chain
+
+**AuditEvent** — Portable, normalized application statement containing actor, action, target, scope, and minimized context. It is an input, not a stored record. See [audit events](/docs/concepts/audit-events/).
+
+**AuditRecord** — Stored envelope: the normalized event plus authoritative `sequence`, `previousHash`, `hash`, `appendedAt`, `hashAlgorithm`, `canonicalization`, and `idempotencyKeyHash`. Only a store can produce one.
+
+**Canonical JSON** — Deterministic serialization used as the byte input to every protocol hash. `veritio-json-v1` normalizes the supported JSON domain and sorts object keys recursively before serializing. See [hash chain](/docs/concepts/hash-chain/).
+
+**Hash chain** — Ordered records where each record stores the prior record hash, making later mutation, deletion, or reordering detectable. Detection, not prevention.
+
+**Idempotency key** — Host-owned retry identity. The store hashes it with tenant scope and rejects reuse for different canonical event content. The raw key is never stored.
+
+**Tenant chain** — Independent sequence and hash-link state for one tenant. Two tenants may both hold sequence `1`; their records must never be joined into one chain for verification.
+
+**Redaction** — Deterministic minimization of metadata keys before canonicalization, so the same input always hashes the same way. See [redaction](/docs/concepts/redaction/).
+
+## Governed changes
+
+**Governed change** — Veritio's model for one authorized mutation, split into three linked records — a Change (declared intent), an Activity (execution), and a Revision (resulting state) — instead of a single flat event. See [changes, activities, and revisions](/docs/concepts/governed-changes/).
+
+**Change** — The declared intent: what was asked, by whom (`initiatedBy`), under which optional authorization or delegation assertion, carrying a tenant-scoped idempotency-key hash. Reference kind `change`, id prefix `chg_`.
+
+**Activity** — The execution record: who or what actually performed the change (`performedBy`) — a service, an operator session, an agent. Reference kind `activity`, id prefix `act_`.
+
+**Revision** — The resulting governed state of one entity: a `stateCommitment`, sorted `changedPaths`, optional `parents`, and `generatedBy`. Reference kind `revision`, id prefix `rev_`.
+
+**State commitment** — `{ algorithm, canonicalization, schemaRef, fieldSetRef, fields, digest }`. The digest is `sha256` over the canonical JSON of the post-policy `fields` object, so it commits to the minimized projection Veritio actually ships — never to the source database row. Anyone holding the evidence can recompute it from `fields` alone.
+
+**Capture mode** — The per-field policy declared in `defineEntity`. Four modes are implemented — `full`, `content_digest`, `keyed_digest`, `omit` — and four names are reserved (`randomized_digest`, `reference`, `redact`, `encrypt`). Selecting a reserved mode fails at draft time rather than degrading to a weaker commitment. See the [governed-change API](/docs/reference/governed-change-api/).
+
+**Governed action draft** — The output of `createGovernedActionDraft`, the host-boundary helper that derives change and activity ids, the tenant-scoped idempotency hash, and `changedPaths`, then delegates to `createGovernedChangeDraft` for protocol event and edge semantics. The draft holds evidence *inputs*: three `AuditEventInput`s, the evidence edges, and an `outboxEntry`. It carries no sequence and no record hash until a store appends it.
+
+**EvidenceRef** — Authority-qualified pointer `{ authority, kind, type, id }` used everywhere a record names another record. The authority is what makes an id safe to join across systems.
+
+**Reserved context key** — A key in `VeritioContextMetadata` — `activityEpisodeId`, `authSessionId`, `traceId`, `changeId`, `capturePolicyId`, and others — that `mergeVeritioMetadata` applies after caller metadata. Governed changes reject a caller-supplied reserved key rather than replacing it silently.
+
+One draft materializes most of these terms at once:
+
+<Code code={governedDraftOutput} lang="json" title="verified output" />
+
+## Activity episodes
+
+**Activity episode** — A Layer-1 grouping: a named span of work whose events all carry the same opaque `metadata.activityEpisodeId`. It is not an event-schema field, which is why an SDK that has never heard of episodes still hashes and verifies these records correctly. See [activity episodes](/docs/concepts/activity-episodes/).
+
+**Episode stamp** — The assignment of `metadata.activityEpisodeId` after caller-supplied metadata, so code under audit cannot choose which episode its own evidence lands in. Templates and the provenance recorder overwrite a caller's value; governed changes throw instead.
+
+**Session id** — The narrower sibling stamp, `metadata.sessionId`, scoping records to one agent session. One episode may span several sessions.
+
+## Evidence graph and commits
+
+**Evidence entity** — A node from the closed type vocabulary: `agent_session`, `pull_request`, `deployment`, `activity_episode`, `data_subject`, and the rest. See the [evidence vocabulary](/docs/reference/evidence-vocabulary/).
+
+**Evidence edge** — Portable directed relation between two entities, stored in `EvidenceEdgeRecord` envelopes with their own independently sequenced hash chain and their own `verifyEvidenceEdgeRecords` pass. See the [evidence graph](/docs/concepts/evidence-graph/).
+
+**Evidence commit** — A separate record binding an ordered manifest of *already-persisted* records under one Merkle root, chained per stream. Members are references — `{ index, recordType, recordId, recordHash }` — never copies, across six record types: `audit.record`, `evidence.edge.record`, `entity.revision.record`, `activity.record`, `assertion.record`, `change.record`. See [evidence commits](/docs/concepts/evidence-commits/).
+
+**Records root** — The Merkle root over a commit's normalized member leaves. A one-member commit's records root is its leaf hash unchanged.
+
+**veritio-merkle-v1** — The tree algorithm behind the records root: ordered leaves folded pairwise left to right, with an odd final hash duplicated as its own right sibling at every level. Leaf, node, and commit digests each use a distinct domain separator so they cannot collide. See [evidence commit hashing](/docs/reference/evidence-commit-hashing/).
+
+**Commit stream** — The `streamId` a commit chains on. A valid stream starts at `sequence: 1` with `previousCommitHash: null`; verifying one stream never reads another's state.
+
+<Code code={merkleRootOutput} lang="json" title="verified output" />
+
+## Risk
+
+**Risk signals** — The closed, non-PII vocabulary describing one operation: required `operationType`, optional `reversibility`, `envCriticality`, and the non-negative integer magnitudes `dataVolume`, `fanOut`, `referenceCount`. No field is a place for an identifier, path, or free text. `normalizeRiskSignals` fails closed on an unknown enum member or a non-integer magnitude rather than scoring low. See [risk scoring](/docs/concepts/risk-scoring/).
+
+**Risk assessment** — The result of `scoreRiskSignals`: a `score` in `[0,1]`, a `level`, a `policyVersion`, and exactly six `factors` in fixed order, each with `kind` of `base`, `additive`, or `multiplier`. The factor list lets a reviewer recompute the score without holding the policy.
+
+**Risk band** — The named level derived from a score by `bandOf` using half-open thresholds: `none`, `low`, `medium`, `high`, `critical`. Under `veritio.reference.v1` the cut points are `0.05 / 0.25 / 0.50 / 0.75`.
+
+**Episode rollup** — `rollupEpisodeRisk` folding many step scores into one episode summary: `peak`, `velocityScore`, `stepCount`, and the banded result. Momentum decays by repeated multiplication, never exponentiation, so the three SDKs agree digit for digit.
+
+**Policy version** — The string stamped into every conclusion so a score and the constants that produced it travel together. `DEFAULT_RISK_POLICY` is `veritio.reference.v1`; a derived policy gets a deterministic `+tempX.XX` suffix; any hand override makes an explicit `policyVersion` mandatory. See the [risk policy reference](/docs/reference/risk-policy/).
+
+**Temperature** — The single tuning knob on `riskPolicy({ temperature })`. A multiple of `0.01` in `[0,1]` rescales exactly nine pinned fields by two-segment linear interpolation, where `0.5` reproduces the reference policy byte for byte. It never adds or removes frequency rules. See [tuning risk policy](/docs/guides/risk-policy-tuning/).
+
+**Frequency rule** — A sliding-window burst rule `{ actions, windowSeconds, threshold, boost }`. It fires at most once per episode when qualifying steps inside any window reach the threshold, and contributes to `frequencyScore`. Because that score joins a final `max()`, a rule can only raise an episode score, never lower it.
+
+**Security risk assertion** — The append-only `assertion.recorded` envelope of type `security.risk` that stamps an already-computed conclusion onto an evidence subject. Its producer authority is fixed to `veritio.detectors`, and the builder never recomputes a score. `hashAssertionRecord` mirrors `hashAuditRecord`. See [security risk assertions](/docs/guides/security-risk-assertions/).
+
+## Storage and delivery
+
+**Authoritative store** — A component that atomically owns tenant ordering, idempotency conflicts, expected-tip checks, and hash-revalidated reads. Only an authoritative store answers verify, DSAR, and definitive export requests. See the [storage overview](/docs/storage/overview/).
+
+**Derived tier** — A copy that never owns sequence: the object archive in R2, S3, or MinIO, and the ClickHouse read model. Both keep canonical record bytes opaque and rehash on read, and both remain eventually consistent, so they serve recovery, long-range scans, and operational views only.
+
+**Conformance suite** — `createAuditStoreConformanceTests` from `@veritio/storage/conformance`: the reusable checks a store must pass to be called authoritative — tenant-scoped ordering, idempotent append with conflict rejection, cloned reads, fail-closed missing tenant scope and expected-tip mismatch, and fail-closed corrupted-record integrity. See [storage conformance](/docs/storage/conformance/).
+
+**Transactional outbox** — A durable queue row committed inside the host's own mutation transaction, drained later by a restartable dispatcher. It does not make evidence appending atomic with the mutation; it makes the *intent to append* atomic, so a crash cannot leave a mutation with no evidence. See [transactional outbox](/docs/guides/transactional-outbox/).
+
+**Mutation binding** — The honesty field on an outbox entry: `same_transaction`, `not_transaction_bound`, or `best_effort`, defaulting to `not_transaction_bound` because the SDK cannot observe whether the host truly enrolled the append. It is copied to `metadata.captureAssurance`.
+
+**Tip cache** — A validated cached last sequence and hash. Redis support is a cache helper, never durable evidence storage.
+
+## Verification and exports
+
+**Verification** — Recomputing declared invariants and returning an explicit pass or the first failure with a stable reason. It does not establish that a recorded claim was truthful or authorized. See the [verifier reference](/docs/reference/verifier/).
+
+**vevb-1** — Veritio Evidence Export Bundle v1: a canonical container with manifest, file payloads, hashes, a verification report, and an optional signature. See the [export format](/docs/reference/export-format/).
+
+**Chain scope** — The claim a bundle makes about its own completeness, written into `manifest.chainScope` and hashed with the rest of the manifest. It is what a `valid: true` verdict must be read alongside.
+
+**Full chain** — `chainScope` absent. Every included tenant chain starts at sequence 1 and is gapless. Evidence commits may only travel in a full bundle.
+
+**Windowed chain** — A contiguous partial-chain claim with an allowed mid-chain starting boundary and strict linkage from there on.
+
+**Filtered chain** — A partial-content claim that must declare `filters`. It cannot prove completeness of excluded records, and the verifier rejects filters without the scope or the scope without filters rather than falling back to `full`.
+
+## Governance and product
+
+**Evidence support** — Technical records and checks that can support review, audit, or data workflows. Veritio supports compliance evidence; it is not legal advice and does not decide a legal outcome.
+
+**Retention label** — An application-declared policy key on an event. It deletes nothing on its own and requires an operator-owned enforcement workflow. See [retention](/docs/concepts/retention/).
+
+**Veritio Cloud** — The optional hosted operating path. Open-source use requires no account, project, key, or proprietary store.
+
+If a term would imply a guarantee, hidden behavior, or an unsupported Cloud feature, describe the concrete technical mechanism instead. Continue to the [event schema](/docs/reference/event-schema/), the [parity matrix](/docs/reference/parity-matrix/), or the [documentation overview](/docs/).

@@ -1,0 +1,54 @@
+{
+  "control": {
+    "changeId": "chg_billing_plan_plan_9001_2d4e4ac92afa4a8a",
+    "activityId": "act_billing_plan_plan_9001_2d4e4ac92afa4a8a",
+    "revisionId": "rev_billing_plan_plan_9001_85271b1aa8f9_172321d5",
+    "changedPaths": [
+      "/planTier"
+    ],
+    "eventActions": [
+      "change.declared",
+      "activity.recorded",
+      "entity.revision.created"
+    ]
+  },
+  "guards": [
+    {
+      "guard": "missing tenant scope",
+      "thrown": true,
+      "errorName": "TypeError",
+      "message": "scope.tenantId is required"
+    },
+    {
+      "guard": "empty idempotencyKey",
+      "thrown": true,
+      "errorName": "TypeError",
+      "message": "idempotencyKey is required"
+    },
+    {
+      "guard": "principal ref missing authority",
+      "thrown": true,
+      "errorName": "TypeError",
+      "message": "ref.authority is required"
+    },
+    {
+      "guard": "principal ref missing id",
+      "thrown": true,
+      "errorName": "TypeError",
+      "message": "ref.id is required"
+    },
+    {
+      "guard": "producer ref is not a principal",
+      "thrown": true,
+      "errorName": "TypeError",
+      "message": "principal ref is required"
+    },
+    {
+      "guard": "no governed field changed",
+      "thrown": true,
+      "errorName": "TypeError",
+      "message": "at least one governed field must change"
+    }
+  ],
+  "allGuardsFailClosed": true
+}

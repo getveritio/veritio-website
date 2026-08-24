@@ -1,0 +1,111 @@
+---
+title: Choose your path
+description: Route to the right Veritio docs by task - first event, governed mutations, agent provenance, risk scoring, storage choice, consent and DSAR, cross-language work.
+audience: [newcomer, developer, operator]
+kind: guide
+searchIntent: Pick the right Veritio documentation path for a first event, governed mutations, agent provenance, risk, storage, or DSAR.
+questions:
+  - Which Veritio page should I read for the task I am actually doing?
+  - Should I use Veritio locally, self-host it, or use Cloud?
+  - Where do governed changes, agent provenance, and risk scoring live in the docs?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7', '@veritio/storage@0.4.7', 'Veritio Cloud claims · 2026-08-09']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/index.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/storage/src/index.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/.claude/rules/02-sdk-parity.md
+  - https://getveritio.com/claims.json
+claimRefs: [cloud-managed-path]
+sidebar:
+  order: 5
+---
+
+This page is a router, not a tutorial. Pick the row that matches the task in front of you, then follow the linked path in order. Every path below produces the same portable event, the same canonical bytes, and the same verifiable record chain — they differ only in where the recording call sits and who operates the store.
+
+## Start here regardless of path
+
+Three pages are prerequisites for everything else. Do them first, in order, even if your real goal is agent capture or a Postgres deployment.
+
+1. [Installation](/docs/start/installation/) — install `@veritio/core`, or use the source-backed Python and Go SDKs. The full surface is in the [TypeScript SDK](/docs/sdks/typescript/) guide.
+2. [Record your first audit event](/docs/start/record-first-event/) — create, append, read, and verify one tenant-scoped event against the in-process `MemoryAuditStore` from `@veritio/core`.
+3. [Verify a hash chain](/docs/start/verify-a-chain/) — recompute the chain, then break it on purpose and read the exact failure reason.
+
+The two concepts those tutorials assume are [Audit events](/docs/concepts/audit-events/), which separates the portable event body from the storage-owned record envelope, and [Hash chain](/docs/concepts/hash-chain/), which explains canonical JSON, per-tenant sequences, and previous-hash linkage. [Deterministic redaction](/docs/concepts/redaction/) belongs in the same first sitting: it runs before canonicalization, so it is hash-affecting, not cosmetic.
+
+## Routing by task
+
+| Your task | Read in this order |
+| --- | --- |
+| Record a first event and prove it | [Installation](/docs/start/installation/) → [First event](/docs/start/record-first-event/) → [Verify a chain](/docs/start/verify-a-chain/) |
+| Capture governed create, update, delete | [Changes, activities, revisions](/docs/concepts/governed-changes/) → [Governed actions](/docs/guides/governed-actions/) → [Governed change API](/docs/reference/governed-change-api/) |
+| Capture coding-agent activity | [Claude Code](/docs/ai/claude-code/) → [Agent events](/docs/ai/agent-events/) → [Provenance recorder](/docs/ai/provenance-recorder/) |
+| Score and explain operational risk | [Risk scoring](/docs/concepts/risk-scoring/) → [Risk policy reference](/docs/reference/risk-policy/) → [Tuning risk policy](/docs/guides/risk-policy-tuning/) |
+| Pick a database and operate it | [Storage overview](/docs/storage/overview/) → your engine guide → [Store conformance suite](/docs/storage/conformance/) → [Self-hosting](/docs/storage/self-hosting/) |
+| Answer consent and DSAR questions | [Consent history](/docs/guides/consent-history/) → [DSAR fulfillment](/docs/guides/dsar-fulfillment/) → [Export bundle format](/docs/reference/export-format/) |
+| Work in Python or Go | [Parity matrix](/docs/reference/parity-matrix/) → [Python SDK](/docs/sdks/python/) or [Go SDK](/docs/sdks/go/) |
+| Evaluate the managed option | [Cloud overview](/docs/cloud/overview/) → [Cloud getting started](/docs/cloud/getting-started/) → [Cloud exports](/docs/cloud/exports/) |
+
+## Governed CRUD at a mutation boundary
+
+If you want evidence that a row changed — who changed it, from what to what, under which authorization — record it inside the server-side mutation, not from a log tailer afterwards.
+
+[Changes, activities, and revisions](/docs/concepts/governed-changes/) defines the three objects one governed mutation produces and what the state commitment actually commits to. [Governed actions](/docs/guides/governed-actions/) is the runnable version using `defineEntity` and `createGovernedActionDraft`. [Governed change API](/docs/reference/governed-change-api/) is the signature-level reference, including capture modes, reserved context keys, derived identifiers, and the outbox row shape — in all three SDKs.
+
+Two follow-ons matter in production. [Transactional outbox](/docs/guides/transactional-outbox/) commits the mutation and its evidence in one host transaction and drains the queued entry into an idempotent target; [Outbox adapters](/docs/storage/outbox/) is its adapter and delivery-safety reference. For common actions, [Audit templates](/docs/guides/audit-templates/) and the [Template catalogue](/docs/reference/template-catalogue/) give you canonical action strings instead of hand-written ones.
+
+Framework wiring is thin by design — the adapter never owns tenancy, authorization, or storage. Go to [Next.js](/docs/frameworks/nextjs/), [TanStack Start](/docs/frameworks/tanstack-start/), [SvelteKit](/docs/frameworks/sveltekit/), or [Better Auth](/docs/frameworks/better-auth/). For [Express](/docs/frameworks/express/), [Hono](/docs/frameworks/hono/), and [FastAPI](/docs/frameworks/fastapi/), no adapter package is published yet; those pages show the direct-SDK boundary instead.
+
+## Agent and AI provenance
+
+Start with [Claude Code](/docs/ai/claude-code/) if you want capture running today — it is the published adapter, and it hashes prompts, tool inputs, and file contents rather than storing them. [Agent events](/docs/ai/agent-events/) is the runnable session-and-tool-call exercise. [Provenance recorder](/docs/ai/provenance-recorder/) is the reference for every recording call, the graph edges each emits, and the session stamps a caller cannot shadow. [Evidence graph](/docs/concepts/evidence-graph/) covers the edge vocabulary and its own verifiable chain.
+
+Two supporting pages: [Risk signals from agent capture](/docs/ai/risk-signals/) documents the classifier that stamps `riskSignals` before hashing, which makes the command-to-class mapping part of the capture contract rather than an implementation detail; [Activity episodes](/docs/concepts/activity-episodes/) explains how one `activityEpisodeId` joins agent, change, review, and deploy evidence for rollup.
+
+The [Codex](/docs/ai/codex/) notify adapter and the [AI gateway](/docs/ai/gateway/) are source-only and experimental. Read those pages before depending on either.
+
+## Risk scoring
+
+[Risk scoring](/docs/concepts/risk-scoring/) explains how six non-PII operation signals become a deterministic, explainable score that all three SDKs reproduce byte-for-byte. [Risk policy reference](/docs/reference/risk-policy/) lists every pinned `veritio.reference.v1` constant. [Tuning risk policy](/docs/guides/risk-policy-tuning/) shows the supported way to change thresholds — derive a policy with `riskPolicy`, never edit `DEFAULT_RISK_POLICY` — so a published score stays recomputable. When a conclusion needs to become durable evidence, [Security risk assertions](/docs/guides/security-risk-assertions/) covers the assertion record and its derived audit event.
+
+## Storage selection and self-hosting
+
+[Storage overview](/docs/storage/overview/) is the decision page, and it draws the line that matters most:
+
+```text
+authoritative   AuditStore   owns per-tenant sequence, idempotency, fail-closed integrity
+derived         archive, analytics, cache   eventually consistent, never the sequence owner
+```
+
+An object archive, a ClickHouse read model, or a Redis tip cache can support the system. None of them becomes the authoritative sequence owner by holding a copy.
+
+Pick an engine: [Postgres and Neon](/docs/storage/postgres/), [MySQL and MariaDB](/docs/storage/mysql-mariadb/), [MongoDB](/docs/storage/mongodb/), or the local [File store](/docs/storage/file-store/). Every store receives a host-owned transaction boundary; the package reads no environment variables. Then prove it with the [Store conformance suite](/docs/storage/conformance/) — a custom or forked store is only authoritative once `createAuditStoreConformanceTests` passes against it. [Self-hosting](/docs/storage/self-hosting/) assembles the server, authentication, backups, and recovery verification. The source-backed [Local CLI](/docs/sdks/cli/) gives you a Workbench and local MCP tools with no account.
+
+## Consent, DSAR, retention, and export
+
+[Consent history](/docs/guides/consent-history/) records grants and revocations as chained events and rebuilds a timeline from verified records. [DSAR fulfillment](/docs/guides/dsar-fulfillment/) records the request, extracts that subject's records into a filtered `vevb-1` bundle, and records the delivery on the same chain. [Retention labels](/docs/concepts/retention/) is the page that keeps policy evidence distinct from physical deletion, which the storage or hosted boundary still owns.
+
+For anything leaving the producing system, read [Export bundle format](/docs/reference/export-format/) and the [Verifier reference](/docs/reference/verifier/) together — a full, windowed, and filtered bundle make different chain claims, and only the verifier output tells you which one you have. [Evidence commits](/docs/concepts/evidence-commits/) and [Evidence commit hashing](/docs/reference/evidence-commit-hashing/) cover batch membership proofs. Veritio produces compliance evidence; it does not make a legal determination for you.
+
+## Cross-language work
+
+Read the [Cross-language parity matrix](/docs/reference/parity-matrix/) before porting anything. Event creation, canonical JSON, hashing, redaction, governed drafts, risk scoring, edges, and commits exist in TypeScript, Python, and Go and are pinned by shared `spec/conformance` fixtures. The record-chain verifier, the provenance recorder, export bundles, and every store implementation are TypeScript-only today. A Python or Go service can produce records and ship them to a store a TypeScript process owns; it cannot verify a record chain in-process. Then continue to the [Python SDK](/docs/sdks/python/) or [Go SDK](/docs/sdks/go/).
+
+## Write down the operating contract
+
+Before implementation, name all of the following:
+
+- the server-side source of tenant and actor identity;
+- the authoritative store that assigns ordering;
+- the stable idempotency key for each retryable action;
+- the process that handles verification failures;
+- the backup and restore owner;
+- the retention enforcement owner;
+- whether exports must be verified outside the producing system.
+
+Confirm the chosen path rejects missing tenant scope, conflicting idempotent retries, and an unexpected previous hash. Confirm a restored backup returns the ordered records and passes verification. Keep all storage and hosted credentials on the server boundary.
+
+## When you get stuck
+
+[Troubleshooting and error reference](/docs/reference/troubleshooting/) maps the exact fail-closed message or verifier reason you just hit to its cause. [Event schema reference](/docs/reference/event-schema/) and [Entity and relation vocabulary](/docs/reference/evidence-vocabulary/) are the field-level lookups. [Glossary](/docs/reference/glossary/) settles terminology.
+
+The optional managed path is described in [Veritio Cloud overview](/docs/cloud/overview/). Choosing it changes who operates ingest and storage. It does not add hosted-only fields to the event model, and the complete local open-source path stays available without an account.

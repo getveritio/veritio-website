@@ -1,0 +1,43 @@
+{
+  "conservativeDefaults": {
+    "input": {
+      "operationType": "update"
+    },
+    "normalized": {
+      "operationType": "update",
+      "reversibility": "recoverable",
+      "envCriticality": "production",
+      "dataVolume": 0,
+      "fanOut": 0,
+      "referenceCount": 0
+    },
+    "inputUnchanged": true
+  },
+  "failClosed": [
+    {
+      "case": "unknown operationType",
+      "errorName": "TypeError",
+      "message": "operationType must be a known risk operation type"
+    },
+    {
+      "case": "unknown reversibility",
+      "errorName": "TypeError",
+      "message": "reversibility must be a known risk reversibility class"
+    },
+    {
+      "case": "negative dataVolume",
+      "errorName": "TypeError",
+      "message": "dataVolume must be a non-negative integer"
+    },
+    {
+      "case": "fractional fanOut",
+      "errorName": "TypeError",
+      "message": "fanOut must be a non-negative integer"
+    },
+    {
+      "case": "NaN referenceCount",
+      "errorName": "TypeError",
+      "message": "referenceCount must be a non-negative integer"
+    }
+  ]
+}

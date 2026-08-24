@@ -1,0 +1,251 @@
+---
+title: Risk policy reference
+description: Every pinned veritio.reference.v1 risk constant, the nine fields the temperature knob rescales, and the fail-closed rules for overrides.
+audience: [developer, operator, governance]
+kind: reference
+searchIntent: Look up every pinned veritio.reference.v1 risk constant and the nine fields temperature rescales.
+questions:
+  - What are the DEFAULT_RISK_POLICY constants in Veritio?
+  - What does riskPolicy({ temperature }) actually change?
+  - Why does overriding a Veritio risk policy require policyVersion?
+  - How is the +temp0.70 policyVersion suffix built?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/risk-score.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/risk-policy.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/python/src/veritio/risk_policy.py
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/go/risk_policy.go
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/conformance/risk-policy-temperature.json
+claimRefs: []
+---
+
+import { Code } from '@astrojs/starlight/components'
+import policyTemperatureOutput from '../../../../examples/risk/expected/policy-temperature.txt?raw'
+import policyTemperatureSource from '../../../../examples/risk/policy-temperature.ts?raw'
+
+A risk score is only evidence if the constants behind it are recoverable later. Veritio stores a `policyVersion` string inside every hashed `security.risk` conclusion, and `veritio.reference.v1` is the one policy every SDK must reproduce byte-for-byte. This page is the published table of those constants, plus the exact rules the temperature knob and caller overrides follow.
+
+## The reference constants
+
+`DEFAULT_RISK_POLICY` (`DefaultRiskPolicy` in Go) carries `policyVersion: "veritio.reference.v1"`. Every number below is a cross-language protocol contract: changing one is a protocol change that must land in TypeScript, Python, Go, and `spec/conformance` together.
+
+`operationBase` seeds the per-step score from the operation class:
+
+| `operationType` | base |
+| --- | --- |
+| `read` | 0.05 |
+| `create` | 0.20 |
+| `update` | 0.30 |
+| `config` | 0.45 |
+| `bulk` | 0.55 |
+| `permission` | 0.60 |
+| `delete` | 0.70 |
+| `destructive` | 0.85 |
+
+`reversibilityFactor` and `envCriticalityFactor` are multiplicative. Both default to the most conservative class when the caller omits the signal: `recoverable` and `production`.
+
+| `reversibility` | factor |
+| --- | --- |
+| `reversible` | 0.6 |
+| `recoverable` | 1.0 |
+| `irreversible` | 1.3 |
+
+| `envCriticality` | factor |
+| --- | --- |
+| `sandbox` | 0.4 |
+| `development` | 0.6 |
+| `staging` | 0.8 |
+| `production` | 1.0 |
+
+`magnitude` turns three non-negative integer counts into additive boosts through the saturating curve `x / (x + k)`. `maxBoost` caps their combined ceiling; `weights` splits that ceiling between signals; `k` sets how fast each signal saturates.
+
+| magnitude field | `dataVolume` | `fanOut` | `referenceCount` |
+| --- | --- | --- | --- |
+| `weights` | 0.5 | 0.3 | 0.2 |
+| `k` | 100 | 25 | 50 |
+
+`magnitude.maxBoost` is `0.4`. The weights sum to `1.0`, so the additive part of a step can never exceed `maxBoost` no matter how large the counts get.
+
+`rollup` governs episode aggregation: `windowSeconds: 60`, `decayPerWindow: 0.5`, `velocityNormalizer: 3.0`, `frequencyRules: []`. Momentum carried between steps decays by `decayPerWindow` per elapsed window, peak momentum is divided by `velocityNormalizer` to produce `velocityScore`, and the episode score is the maximum of `peak`, `velocityScore`, and — only when rules are configured — `frequencyScore`. The reference policy ships zero frequency rules, so a reference rollup emits no `frequencyScore` or `frequencyMatches` fields at all.
+
+## Bands are half-open
+
+`bands` holds four inclusive lower bounds: `low: 0.05`, `medium: 0.25`, `high: 0.5`, `critical: 0.75`. `bandOf` compares strictly less-than against each in ascending order, so a score exactly on a boundary lands in the higher band.
+
+```text
+score < 0.05                  → none
+0.05 <= score < 0.25          → low
+0.25 <= score < 0.50          → medium
+0.50 <= score < 0.75          → high
+0.75 <= score                 → critical
+```
+
+Note both ends. `none` exists only below `bands.low`; there is no separate "critical ceiling", because `critical` is the last band and every score is clamped to `[0,1]` before banding. Bands must stay strictly ascending — the policy validator rejects any policy where they are not.
+
+## What temperature does
+
+`riskPolicy({ temperature })` derives a full policy from the reference constants. It is not a multiplier on the final score and not a threshold-only knob: it moves both the scoring inputs and the bands, in the same direction.
+
+Nine fields — and only these nine — are rescaled:
+
+| field | lenient (`t=0`) | reference (`t=0.5`) | strict (`t=1`) |
+| --- | --- | --- | --- |
+| `bands.low` | 0.10 | 0.05 | 0.02 |
+| `bands.medium` | 0.35 | 0.25 | 0.18 |
+| `bands.high` | 0.60 | 0.50 | 0.40 |
+| `bands.critical` | 0.85 | 0.75 | 0.65 |
+| `rollup.decayPerWindow` | 0.30 | 0.50 | 0.70 |
+| `rollup.velocityNormalizer` | 4.0 | 3.0 | 2.0 |
+| `magnitude.maxBoost` | 0.25 | 0.40 | 0.60 |
+| `reversibilityFactor.irreversible` | 1.15 | 1.30 | 1.60 |
+| `envCriticalityFactor.production` | 0.90 | 1.00 | 1.20 |
+
+Everything else is untouched by temperature: all eight `operationBase` entries, the `reversible` and `recoverable` factors, `sandbox`/`development`/`staging`, all three `magnitude.weights`, all three `magnitude.k`, `rollup.windowSeconds`, and `rollup.frequencyRules`.
+
+Derivation is two-segment linear interpolation, chosen so the reference column is an exact fixed point rather than an approximation:
+
+```text
+t = 0.0 ────────── t = 0.5 ────────── t = 1.0
+lenient            reference           strict
+   └─ blend ────────┘  └──── blend ──────┘
+
+t <= 0.5:  lenient + (reference - lenient) * (t / 0.5)
+t >  0.5:  reference + (strict - reference) * ((t - 0.5) / 0.5)
+then round4 (floor(x * 10000 + 0.5) / 10000)
+```
+
+There is no `pow`, `exp`, or `log` anywhere in the derivation. That restriction is deliberate: transcendental functions are the usual source of last-digit divergence between language runtimes, and a derived constant that differs in the fourth decimal produces a different score, a different band, and a different hashed conclusion.
+
+## The policyVersion suffix
+
+`temperature` must be a finite number in `[0,1]` **and** a multiple of `0.01`. The value is immediately converted to integer hundredths, and the derived `policyVersion` is built from those integers alone — never from float formatting:
+
+```text
+0.7  →  hundredths 70
+        whole = 70 / 100 = 0
+        frac  = 70 % 100 = 70
+        "veritio.reference.v1" + "+temp" + "0" + "." + "70"
+     →  "veritio.reference.v1+temp0.70"
+
+0.05 →  hundredths 5  → frac 5 zero-padded → "+temp0.05"
+1.0  →  hundredths 100 → whole 1, frac 0   → "+temp1.00"
+```
+
+This is why the 0.01 granularity is enforced rather than rounded. `0.7` renders as `0.7` in one language and `0.7000000000000001` in another; integer division and modulo do not. The suffix is a label that appears inside hashed evidence, so it has to be produced identically everywhere or two SDKs would sign the same conclusion under two different policy names.
+
+Calling `riskPolicy()` with no options at all returns a fresh copy equal to `DEFAULT_RISK_POLICY`, keeping the unsuffixed `veritio.reference.v1` version. Calling it with `temperature: 0.5` returns the same constants with the suffixed version `veritio.reference.v1+temp0.50`.
+
+## Verified output
+
+The following is produced by an executable fixture whose output is byte-compared in CI. It scores one fixed signal set — `update`, `irreversible`, `production`, `dataVolume: 120`, `fanOut: 5`, `referenceCount: 8` — under five temperatures, so only the policy varies.
+
+<Code code={policyTemperatureOutput} lang="json" title="verified policy-temperature output" />
+
+Read it field by field:
+
+- **`profiles[].policyVersion`** proves the suffix rule for `0`, `0.2`, `0.5`, `0.8`, and `1`, including zero-padding (`+temp0.00`, `+temp0.20`) and the whole-number case (`+temp1.00`).
+- **`profiles[].bands`** proves the bands move monotonically inward as temperature rises, and stay strictly ascending at both extremes.
+- **`profiles[].rollup`** proves `windowSeconds` stays `60` at every temperature and `frequencyRuleCount` stays `0`. Those two are the control group: they show the knob is scoped, not global.
+- **`profiles[].scaledMultipliers`** proves exactly which three scoring constants move — `magnitude.maxBoost`, the `irreversible` factor, and the `production` factor — while the other reversibility and environment classes hold their reference values.
+- **`profiles[].fixedSignalScore`** proves the compounding effect. The same signals score `0.4012` / `medium` at `t=0` and `0.9796` / `critical` at `t=1`.
+- **`referenceInvariant`** proves `temperature: 0.5` reproduces every reference constant, comparing the whole derived policy against `DEFAULT_RISK_POLICY` with `policyVersion` stripped.
+- **`rejections`** proves the two distinct fail-closed messages for a sub-hundredth value and an out-of-range value.
+
+The reference row is worth checking by hand, because it shows why both the numerator and the bands matter:
+
+```text
+base(update)                          0.3000
++ 0.4 * 0.5 * 120/(120+100)  → round4 0.1091
++ 0.4 * 0.3 *   5/(5+25)     → round4 0.0200
++ 0.4 * 0.2 *   8/(8+50)     → round4 0.0110
+                             sum      0.4401
+* irreversible 1.3 * production 1.0   0.5721
+band: 0.5721 >= high 0.5, < critical 0.75  → high
+```
+
+At `t=1` the same arithmetic runs with `maxBoost 0.6`, `irreversible 1.6`, `production 1.2` and is banded against `critical 0.65`. Scores move and thresholds move together, which is why **scores derived under different temperatures are not comparable**. Comparing them is only meaningful when the `policyVersion` strings match.
+
+The fixture source is the definition of what is being asserted:
+
+<Code code={policyTemperatureSource} lang="ts" title="src/examples/risk/policy-temperature.ts" />
+
+## Overrides
+
+`overrides` are deep-merged **after** temperature derivation. One rule dominates: if the overrides object carries any key at all, `overrides.policyVersion` is mandatory and must be a non-empty string.
+
+```text
+riskPolicy({ temperature: 0.7, overrides: { magnitude: { maxBoost: 0.5 } } })
+  → TypeError: overrides.policyVersion is required ...
+
+riskPolicy({ temperature: 0.7, overrides: {
+  policyVersion: 'acme.custom.v3', magnitude: { maxBoost: 0.5 },
+} })
+  → policyVersion "acme.custom.v3"
+```
+
+The reason is evidentiary, not stylistic. An auto-generated `+temp0.70` suffix asserts "these are the reference constants derived at temperature 0.70". Once a caller has changed `maxBoost`, that assertion is false, and it would be false inside a hashed conclusion that a reviewer reads months later. Requiring an explicit name makes a hand-tuned policy self-identifying.
+
+Merging is explicit, not recursive. Only documented sub-objects merge — one level into `operationBase`, `reversibilityFactor`, `envCriticalityFactor`, `bands`, and `rollup`; two levels into `magnitude.weights` and `magnitude.k`. Unknown keys are ignored rather than smuggled into the policy shape.
+
+`rollup.frequencyRules` is the exception: it **replaces wholesale**. Supplying rules discards the base rule set instead of concatenating with it. A merged rule list would make the effective burst-detection configuration depend on inheritance order, which is exactly the kind of ambiguity a stored `policyVersion` cannot describe.
+
+## Fail-closed behavior
+
+Derivation validates the finished policy — after temperature and after overrides — and throws rather than returning something the banding math cannot honor.
+
+| Condition | Result |
+| --- | --- |
+| `temperature` non-finite, `< 0`, or `> 1` | `temperature must be a finite number in [0,1]` |
+| `temperature` not a multiple of `0.01` | `temperature must be a multiple of 0.01` |
+| any numeric leaf non-finite | `policy numeric fields must all be finite numbers` |
+| bands not strictly ascending | `policy bands must be strictly ascending` |
+| any reversibility or environment factor `<= 0` | `policy multiplier factors must be greater than 0` |
+| `rollup.windowSeconds` or `velocityNormalizer` `<= 0` | `... must be greater than 0` |
+| empty or non-string `policyVersion` | `policy policyVersion must be a non-empty string` |
+
+Python additionally rejects `bool` where a number is required, because `True` is an `int` in Python and would otherwise pass as `1`. Go takes `float64` directly and returns an `error` instead of panicking.
+
+These checks run on the caller's overrides too, so a hand-tuned policy cannot silently mis-band scores; it fails at construction, before any evidence is written.
+
+## Cross-language names
+
+The field names inside a policy are language-neutral JSON identifiers and never change. Only the API surface differs.
+
+| Concept | TypeScript | Python | Go |
+| --- | --- | --- | --- |
+| Reference policy | `DEFAULT_RISK_POLICY` | `DEFAULT_RISK_POLICY` | `DefaultRiskPolicy` |
+| Derive a policy | `riskPolicy(options)` | `risk_policy(options)` | `RiskPolicy(options)` |
+| Options | `RiskPolicyOptions` object | `dict` | `RiskPolicyOptions` struct |
+| Overrides | `RiskPolicyOverrides` | `dict` under `"overrides"` | `*RiskPolicyOverrides` |
+| Failure | throws `TypeError` | raises `TypeError` | returns `error` |
+
+TypeScript and Python read policy fields by their JSON names (`policy.bands.low`, `policy["bands"]["low"]`). Go uses exported struct fields (`policy.Bands.Low`) with `map[string]float64` for the three enum-keyed tables, keyed by the same protocol strings.
+
+Go's optional numeric fields are pointers, so an absent knob is distinguishable from a deliberate `0.0` — which is a real temperature meaning "lenient endpoints", not "unset". Use the `veritio.Float64` helper:
+
+```go
+policy, err := veritio.RiskPolicy(veritio.RiskPolicyOptions{
+    Temperature: veritio.Float64(0.7),
+})
+if err != nil {
+    return err
+}
+// policy.PolicyVersion == "veritio.reference.v1+temp0.70"
+```
+
+The same pattern applies to the override structs: `MaxBoost`, `Bands.Low`, `Rollup.DecayPerWindow` and the rest are `*float64`, and `nil` means "keep the derived value".
+
+## What a policy version does not prove
+
+A matching `policyVersion` proves that two conclusions were computed from the same constants under the same math. It proves nothing else.
+
+It does not prove the signals were accurate. `operationType`, `reversibility`, `envCriticality`, and the three counts are classifications supplied by the caller or by a capture adapter; a mislabelled `delete` scored as an `update` produces a perfectly reproducible wrong number.
+
+It does not make a score a judgement. `critical` is a band, not a finding. The bands encode one defensible default ordering of operation classes; whether that ordering matches your risk appetite is a decision you make, and a temperature or a named override is how you record having made it.
+
+It does not survive a silent retune. A hosted or forked deployment that changes constants while keeping `veritio.reference.v1` breaks the contract this page describes. That is precisely what the conformance fixture at `spec/conformance/risk-policy-temperature.json` exists to catch — and why a derived policy carries a suffix rather than reusing the bare reference name.
+
+Finally, a risk score is evidence tooling, not legal advice, and not a control. It records what a system observed and how it classified it; enforcement, review, and response still belong to your application.
+
+Continue with [Risk scoring](/docs/concepts/risk-scoring/) for the step and episode math these constants parameterize, [Audit events](/docs/concepts/audit-events/) for how a `security.risk` conclusion is carried as evidence, and [Hash chain](/docs/concepts/hash-chain/) for what makes that stored conclusion tamper-evident.

@@ -1,0 +1,46 @@
+{
+  "verifiedAt": "2026-08-09",
+  "notice": "Public claim approvals only. Private implementation evidence and repository locations are intentionally excluded.",
+  "claims": {
+    "cloud-managed-path": {
+      "status": "approved",
+      "verifiedOn": "2026-08-09",
+      "summary": "Veritio Cloud is an optional hosted product and the OSS SDKs remain usable without a hosted account."
+    },
+    "cloud-projects-keys-ingest": {
+      "status": "approved",
+      "verifiedOn": "2026-08-09",
+      "summary": "The managed product implements projects, scoped keys, and a project-scoped ingest path."
+    },
+    "cloud-export-requests": {
+      "status": "approved",
+      "verifiedOn": "2026-08-09",
+      "summary": "The managed product implements export requests, job status, and download surfaces; downloaded bundles still require explicit verification."
+    },
+    "cloud-evidence-views": {
+      "status": "approved",
+      "verifiedOn": "2026-08-09",
+      "summary": "The managed product implements tenant-scoped views for records, agent sessions, activity episodes, and governed changes."
+    },
+    "cloud-identity-and-evidence-processing": {
+      "status": "approved",
+      "verifiedOn": "2026-08-09",
+      "summary": "The managed product implements account authentication, organization membership, and tenant-scoped processing of customer-supplied evidence records."
+    },
+    "cloud-security-controls": {
+      "status": "approved",
+      "verifiedOn": "2026-08-09",
+      "summary": "The managed product implements authenticated sessions, tenant-scoped authorization, append-only hash-linked evidence with integrity checks, and audit records for sensitive control-plane actions."
+    },
+    "cloud-provider-configuration": {
+      "status": "approved",
+      "verifiedOn": "2026-08-09",
+      "summary": "The managed product is configured to use Cloudflare and Neon infrastructure; Polar is listed only as a planned payment processor until billing is activated."
+    },
+    "cloud-price-catalog": {
+      "status": "approved",
+      "verifiedOn": "2026-08-09",
+      "summary": "The published Cloud price catalog lists Pro at USD 29 monthly, Team at USD 99 monthly, Compliance at USD 499 monthly, and Enterprise as custom."
+    }
+  }
+}

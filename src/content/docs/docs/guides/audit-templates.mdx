@@ -1,0 +1,155 @@
+---
+title: Audit templates
+description: Use the pre-built audit template builders in @veritio/core to emit canonical action strings and minimized metadata instead of hand-writing them.
+audience: [developer, governance]
+kind: guide
+searchIntent: Choose a pre-built Veritio audit template instead of hand-writing canonical action strings and metadata.
+questions:
+  - Which audit templates ship with @veritio/core?
+  - Does a Veritio template produce a different hash than a hand-built event?
+  - Why does my agent template throw a TypeError on metadata?
+  - Can I override the action string of an audit template?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/templates.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/README.md
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/examples/cloud-full-governance-poc/src/scenario.ts
+claimRefs: []
+---
+
+import { Code } from '@astrojs/starlight/components'
+import parityOutput from '../../../../examples/templates/expected/signed-in-parity.txt?raw'
+import guardOutput from '../../../../examples/templates/expected/raw-content-guard.txt?raw'
+
+Every host that hand-writes `action` strings eventually invents its own. One service records `user.login`, another records `auth.login.success`, and a third records `session_created`. The events all pass validation, they all hash correctly, and none of them join up in a query. Audit templates exist to remove that decision from application code.
+
+`@veritio/core` ships 26 template builders. Twenty-five of them cover the canonical actions grouped in `auditTemplateSets`; a twenty-sixth, `episodeStartedTemplate`, builds `activity.episode.started` and is deliberately kept out of the sets. The same builders exist in the Python and Go SDKs with the same action strings and the same guards.
+
+## A template is an input builder, not a recorder
+
+A template returns an `AuditEventInput`. That is the same plain object you would have written yourself, and it is not yet an event. You still pass it to `createAuditEvent`, which is where identity, schema version, timestamp normalization, redaction, and validation happen.
+
+```text
+authSessionCreatedTemplate(input)
+            ↓  returns AuditEventInput  (plain object, no side effects)
+createAuditEvent(input)
+            ↓  assigns id + schemaVersion, redacts metadata, validates
+AuditEvent
+            ↓  hashAuditEvent / recorder.record
+record envelope, sequence, previousHash, hash
+```
+
+`templates.ts` imports no crypto module, no store, and no clock. It cannot hash, cannot redact, and cannot persist. That separation is the reason a template can never quietly change the meaning of a recorded event: whatever it returns is subject to exactly the same constructor every hand-built event goes through.
+
+## Discovering the actions
+
+`auditTemplateSets` is the discovery surface. It is a plain object keyed by the five set names, each holding the canonical action strings that set covers.
+
+```text
+auth          auth.user.created, auth.session.created,
+              auth.session.revoked, auth.password.reset.requested
+
+organization  org.created, org.member.invited, org.member.joined,
+              org.member.removed, org.member.role.changed
+
+data          consent.granted, consent.revoked,
+              data.subject.request.created, export.bundle.created,
+              retention.policy.applied
+
+agent         agent.session.started, agent.prompt.recorded,
+              agent.tool.called
+
+code          change.proposal.created, change.files.changed,
+              review.approval.recorded, review.finding.created,
+              review.waiver.recorded, ci.job.completed,
+              deploy.deployed, audit.runtime.observed
+```
+
+A parallel object, `auditTemplates`, holds the builders themselves under friendlier names — `auditTemplates.auth.signedIn`, `auditTemplates.code.filesChanged` — so a host can reach a builder without knowing the action string at all. Use `auditTemplateSets` when you need the strings (query filters, dashboards, retention rules); use `auditTemplates` when you need the function.
+
+## A template and a hand-built event hash identically
+
+The strongest claim a template can make is that it adds nothing you cannot see. The checked fixture below builds one `auth.session.created` event twice: once through `authSessionCreatedTemplate`, once by writing out every field the template would have chosen. Both go through `createAuditEvent` with a pinned `id` and `occurredAt`, so any hidden default, extra metadata key, or silent field would move the digest.
+
+<Code code={parityOutput} lang="json" title="verified template parity output" />
+
+Four things in that output carry weight.
+
+`templateEvent` and `handBuiltEvent` are byte-identical objects. The template contributed `action`, `target`, `purpose`, `lawfulBasis`, `retention`, and a compacted `securityContext` block — nothing else.
+
+`canonicalJsonIdentical: true` proves the equality at the level that matters. Two objects can look the same in a pretty-printer and serialize differently; this compares the `veritio-json-v1` bytes.
+
+`templateHash` and `handBuiltHash` are the same SHA-256 digest. A template is therefore hash-neutral: adopting one does not invalidate history recorded by hand, and migrating a hand-built call site to a template does not change what the event means.
+
+The `securityContext` keys appear sorted (`ipAddressHash`, `location`, `method`, `provider`, `userAgentHash`) even though the template writes them in a different order. `createAuditEvent` sorts nested metadata keys during redaction, so template authorship order never reaches the hash. What order *does* affect is which value survives a key collision — covered next.
+
+## Precedence: what the caller owns, what the template owns
+
+Every template accepts a common input block: `id`, `occurredAt`, `scope`, `requestId`, `purpose`, `lawfulBasis`, `dataCategories`, `retention`, `metadata`, `activityEpisodeId`, and `riskSignals`. The first eight are caller-first — the template's value is a default applied with `??`, so passing `retention: 'security_7y'` wins.
+
+`metadata` is the exception, and it runs the other way.
+
+```text
+{ ...callerMetadata }            caller's keys land first
+{ ...templateMetadata }          template's reserved keys overwrite them
+metadata.activityEpisodeId = …   stamped after both, if supplied
+metadata.riskSignals = …         normalized and stamped last, if supplied
+```
+
+Template-reserved metadata wins. If a caller passes `metadata: { sessionId: 'anything' }` to an agent template, the template's own `sessionId` overwrites it. This is deliberate: read models group a session's events by `metadata.sessionId`, and a caller that could shadow that key could silently detach events from their session.
+
+`activityEpisodeId` and `riskSignals` are stamped after the merge, by direct assignment rather than a spread, so no metadata bag can shadow them either. `riskSignals` additionally passes through `normalizeRiskSignals`, which fails closed on unknown vocabulary rather than writing an uninterpretable signal into the hash. Both keys are non-PII and neither matches the redaction key pattern, so both survive `createAuditEvent` intact.
+
+## actor, action, and target have no caller channel
+
+`buildTemplate` assigns `event.actor`, `event.action`, and `event.target` from the template's own defaults object. Nothing in the common input can reach them, and neither can `metadata`.
+
+Where a template wants the actor to be a choice, it exposes an explicit typed field and folds it in itself — `actor` on the auth and consent builders, `inviter` on invitations, `reviewer` on review events, `service` on CI and deployment events, `agentActor` on agent events. That is a template-controlled parameter, not an override.
+
+`action` has no channel at all. It is a string literal inside each builder. `target` is derived from the builder's own identifier field, so `filesChangedTemplate` always targets `source_tree` and `agentToolCalledTemplate` always targets `tool_call`.
+
+If you need a different action string, hand-build the event with `createAuditEvent`. That is the supported path, and the parity fixture above is the proof that it costs you nothing.
+
+## Organization templates change tenant scope
+
+One template group has a side effect worth knowing before you adopt it. All five organization builders default `scope` to `{ tenantId: organizationId }` when the caller did not supply a scope.
+
+This matches the bootstrap case — an organization is created and its id becomes the tenant id in the same request — but it is a real behavior change if your tenant id is not your organization id. Sequence numbers, chain linkage, and verifier state are all per tenant, so a template that silently picks a different `tenantId` writes into a different chain. Pass `scope` explicitly whenever the two identifiers differ.
+
+## The raw-content guard on agent and code templates
+
+Agent and code events describe prompts, diffs, commands, and logs. Those are exactly the payloads that should never enter an audit trail in raw form, and key-name redaction cannot reliably catch them — a diff under the key `summary` looks innocuous.
+
+The agent and code templates therefore declare a `block-raw-content` metadata policy. Before any event object is constructed, the caller's `metadata` is walked recursively and rejected on two independent rules.
+
+<Code code={guardOutput} lang="json" title="verified raw-content guard output" />
+
+The first three rejections are the key-name rule. `diff`, `filePath`, and a nested `result.stdout` are all blocked, and the error message names the full path so the offending key is obvious. The rule normalizes the key name and blocks a list including `prompt`, `diff`, `patch`, `path`, `stdout`, `stderr`, `output`, `args`, `raw`, `log`, `token`, `authorization`, `cookie`, `secret`, `password`, and `apikey` — but it first exempts any key ending in `hash`, `hashes`, `id`, `ids`, `count`, or `status`.
+
+The last two rejections are the value-shape rule, and they fire under harmless keys. A string containing `diff --git ` or a unified-diff hunk header, or matching a bearer-token shape, is rejected regardless of where it sits.
+
+`minimizedAlternative` shows the counterpart. `diffHash`, `fileCount`, and `filePathHashes` all pass, because the exemptions are designed to let the minimized form of the same evidence through. The guard blocks raw content, not the fact that content changed.
+
+Note what is *not* guarded. The auth, organization, and data templates do not declare this policy, and neither does `episodeStartedTemplate`. Their metadata is subject only to `createAuditEvent`'s key-name redaction, which replaces matching values with `[redacted]` rather than throwing. A password blob passed to `consentGrantedTemplate` under the key `notes` will be recorded.
+
+## Failure modes
+
+The guard throws a `TypeError` before the event exists. There is no partial event and nothing reaches the hash chain, so a caught guard error is safe to convert into a request-level rejection. It is a fail-closed boundary, not a sanitizer.
+
+Beyond the guard, a template inherits every `createAuditEvent` failure: a missing `actor.id`, `actor.type`, `action`, `target.id`, or `target.type` throws, an action that is not dotted lowercase throws, and a non-finite number anywhere in metadata throws.
+
+The most common surprise is not a throw at all. A metadata key the guard does not recognize passes through untouched. `commitMessage`, `reason`, and `description` are all accepted on a code template.
+
+## What templates do not prove
+
+A template proves that one event uses the canonical action, target shape, and reserved metadata keys for its category. That is all.
+
+It does not prove the event is true, that the host recorded every event it should have, or that raw content stayed out of the fields the guard does not cover. It does not verify anything — integrity comes from the record envelope and the chain, not from the builder. And a canonical action string is a naming convention, not a legal position: Veritio supports compliance evidence and is not legal advice.
+
+## Related
+
+- [Audit events](/docs/concepts/audit-events/) — the input-to-record boundary a template feeds.
+- [Redaction](/docs/concepts/redaction/) — the key-name pass that runs after every template.
+- [Hash chain](/docs/concepts/hash-chain/) — why hash-neutrality is the meaningful parity claim.
+- [Event schema reference](/docs/reference/event-schema/) — every field a template can populate.

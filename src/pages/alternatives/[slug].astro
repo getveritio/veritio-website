@@ -45,7 +45,7 @@ const cardShadow = 'shadow-[0_1px_2px_rgba(16,35,27,0.05),0_16px_40px_-16px_rgba
 <BaseLayout title={alt.metaTitle} description={alt.metaDescription} ogImage={ogImage} ogImageAlt={ogImageAlt}>
   <Nav />
 
-  <main>
+  <main id="main-content">
     <!-- Hero: thesis left, live VS evidence card right -->
     <section class="relative overflow-hidden">
       <!-- decorative dot texture, per concept -->
@@ -62,7 +62,7 @@ const cardShadow = 'shadow-[0_1px_2px_rgba(16,35,27,0.05),0_16px_40px_-16px_rgba
 
       <div class="container relative">
         <div class="border-b border-line py-3 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-muted">
-          <a href="/alternatives" class="text-ink-muted no-underline hover:text-accent">Alternatives</a>
+          <a href="/alternatives/" class="text-ink-muted no-underline hover:text-accent">Alternatives</a>
           &nbsp;/&nbsp;{alt.name}
         </div>
 
@@ -74,7 +74,7 @@ const cardShadow = 'shadow-[0_1px_2px_rgba(16,35,27,0.05),0_16px_40px_-16px_rgba
             </h1>
             <p class="mt-6 max-w-xl text-lg leading-relaxed text-ink-soft">{alt.what}</p>
             <div class="mt-8 flex flex-wrap gap-3">
-              <a href="/cloud" class="doc-btn doc-btn--solid rounded-md">See Veritio Cloud</a>
+              <a href="/cloud/" class="doc-btn doc-btn--solid rounded-md">See Veritio Cloud</a>
               <a href={ossRepo} target="_blank" rel="noopener noreferrer" class="doc-btn rounded-md">View on GitHub ↗</a>
             </div>
             <p class="mt-7 flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.13em] text-ink-muted">
@@ -255,9 +255,9 @@ const cardShadow = 'shadow-[0_1px_2px_rgba(16,35,27,0.05),0_16px_40px_-16px_rgba
           <p class="mt-3 text-base leading-relaxed text-surface/70">{alt.closing}</p>
         </div>
         <div class="flex flex-wrap gap-3">
-          <a href="/cloud" class="doc-btn doc-btn--invert-solid rounded-md">See Veritio Cloud</a>
+          <a href="/cloud/" class="doc-btn doc-btn--invert-solid rounded-md">See Veritio Cloud</a>
           <a href={ossRepo} target="_blank" rel="noopener noreferrer" class="doc-btn doc-btn--invert rounded-md">View on GitHub ↗</a>
-          <a href="/alternatives" class="doc-btn doc-btn--invert rounded-md">More comparisons</a>
+          <a href="/alternatives/" class="doc-btn doc-btn--invert rounded-md">More comparisons</a>
         </div>
       </div>
     </section>

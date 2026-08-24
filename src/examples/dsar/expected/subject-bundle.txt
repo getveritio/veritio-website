@@ -1,0 +1,95 @@
+{
+  "requestEvent": {
+    "id": "evt_subject_request_01",
+    "schemaVersion": "2026-06-10",
+    "occurredAt": "2026-08-09T09:10:00.000Z",
+    "actor": {
+      "type": "user",
+      "id": "usr_1001"
+    },
+    "action": "data.subject.request.created",
+    "target": {
+      "type": "subject_request",
+      "id": "dsr_0007"
+    },
+    "metadata": {
+      "requestType": "access",
+      "subjectId": "dsub_1001"
+    },
+    "scope": {
+      "tenantId": "org_acme",
+      "environment": "production"
+    },
+    "purpose": "data_subject_workflow",
+    "lawfulBasis": "legal_obligation",
+    "retention": "subject_request_3y"
+  },
+  "chain": {
+    "sequences": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "subjectSequences": [
+      1,
+      3
+    ],
+    "subjectActions": [
+      "consent.granted",
+      "data.subject.request.created"
+    ]
+  },
+  "manifest": {
+    "bundleVersion": "vevb-1",
+    "createdAt": "2026-08-09T09:20:00.000Z",
+    "scope": {
+      "environment": "production",
+      "tenantId": "org_acme"
+    },
+    "range": {
+      "from": "2026-08-09T09:00:00.000Z",
+      "to": "2026-08-09T09:10:00.000Z"
+    },
+    "chainScope": "filtered",
+    "filters": {},
+    "files": [
+      {
+        "path": "records/audit-events.jsonl",
+        "records": 2
+      },
+      {
+        "path": "records/evidence-edges.jsonl",
+        "records": 0
+      },
+      {
+        "path": "records/commits.jsonl",
+        "records": 0
+      },
+      {
+        "path": "verification.json",
+        "records": 0
+      }
+    ]
+  },
+  "containerRoundTrip": true,
+  "verification": {
+    "valid": true,
+    "checks": {
+      "structure": true,
+      "integrity": true,
+      "chains": true,
+      "signature": "absent"
+    },
+    "chainScope": "filtered",
+    "issues": []
+  },
+  "sameSubsetClaimedAsFullChain": {
+    "valid": false,
+    "chains": false,
+    "chainScope": "full",
+    "issues": [
+      "record chain verification failed"
+    ]
+  }
+}

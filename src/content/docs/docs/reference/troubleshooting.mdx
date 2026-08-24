@@ -1,0 +1,177 @@
+---
+title: Troubleshooting and error reference
+description: Every fixed fail-closed message, verifier reason, and bundler trap in the Veritio SDK, with the cause behind each one and the change that clears it.
+audience: [developer, operator]
+kind: troubleshooting
+searchIntent: Look up the exact Veritio fail-closed error message or verifier reason you just hit and what fixes it.
+questions:
+  - What does "at least one governed field must change" mean?
+  - Why does Veritio throw "idempotency conflict" on a retry?
+  - Why does importing @veritio/core break my Vite browser build?
+  - What is the difference between hash_mismatch and previous_hash_mismatch?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/index.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/governed-change.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/export-bundle.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/risk-score.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/package.json
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/go/governed_change.go
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/python/src/veritio/event.py
+claimRefs: []
+---
+
+import { Code } from '@astrojs/starlight/components'
+import failClosedCatalogue from '../../../../examples/errors/expected/fail-closed-catalogue.txt?raw'
+import governedFailClosed from '../../../../examples/governed/expected/fail-closed.txt?raw'
+
+Veritio refuses inputs that would produce weaker evidence rather than accepting them and recording something unverifiable. That refusal is a thrown error or a returned error value with a fixed message string, and this page is the index of those strings. Find the message you are looking at, read what invariant it protected, and change the input rather than the guard.
+
+## Where a guard sits
+
+Every guard fires before anything durable exists. There is no partially written record, no half-built draft, no bundle on disk to clean up. The ordering is deliberate:
+
+```text
+host input
+    ↓  shape guards        actor/target/action/date present and well formed
+    ↓  value guards        every value has a canonical JSON form
+    ↓  scope guards        scope.tenantId present, non-blank
+    ↓  derivation          ids, digests, changed paths, idempotency hash
+    ↓  hashing             canonical bytes → sha256
+    ↓  append              sequence, previousHash, idempotency record
+```
+
+A guard that fires at any level aborts the whole call. Nothing below it runs. This is what makes a caught error safe to retry after correcting the input: the failed attempt consumed no sequence number and left no idempotency entry.
+
+## The verified guard catalogue
+
+The fixture below runs thirty-five bad inputs through ten public surfaces and prints the error each one raised, verbatim. It runs in CI and its output is byte-compared, so the strings on this page are the strings your application will see from `@veritio/core@0.4.7`.
+
+<Code code={failClosedCatalogue} lang="json" title="verified output — fail-closed catalogue" />
+
+Read three fields per row. `outcome` is `rejected` when the guard fired; a probe that returned normally is reported as `accepted`, not skipped, so a guard that silently stops firing shows up as a byte diff instead of disappearing. `errorName` separates `TypeError` (a malformed input for a protocol helper) from `Error` (an export-bundle declaration that contradicts itself). `allFailClosed: true` states that all thirty-five probes were rejected in this run.
+
+## Message index
+
+These are the messages most likely to reach a host application, with the invariant behind each.
+
+| Message | Raised by | Cause | Fix |
+| --- | --- | --- | --- |
+| `scope.tenantId is required` | store append, `createGovernedActionDraft`, `list` | The event or draft input carried no tenant id, or a blank/whitespace one. Tenant scope keys the sequence, the previous-hash link, and the idempotency hash, so there is nothing to append to. | Resolve the tenant at the recorder boundary and pass it in `scope`. Never default it to a placeholder. |
+| `idempotencyKey is required` | `createGovernedActionDraft` | The key was absent, empty, or whitespace. It seeds both derived ids and the tenant-scoped idempotency hash. | Derive it from the host mutation's natural key, for example `billing:plan_9001:upgrade:1`. |
+| `at least one governed field must change` | `createGovernedActionDraft` | Comparing `before` and `after` produced no changed path. A field is only compared when it is declared in the entity, its capture mode is not `omit`, and its `after` value is defined; equality is decided on canonical JSON, so `1` and `1.0` are the same value. | Either skip the draft — a no-op mutation is not governed-change evidence — or declare the change explicitly, described below. |
+| `capture mode randomized_digest is not supported by the current governed-change draft helper` | `createGovernedActionDraft` | A governed field declared a capture mode the draft helper cannot build. It supports `full`, `keyed_digest`, and `content_digest`; `omit` fields are skipped before this point. | Change the field's capture mode in `defineEntity`, or omit the field from the governed set. |
+| `metadata.changeId is reserved by Veritio` | `mergeVeritioMetadata` | Caller metadata contained one of the nine reserved context keys: `authSessionId`, `authContextId`, `activityEpisodeId`, `traceId`, `correlationId`, `causationEventId`, `changeId`, `capturePolicyId`, `collectionSource`. The SDK owns these so read models can group evidence by them. | Rename your key, or pass the value through the context argument so the SDK stamps it. |
+| `recordHash must be a sha256 digest` | `createEvidenceCommit` | A commit member's `recordHash` did not match `sha256:` followed by exactly 64 lowercase hex characters. A commit binds records by digest; a malformed digest would produce a Merkle root that binds nothing. | Copy the stored `hash` from the record verbatim. Do not strip the prefix or upper-case the hex. |
+| `member indices must be contiguous from zero` | `createEvidenceCommit` | After sorting by index, the members were not `0, 1, 2, …`. Gaps or duplicates would make the leaf ordering — and therefore the root — ambiguous. | Renumber the manifest from zero after any filtering step. |
+| `duplicate commit member` | `createEvidenceCommit` | Two members shared the same `recordType` and `recordId`. A record counted twice inflates `recordCount` and changes the root without adding evidence. | De-duplicate by `recordType` plus `recordId` before building the manifest. |
+| `export bundle: filters require chainScope 'filtered'` | `buildExportBundle` | Filters were supplied while the bundle still claimed a full or windowed chain. The manifest's scope is the claim a reader trusts, so it must match the selection that actually happened. | Set `chainScope: 'filtered'` alongside the filters, or drop the filters. |
+| `export bundle: commits are not supported in a scoped bundle` | `buildExportBundle` | Commits were supplied for a `windowed` or `filtered` bundle. A commit binds a complete set of records; a scoped bundle does not carry that set, so the commit could not be reconciled inside the bundle. | Export commits from a full-scope bundle, or remove them from the scoped one. |
+
+Two neighbouring guards complete the pair set: `export bundle: chainScope 'filtered' requires a filters declaration` is the inverse of the filters rule, and `expectedPreviousHash does not match tenant chain tip` rejects an append whose caller believed a stale tip.
+
+## Verification reasons
+
+Verification does not throw. It returns a result, and a failure carries the array index of the first offending record plus a fixed reason. Six reasons exist for record chains, from `verifyAuditRecords` and `verifyEvidenceEdgeRecords`.
+
+| Reason | What it indicates |
+| --- | --- |
+| `missing_tenant_scope` | The record has no `event.scope.tenantId` (or no `edge.scope.tenantId`). There is no chain to place it in. |
+| `unsupported_hash_algorithm` | `hashAlgorithm` is not `sha256`. The verifier will not guess an algorithm. |
+| `unsupported_canonicalization` | `canonicalization` is not `veritio-json-v1`. The bytes cannot be reproduced under a canonicalization the verifier does not implement. |
+| `sequence_mismatch` | The record's sequence is not exactly one greater than the last verified record for that tenant. A gap, a repeat, or a chain that starts above 1 — the signature of a deleted or reordered record. |
+| `previous_hash_mismatch` | The sequence was right but `previousHash` does not point at the last verified hash for that tenant. Records were substituted or spliced from another chain. |
+| `hash_mismatch` | The record's own bytes were recomputed and disagree with the stored `hash`. Content changed without the envelope being rebuilt. |
+
+Commit-ledger verification, from `verifyEvidenceCommits`, has nine reasons over per-stream chains.
+
+| Reason | What it indicates |
+| --- | --- |
+| `unsupported_hash_algorithm` | `hashAlgorithm` is not `sha256`. |
+| `unsupported_canonicalization` | `canonicalization` is not `veritio-json-v1`. |
+| `unsupported_tree_algorithm` | `treeAlgorithm` is not the pinned Merkle algorithm, so the root is not comparable. |
+| `sequence_mismatch` | The commit's sequence is not one past the last commit for that `streamId`. |
+| `previous_hash_mismatch` | `previousCommitHash` does not point at the previous commit for that stream. The first commit in a stream must carry `null`. |
+| `invalid_member_manifest` | The member list failed normalization — empty, non-contiguous indices, a duplicate member, an unknown `recordType`, a malformed `recordHash` — or `streamId` is missing or empty. Untrusted JSON reaches this guard even when the compile-time type says it cannot. |
+| `record_count_mismatch` | `recordCount` disagrees with the number of normalized members. |
+| `records_root_mismatch` | The Merkle root recomputed from the members disagrees with the stored `recordsRoot`. The member set changed after the commit was built. |
+| `hash_mismatch` | The commit hash recomputed from its canonical fields disagrees with the stored `hash`, or `hash` is not a string. |
+
+Commit verification proves the ledger's internal consistency only. It does not reconcile each `member.recordHash` against an independently verified record, so a fabricated commit chain over fabricated digests verifies `ok` in isolation. Per-record integrity comes from `verifyAuditRecords` and `verifyEvidenceEdgeRecords`; compose both.
+
+## The idempotency-conflict trap
+
+`idempotency conflict` is the guard most often mistaken for a bug. The store keys a replay on `sha256(tenantId + NUL + idempotencyKey)` and stores the canonical JSON of the event it accepted under that key. A second append with the same key compares canonical bytes: identical bytes return the original record, different bytes throw.
+
+The trap is a session or request context that widens mid-stream while the key stays put.
+
+```text
+attempt 1   key "invite:inv_123"   event { …, metadata: { role: "viewer" } }
+                                   → stored, sequence 4
+
+attempt 2   key "invite:inv_123"   event { …, metadata: { role: "viewer",
+                                                          sessionId: "ses_9" } }
+                                   → same key, different canonical bytes
+                                   → TypeError: idempotency conflict
+```
+
+Anything that changes the canonical bytes triggers it: an added metadata key, a re-resolved `occurredAt`, a normalized actor id, a recorder that started stamping a session or episode id partway through a retry loop. None of those are "the same event" as far as the chain is concerned, and accepting the second one would let a retry silently rewrite recorded evidence.
+
+Note the asymmetry with tenant scope. Because the tenant id is mixed into the key hash, re-scoping to a *different* tenant does not conflict — it lands in that tenant's chain as a fresh append. Re-scoping within one tenant, or changing anything else about the event, does conflict. If a retry legitimately carries new information, give it a new idempotency key and record it as its own event.
+
+## The no-op governed update
+
+`at least one governed field must change` is deliberate: the draft helper will not manufacture a revision for a mutation that changed nothing it governs. The escape hatch is to declare the paths yourself. `createGovernedActionDraft` accepts an optional `changedPaths`, and when it is supplied the helper skips inference entirely.
+
+```ts
+createGovernedActionDraft({
+  // …
+  before: row,
+  after: row,
+  changedPaths: ['/planTier'],
+})
+```
+
+Use this when the change is real but invisible to the diff — a value the entity captures as `omit`, a re-affirmation the host must record, a governed field written outside the row you handed in. Do not use it to silence the guard on a genuine no-op: you would be asserting a change that did not happen, and the resulting revision is evidence of that assertion. Explicit paths are sorted and carried onto the revision unchanged; an empty array still fails the guard.
+
+The governed guard set has its own checked fixture:
+
+<Code code={governedFailClosed} lang="json" title="verified output — governed-change guards" />
+
+## Vite, browsers, and node:crypto
+
+Importing the `@veritio/core` root barrel in browser or edge code fails the bundle. The barrel reaches hashing and id generation, which import `node:crypto`, and Vite has no browser shim for it. The failure surfaces at build time as an unresolved `node:crypto`, or at runtime as a missing `createHash`.
+
+The risk math is published separately for exactly this reason. It is crypto-free by construction — clamp, floor, divide, multiply only, no dependency on the core barrel — so it bundles for the browser unchanged:
+
+```ts
+// breaks a browser bundle: drags in node:crypto
+import { scoreRiskSignals } from '@veritio/core'
+
+// safe in a browser bundle: pure protocol math
+import { scoreRiskSignals } from '@veritio/core/risk-score'
+```
+
+Everything that hashes — record creation, appends, commits, governed drafts, assertion builders, export bundles — stays server-side. That is not only a bundling constraint. Browser-visible code must never hold storage credentials or digest keys, so the append boundary belongs on the server regardless of what your bundler could resolve.
+
+## Failure shape differs by language
+
+The guards are protocol behavior; their surface is not. Port the *decision* across languages, not the string.
+
+- **TypeScript** throws. Most guards throw `TypeError`; the export-bundle declaration guards throw `Error`. The `errorName` column in the catalogue above is the authoritative split.
+- **Python** raises. Shape guards raise `TypeError`; canonical JSON raises `ValueError` for a non-finite number, with different wording from the TypeScript equivalent. Same rejection, different text and class.
+- **Go** returns. Helpers return `(T, error)` — `errors.New("idempotencyKey is required")`, `fmt.Errorf("capture mode %s is not supported by the current governed-change draft helper", …)`. A discarded error leaves a zero-value struct that looks like a draft and is not one. Check every returned error; there is nothing to catch.
+
+Chain verification also differs in coverage today. All three SDKs verify commit ledgers and return a result value rather than raising. Record-chain verification — `verifyAuditRecords` and `verifyEvidenceEdgeRecords` — is TypeScript-only at 0.4.7. If your verification runs in Python or Go, verify records with the TypeScript verifier or an independent implementation of the documented rules.
+
+## What a caught error does not prove
+
+A fired guard proves one thing: that one input was rejected before it became evidence. It says nothing about the rest of your system.
+
+- It does not prove your existing chain is intact. Guards validate inputs; only verification inspects stored records.
+- It does not prove your host emits every event it should. Nothing in the SDK can observe a mutation that never called it.
+- `allFailClosed: true` in the fixture proves these thirty-five probes were rejected at this version. It does not enumerate every malformed input, and a guard is not a substitute for validating host data at your own boundary.
+- Message strings are documentation, not a stable API. They have changed between versions and can change again. Branch on the call site and the input you supplied, not on `error.message`.
+
+Continue with the [verifier reference](/docs/reference/verifier/) for the full verification report shape, the [hash chain](/docs/concepts/hash-chain/) for what each mismatch reason implies about stored bytes, or [governed actions](/docs/guides/governed-actions/) for the mutation boundary most of these guards protect.

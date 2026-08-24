@@ -1,0 +1,36 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro'
+import Nav from '../components/Nav.astro'
+import Footer from '../components/Footer.astro'
+
+const stack = [
+  ['Protocol', 'Language-neutral schemas, canonical JSON, hashing, evidence edges, and export bundle format.'],
+  ['SDKs', 'TypeScript, Python, and Go implementations checked against shared conformance fixtures.'],
+  ['Adapters', 'Thin host boundaries for Next.js, Better Auth, agent tools, and other frameworks without owning event semantics.'],
+  ['Storage', 'Conformance-tested authoritative stores plus explicitly derived archive and read-model helpers.'],
+  ['Verifier', 'Re-runnable chain and export verification that does not require a hosted account.'],
+  ['Workbench', 'Source-backed local CLI and MCP development loop with write tools disabled by default.'],
+]
+---
+
+<BaseLayout title="Veritio open source — Protocol, SDKs, storage, and verifier" description="Explore the Apache-2.0 Veritio protocol, TypeScript, Python, and Go SDKs, storage conformance, adapters, verifier, and examples." claimRefs={['cloud-managed-path']}>
+  <Nav />
+  <main id="main-content">
+    <section class="container py-16 sm:py-24">
+      <span class="eyebrow">Open source · Apache-2.0</span>
+      <h1 class="mt-5 max-w-[14ch] text-[clamp(48px,7vw,92px)] font-medium leading-[0.98] tracking-[-0.02em]">The evidence contract is yours to inspect.</h1>
+      <p class="mt-8 max-w-3xl text-xl leading-relaxed text-ink-soft">Veritio’s event schemas, canonical bytes, hashing rules, SDKs, storage contracts, examples, and verifier live in public. Use them locally, self-host the operating boundary, and verify exports without asking a hosted service for permission.</p>
+      <div class="mt-9 flex flex-wrap gap-3"><a class="doc-btn doc-btn--solid" href="https://github.com/getveritio/veritio" target="_blank" rel="noopener noreferrer">View repository ↗</a><a class="doc-btn" href="/docs/">Read the docs</a></div>
+    </section>
+
+    <section class="border-y border-line-strong bg-surface-raised"><div class="container grid sm:grid-cols-2 lg:grid-cols-3">
+      {stack.map(([title, body], index) => <article class="border-b border-line p-8 sm:border-r lg:p-10"><span class="font-mono text-xs text-accent">0{index + 1}</span><h2 class="mt-5 text-3xl font-medium">{title}</h2><p class="mt-4 leading-relaxed text-ink-soft">{body}</p></article>)}
+    </div></section>
+
+    <section class="container grid gap-12 py-16 sm:py-24 lg:grid-cols-[0.8fr_1.2fr]">
+      <div><span class="eyebrow">Hard boundary</span><h2 class="mt-4 text-4xl font-medium">Open source stays complete on its own.</h2></div>
+      <div class="space-y-6 text-lg leading-relaxed text-ink-soft"><p>No hosted project ID, hosted API key, billing account, proprietary storage, or region selection is required to create and verify OSS records.</p><p>Cloud adds managed infrastructure and product surfaces. It does not redefine event fields, hash behavior, redaction, or the export format.</p><p>Veritio supports evidence workflows. It is not legal advice and does not make an application automatically compliant with a framework.</p></div>
+    </section>
+  </main>
+  <Footer />
+</BaseLayout>

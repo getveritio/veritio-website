@@ -1,0 +1,1 @@
+{'eventId': 'evt_member_invited_01', 'hashPrefix': '3c1eb99f7a8f'}

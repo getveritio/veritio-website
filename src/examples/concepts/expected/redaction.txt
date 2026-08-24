@@ -1,0 +1,180 @@
+{
+  "sensitiveKeyFamilies": [
+    "password",
+    "secret",
+    "token",
+    "apiKey / api_key / api-key",
+    "authorization",
+    "email",
+    "phone",
+    "ssn"
+  ],
+  "matching": {
+    "note": "Case-insensitive SUBSTRING match on the KEY NAME only. The value is never inspected.",
+    "redactionMarker": "[redacted]"
+  },
+  "keyOutcomes": {
+    "AUTHORIZATION": "redacted",
+    "accessToken": "redacted",
+    "activityEpisodeId": "preserved",
+    "amountCents": "preserved",
+    "apiKey": "redacted",
+    "apiKeys": "redacted",
+    "api_key": "redacted",
+    "billingEmailCommitment": "preserved",
+    "clientSecret": "redacted",
+    "contactEmailCommitment": "rewritten",
+    "currency": "preserved",
+    "customerEmail": "redacted",
+    "dunningStage": "preserved",
+    "invoiceNumber": "preserved",
+    "password": "redacted",
+    "phoneNumber": "redacted",
+    "recipients": "rewritten",
+    "request": "rewritten",
+    "seatCount": "preserved",
+    "secretRotation": "redacted",
+    "sessionId": "preserved",
+    "ssn": "redacted",
+    "tokenizerVersion": "redacted",
+    "x-api-key": "redacted"
+  },
+  "beforeMetadata": {
+    "password": "hunter2",
+    "clientSecret": "sk_live_NOT_A_REAL_KEY_0000000000",
+    "accessToken": "sk_live_NOT_A_REAL_KEY_0000000000",
+    "apiKey": "sk_live_NOT_A_REAL_KEY_0000000000",
+    "api_key": "sk_live_NOT_A_REAL_KEY_0000000000",
+    "x-api-key": "sk_live_NOT_A_REAL_KEY_0000000000",
+    "AUTHORIZATION": "Bearer abcdef",
+    "customerEmail": "billing@acme.example",
+    "phoneNumber": "+1-555-0100",
+    "ssn": "000-00-0000",
+    "tokenizerVersion": "3",
+    "secretRotation": {
+      "previousKeyId": "key_a",
+      "rotatedAtSequence": 41
+    },
+    "apiKeys": [
+      "primary",
+      "standby"
+    ],
+    "request": {
+      "method": "POST",
+      "route": "/v1/invoices",
+      "headers": {
+        "authorization": "Bearer abcdef",
+        "content-type": "application/json"
+      }
+    },
+    "recipients": [
+      {
+        "id": "usr_owner",
+        "email": "owner@acme.example"
+      }
+    ],
+    "billingEmailCommitment": {
+      "algorithm": "sha256",
+      "digest": "sha256:3f79bb7b435b05321651daefd374cdc681dc06faa65e374e38337b88ca046dea"
+    },
+    "contactEmailCommitment": {
+      "algorithm": "sha256",
+      "digest": "sha256:3f79bb7b435b05321651daefd374cdc681dc06faa65e374e38337b88ca046dea",
+      "value": "contact@acme.example"
+    },
+    "invoiceNumber": "INV-4821",
+    "currency": "EUR",
+    "amountCents": 129900,
+    "seatCount": 25,
+    "dunningStage": null,
+    "sessionId": "ses_7c2a",
+    "activityEpisodeId": "aep_7c2a"
+  },
+  "afterMetadata": {
+    "AUTHORIZATION": "[redacted]",
+    "accessToken": "[redacted]",
+    "activityEpisodeId": "aep_7c2a",
+    "amountCents": 129900,
+    "apiKey": "[redacted]",
+    "apiKeys": "[redacted]",
+    "api_key": "[redacted]",
+    "billingEmailCommitment": {
+      "algorithm": "sha256",
+      "digest": "sha256:3f79bb7b435b05321651daefd374cdc681dc06faa65e374e38337b88ca046dea"
+    },
+    "clientSecret": "[redacted]",
+    "contactEmailCommitment": {
+      "algorithm": "sha256",
+      "digest": "sha256:3f79bb7b435b05321651daefd374cdc681dc06faa65e374e38337b88ca046dea"
+    },
+    "currency": "EUR",
+    "customerEmail": "[redacted]",
+    "dunningStage": null,
+    "invoiceNumber": "INV-4821",
+    "password": "[redacted]",
+    "phoneNumber": "[redacted]",
+    "recipients": [
+      {
+        "email": "[redacted]",
+        "id": "usr_owner"
+      }
+    ],
+    "request": {
+      "headers": {
+        "authorization": "[redacted]",
+        "content-type": "application/json"
+      },
+      "method": "POST",
+      "route": "/v1/invoices"
+    },
+    "seatCount": 25,
+    "secretRotation": "[redacted]",
+    "sessionId": "ses_7c2a",
+    "ssn": "[redacted]",
+    "tokenizerVersion": "[redacted]",
+    "x-api-key": "[redacted]"
+  },
+  "subtreeReplacement": {
+    "note": "A sensitive key replaces its whole subtree, so nested objects and arrays cannot leak a value through a sensitive parent.",
+    "secretRotation": "[redacted]",
+    "apiKeys": "[redacted]"
+  },
+  "recursion": {
+    "note": "Nested objects are walked, so a sensitive key is caught at any depth. Object keys are also sorted into canonical order.",
+    "requestHeaders": {
+      "authorization": "[redacted]",
+      "content-type": "application/json"
+    },
+    "recipients": [
+      {
+        "email": "[redacted]",
+        "id": "usr_owner"
+      }
+    ]
+  },
+  "digestEnvelopeCarveOut": {
+    "note": "Only a minimized { algorithm, digest } envelope survives a sensitive key, keeping governed field commitments usable. Any sibling raw value inside the envelope is stripped.",
+    "billingEmailCommitment": {
+      "algorithm": "sha256",
+      "digest": "sha256:3f79bb7b435b05321651daefd374cdc681dc06faa65e374e38337b88ca046dea"
+    },
+    "contactEmailCommitment": {
+      "algorithm": "sha256",
+      "digest": "sha256:3f79bb7b435b05321651daefd374cdc681dc06faa65e374e38337b88ca046dea"
+    },
+    "rawSiblingStripped": true
+  },
+  "determinism": {
+    "canonicalJsonIdentical": true,
+    "hashIdentical": true,
+    "eventHash": "aadedb14575e3550f828905d2998e0f8c03892e2199056a39100eba7cbd35948"
+  },
+  "secretNeverReachesTheHash": {
+    "note": "Redaction runs inside createAuditEvent, before canonical JSON and before hashing, so the raw value is absent from the hashed bytes and cannot move the hash.",
+    "rawSecretInCanonicalBytes": false,
+    "realSecretHash": "7f0059c881f0f1a61de2f610cad024ac41e755949a8bfe6af7932982595987b1",
+    "differentSecretHash": "7f0059c881f0f1a61de2f610cad024ac41e755949a8bfe6af7932982595987b1",
+    "preRedactedHash": "7f0059c881f0f1a61de2f610cad024ac41e755949a8bfe6af7932982595987b1",
+    "hashUnchangedByTheSecretValue": true
+  }
+}

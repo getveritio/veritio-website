@@ -1,0 +1,152 @@
+{
+  "signals": {
+    "operationType": "update",
+    "reversibility": "irreversible",
+    "envCriticality": "production",
+    "dataVolume": 120,
+    "fanOut": 5,
+    "referenceCount": 8
+  },
+  "profiles": [
+    {
+      "temperature": 0,
+      "policyVersion": "veritio.reference.v1+temp0.00",
+      "bands": {
+        "low": 0.1,
+        "medium": 0.35,
+        "high": 0.6,
+        "critical": 0.85
+      },
+      "rollup": {
+        "windowSeconds": 60,
+        "decayPerWindow": 0.3,
+        "velocityNormalizer": 4,
+        "frequencyRuleCount": 0
+      },
+      "scaledMultipliers": {
+        "magnitudeMaxBoost": 0.25,
+        "irreversibleFactor": 1.15,
+        "productionFactor": 0.9
+      },
+      "fixedSignalScore": {
+        "score": 0.4012,
+        "level": "medium"
+      }
+    },
+    {
+      "temperature": 0.2,
+      "policyVersion": "veritio.reference.v1+temp0.20",
+      "bands": {
+        "low": 0.08,
+        "medium": 0.31,
+        "high": 0.56,
+        "critical": 0.81
+      },
+      "rollup": {
+        "windowSeconds": 60,
+        "decayPerWindow": 0.38,
+        "velocityNormalizer": 3.6,
+        "frequencyRuleCount": 0
+      },
+      "scaledMultipliers": {
+        "magnitudeMaxBoost": 0.31,
+        "irreversibleFactor": 1.21,
+        "productionFactor": 0.94
+      },
+      "fixedSignalScore": {
+        "score": 0.4647,
+        "level": "medium"
+      }
+    },
+    {
+      "temperature": 0.5,
+      "policyVersion": "veritio.reference.v1+temp0.50",
+      "bands": {
+        "low": 0.05,
+        "medium": 0.25,
+        "high": 0.5,
+        "critical": 0.75
+      },
+      "rollup": {
+        "windowSeconds": 60,
+        "decayPerWindow": 0.5,
+        "velocityNormalizer": 3,
+        "frequencyRuleCount": 0
+      },
+      "scaledMultipliers": {
+        "magnitudeMaxBoost": 0.4,
+        "irreversibleFactor": 1.3,
+        "productionFactor": 1
+      },
+      "fixedSignalScore": {
+        "score": 0.5721,
+        "level": "high"
+      }
+    },
+    {
+      "temperature": 0.8,
+      "policyVersion": "veritio.reference.v1+temp0.80",
+      "bands": {
+        "low": 0.032,
+        "medium": 0.208,
+        "high": 0.44,
+        "critical": 0.69
+      },
+      "rollup": {
+        "windowSeconds": 60,
+        "decayPerWindow": 0.62,
+        "velocityNormalizer": 2.4,
+        "frequencyRuleCount": 0
+      },
+      "scaledMultipliers": {
+        "magnitudeMaxBoost": 0.52,
+        "irreversibleFactor": 1.48,
+        "productionFactor": 1.12
+      },
+      "fixedSignalScore": {
+        "score": 0.7991,
+        "level": "critical"
+      }
+    },
+    {
+      "temperature": 1,
+      "policyVersion": "veritio.reference.v1+temp1.00",
+      "bands": {
+        "low": 0.02,
+        "medium": 0.18,
+        "high": 0.4,
+        "critical": 0.65
+      },
+      "rollup": {
+        "windowSeconds": 60,
+        "decayPerWindow": 0.7,
+        "velocityNormalizer": 2,
+        "frequencyRuleCount": 0
+      },
+      "scaledMultipliers": {
+        "magnitudeMaxBoost": 0.6,
+        "irreversibleFactor": 1.6,
+        "productionFactor": 1.2
+      },
+      "fixedSignalScore": {
+        "score": 0.9796,
+        "level": "critical"
+      }
+    }
+  ],
+  "referenceInvariant": {
+    "defaultPolicyVersion": "veritio.reference.v1",
+    "derivedPolicyVersion": "veritio.reference.v1+temp0.50",
+    "constantsMatchDefault": true
+  },
+  "rejections": [
+    {
+      "temperature": 0.005,
+      "error": "temperature must be a multiple of 0.01"
+    },
+    {
+      "temperature": 1.5,
+      "error": "temperature must be a finite number in [0,1]"
+    }
+  ]
+}

@@ -1,0 +1,176 @@
+---
+title: Template catalogue
+description: Every audit template builder in @veritio/core mapped to the action string, target type, and default purpose, lawful basis, and retention it emits.
+audience: [developer, governance]
+kind: reference
+searchIntent: Map each Veritio audit template builder to the canonical action string and evidence defaults it emits.
+questions:
+  - What action string does auditTemplates.code.deploymentCreated emit?
+  - Which audit template defaults to the consent_7y retention class?
+  - Why is activity.episode.started missing from auditTemplateSets?
+  - Do the TypeScript, Python, and Go audit template registries match?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/templates.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/python/src/veritio/templates.py
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/go/templates.go
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/event.schema.json
+claimRefs: []
+---
+
+import { Code } from '@astrojs/starlight/components'
+import catalogueOutput from '../../../../examples/templates/expected/action-catalogue.txt?raw'
+
+A host that writes its own action strings will eventually write two spellings of the same thing. The audit templates exist to prevent that: each builder owns one canonical action string, one target resource type, and a set of evidence defaults. This page is the mapping, produced from a fixture that calls every builder in the published package.
+
+## Templates are pure builders
+
+A template takes host inputs and returns an `AuditEventInput`. It does not hash, sequence, store, or redact. Those happen later, when the recorder turns the input into a record.
+
+```text
+host inputs
+     ↓ auditTemplates.<set>.<builder>
+AuditEventInput  { actor, action, target, purpose, lawfulBasis, retention, metadata }
+     ↓ createAuditEvent      (id, occurredAt, scope validation, redaction)
+     ↓ AuditStore.append     (sequence, previousHash, hash)
+record
+```
+
+Because templates are pure, the catalogue below can be generated without a store, a clock, or a tenant. That is also why a template cannot fail closed on a missing tenant: scope validation belongs to `createAuditEvent`, not to the builder.
+
+Every field a template sets is a default, not a lock — but the two halves of the event resolve in opposite directions, and mixing them up is the most common source of surprise.
+
+```text
+evidence fields                     metadata
+purpose, lawfulBasis,               caller keys
+dataCategories, retention                ↓  merged first
+        ↑                           template-reserved keys
+caller value wins                        ↓  merged last
+        ↓                           activityEpisodeId, riskSignals
+template default fills the gap           ↓  stamped last of all
+```
+
+`buildTemplate` resolves `purpose`, `lawfulBasis`, `dataCategories`, and `retention` as caller value first, template value second: you can always override an evidence classification. Metadata goes the other way. Template-reserved keys such as `sessionId`, `proposalId`, and `subjectId` are merged after caller metadata, and `activityEpisodeId` plus normalized `riskSignals` are stamped after that. A caller cannot shadow the grouping keys read models join on. That asymmetry is intentional: classification is a host policy decision, identity and grouping are not.
+
+Only fields the caller actually supplies appear on the event. A template never emits a present-but-null field, so absent optional metadata leaves no key behind — which matters because the canonical bytes, and therefore the record hash, differ between an omitted key and a key set to `null`.
+
+## The catalogue
+
+Twenty-six builders ship in `@veritio/core@0.4.7`. Twenty-five are reachable through the `auditTemplates` registry and advertised by `auditTemplateSets`. One is not; it is listed last and explained below.
+
+| Builder | Action | Target type | Purpose | Lawful basis | Retention | Required inputs |
+| --- | --- | --- | --- | --- | --- | --- |
+| `auditTemplates.auth.userCreated` | `auth.user.created` | `user` | `access_management` | `contract` | `security_1y` | `userId` |
+| `auditTemplates.auth.signedIn` | `auth.session.created` | `session` | `access_management` | `contract` | `security_1y` | `userId`, `sessionId` |
+| `auditTemplates.auth.signedOut` | `auth.session.revoked` | `session` | `access_management` | `contract` | `security_1y` | `userId`, `sessionId` |
+| `auditTemplates.auth.passwordResetRequested` | `auth.password.reset.requested` | `password_reset_request` | `access_management` | `contract` | `security_1y` | `userId`, `resetRequestId` |
+| `auditTemplates.organization.created` | `org.created` | `organization` | `access_management` | `contract` | `security_1y` | `organizationId`, `actor` |
+| `auditTemplates.organization.memberInvited` | `org.member.invited` | `organization_invitation` | `access_management` | `contract` | `security_1y` | `organizationId`, `invitationId`, `inviter` |
+| `auditTemplates.organization.memberJoined` | `org.member.joined` | `organization_member` | `access_management` | `contract` | `security_1y` | `organizationId`, `memberId`, `actor` |
+| `auditTemplates.organization.memberRemoved` | `org.member.removed` | `organization_member` | `access_management` | `contract` | `security_1y` | `organizationId`, `memberId`, `actor` |
+| `auditTemplates.organization.memberRoleChanged` | `org.member.role.changed` | `organization_member` | `access_management` | `contract` | `security_1y` | `organizationId`, `memberId`, `actor` |
+| `auditTemplates.data.consentGranted` | `consent.granted` | `consent` | `consent_management` | `consent` | `consent_7y` | `actor`, `consentId` |
+| `auditTemplates.data.consentRevoked` | `consent.revoked` | `consent` | `consent_management` | `consent` | `consent_7y` | `actor`, `consentId` |
+| `auditTemplates.data.subjectRequestCreated` | `data.subject.request.created` | `subject_request` | `data_subject_workflow` | `legal_obligation` | `subject_request_3y` | `actor`, `subjectRequestId`, `requestType` |
+| `auditTemplates.data.exportBundleCreated` | `export.bundle.created` | `export_bundle` | `data_subject_workflow` | `legal_obligation` | `export_1y` | `actor`, `exportBundleId` |
+| `auditTemplates.data.retentionPolicyApplied` | `retention.policy.applied` | `policy` | `retention_management` | `legal_obligation` | `retention_audit_7y` | `actor`, `policyId` |
+| `auditTemplates.agent.sessionStarted` | `agent.session.started` | `agent_session` | `change_provenance` | — | `security_1y` | `sessionId`, `agentActor` |
+| `auditTemplates.agent.promptRecorded` | `agent.prompt.recorded` | `agent_session` | `change_provenance` | — | `security_1y` | `sessionId`, `promptHash`, `agentActor` |
+| `auditTemplates.agent.toolCalled` | `agent.tool.called` | `tool_call` | `change_provenance` | — | `security_1y` | `sessionId`, `toolCallId`, `tool`, `status`, `agentActor` |
+| `auditTemplates.code.changeProposalCreated` | `change.proposal.created` | `change_proposal` | `change_provenance` | — | `security_1y` | `proposalId`, `actor` |
+| `auditTemplates.code.filesChanged` | `change.files.changed` | `source_tree` | `change_provenance` | — | `security_1y` | `sourceTreeId`, `actor` |
+| `auditTemplates.code.reviewApprovalRecorded` | `review.approval.recorded` | `pull_request` | `change_provenance` | — | `security_1y` | `pullRequestId`, `reviewer` |
+| `auditTemplates.code.reviewFindingCreated` | `review.finding.created` | `pull_request` | `change_provenance` | — | `security_1y` | `pullRequestId`, `reviewer` |
+| `auditTemplates.code.reviewWaiverRecorded` | `review.waiver.recorded` | `pull_request` | `change_provenance` | — | `security_1y` | `pullRequestId`, `reviewer` |
+| `auditTemplates.code.ciJobCompleted` | `ci.job.completed` | `ci_run` | `change_provenance` | — | `security_1y` | `ciRunId`, `service`, `status` |
+| `auditTemplates.code.deploymentCreated` | `deploy.deployed` | `deployment` | `change_provenance` | — | `security_1y` | `deploymentId`, `service` |
+| `auditTemplates.code.runtimeObserved` | `audit.runtime.observed` | `runtime_event` | `runtime_observation` | — | `security_1y` | `runtimeEventId`, `actor` |
+| `episodeStartedTemplate` (unregistered) | `activity.episode.started` | `activity_episode` | `change_provenance` | — | `security_1y` | `activityEpisodeId`, `actor` |
+
+A dash in the lawful-basis column means the template sets no `lawfulBasis` at all. The field is then absent from the built event, not present-and-empty. That is deliberate for provenance and agent events: the SDK will not guess a basis on the host's behalf. Supplying `lawfulBasis` as a caller input adds it.
+
+### Builder names do not predict action strings
+
+Six builders in the table emit an action you would not derive from the method name. Treat the action column as authoritative and never reconstruct one from a camel-case identifier.
+
+```text
+auditTemplates.code.deploymentCreated  →  deploy.deployed
+auditTemplates.code.runtimeObserved    →  audit.runtime.observed
+auditTemplates.auth.signedIn           →  auth.session.created
+auditTemplates.auth.signedOut          →  auth.session.revoked
+auditTemplates.organization.created    →  org.created          (not organization.created)
+auditTemplates.data.subjectRequestCreated → data.subject.request.created
+```
+
+The organization set is the sharpest trap. Its registry key is `organization`, its input fields are `organizationId` and `organizationDisplay`, and its actions are all short `org.*` strings. A host filter written against `organization.member.joined` matches nothing.
+
+### One purpose default breaks the pattern
+
+Seven of the eight `code` builders default `purpose` to `change_provenance`. `runtimeObservedTemplate` defaults to `runtime_observation` instead, because a production observation is not evidence about who changed the software. It is the only builder in any set that uses that purpose. If you group evidence by purpose to answer "what did this release change", `runtime_observation` rows are outside that answer by design.
+
+## Verified catalogue output
+
+The fixture below calls all twenty-five registered builders plus `episodeStartedTemplate` with pinned ids, a pinned timestamp, and a pinned scope, then flattens each result to the row shape used in the table. It runs in CI and its output is byte-compared.
+
+<Code code={catalogueOutput} lang="json" title="verified catalogue output" />
+
+Read the output in three parts.
+
+`auditTemplateSets` is the vocabulary the package advertises. It is exported data, not derived from the builders, which is exactly why it can drift from them.
+
+`catalogue[].coverage` is the invariant check. `declaredCount` and `builderCount` must agree, `emittedMatchesDeclared` compares the ordered list of actions the builders actually returned against the ordered list the set declares, and `duplicateActions` catches two builders claiming the same action. All five sets report `emittedMatchesDeclared: true` and `duplicateActions: false`. `totals.everySetFullyCovered: true` is the roll-up. That is the useful result: in this version, no advertised action is unimplemented and no builder emits an action outside its set.
+
+`unregisteredBuilders` is the gap. It holds exactly one row.
+
+## The builder that no set advertises
+
+`totals` reports 25 declared actions, 25 registered builders, and 1 unregistered builder. The unregistered one is `activity.episode.started`.
+
+It is a first-class, documented, exported builder in all three SDKs. It is absent from every `auditTemplateSets` list in all three SDKs. So a host that validates its outbound actions against `auditTemplateSets` — the obvious thing to do with an exported vocabulary — will reject an action its own SDK emits.
+
+The three SDKs also do not agree on what the builder is called, or on whether it is reachable from a grouped registry.
+
+| SDK | Builder name | In the grouped registry? | In the advertised set? |
+| --- | --- | --- | --- |
+| TypeScript | `episodeStartedTemplate` | No — top-level export only | No |
+| Python | `activity_episode_started_template` | Yes — `audit_templates["agent"]["episode_started"]` | No |
+| Go | `EpisodeStartedTemplate` | Go ships no grouped registry | No |
+
+Python's `agent` registry group therefore holds four builders while `audit_template_sets["agent"]` declares three actions. TypeScript's `agent` group holds three and matches. Go has `AuditTemplateSets` but no `AuditTemplates` equivalent, so Go callers must reference the exported functions directly and get no set-to-builder mapping at all.
+
+The practical consequence: `auditTemplateSets` is a floor, not a closed vocabulary. Validate against it plus `activity.episode.started`, or validate against the schema's action pattern instead.
+
+## When a template is the wrong tool
+
+Templates cover lifecycle events with a stable, single target: an account, a session, a consent, a deployment. Three situations fall outside that shape.
+
+A **governed create/update/delete** on host domain data needs changed-path derivation, a tenant-scoped idempotency hash, and revision evidence. [`createGovernedActionDraft`](/docs/guides/governed-actions/) produces those; no template does. Reaching for `auditTemplates.code.changeProposalCreated` to record a row edit produces an event that looks right and carries none of the diff evidence.
+
+An **event with no canonical action here** should use a host-defined action through `createAuditEvent` directly. Do not repurpose the closest template — an `org.member.role.changed` event that actually records a billing plan change is worse than an honest custom action, because it silently poisons every filter and export built on the canonical vocabulary.
+
+**High-volume request logging** is out of scope for all of them. These builders are for events a reviewer would want to see individually, and each one costs a sequence number in the tenant chain.
+
+## Failure modes
+
+**Raw content in agent and code metadata.** Every `agent.*` and `code.*` builder runs its caller metadata through a raw-content guard before building. Key names ending in `prompt`, `diff`, `patch`, `path`, `stdout`, `stderr`, `output`, `args`, `log`, `token`, `secret`, `password`, or `apikey` throw. So do string values containing a `diff --git` line, a `@@ -1,2 +1,2 @@` hunk header, or a `Bearer` token shape. Keys ending in `hash`, `hashes`, `id`, `ids`, `count`, or `status` are explicitly allowed — that is the intended shape of the metadata these templates want.
+
+This is a throw, not a redaction. The event is never built.
+
+**The guard is not applied consistently to the episode builder.** Go's `EpisodeStartedTemplate` passes `blockRawContent: true`. TypeScript's `episodeStartedTemplate` and Python's `activity_episode_started_template` do not. Metadata that throws in Go is accepted in TypeScript and Python, where it then falls back to key-name redaction in `createAuditEvent`. Do not rely on the template guard as your only minimization step.
+
+**Scope.** `organizationCreatedTemplate` and the three member builders default `scope` to `{ tenantId: organizationId }` when the caller omits it. No other builder defaults scope. Omit scope elsewhere and the missing tenant surfaces later, at event creation.
+
+**Role normalization.** Passing `role` as an array deduplicates and sorts it before it reaches metadata, so `['admin','viewer']` and `['viewer','admin','viewer']` produce identical bytes and identical hashes. Passing a whitespace-only string drops the key entirely.
+
+## What this does not prove
+
+The verified output covers the **TypeScript** package only. There is no fixture under `spec/conformance` pinning template output across languages — the conformance suite covers canonical JSON, hashing, redaction, risk scoring, governed-action drafts, and export bundles, but not templates. Python and Go template output is not byte-compared against TypeScript by any check in the repository. The action strings and defaults in the table match across the three files as read at the pinned revision; nothing enforces that they stay matched.
+
+`everySetFullyCovered: true` proves the registry is internally consistent. It does not prove the vocabulary is complete, correct for your domain, or stable across versions.
+
+The action vocabulary is not enforced by the protocol. `spec/event.schema.json` accepts any dotted action string, so a typo'd custom action is a valid event. Templates are a convention that keeps hosts on one spelling; they are not a validator.
+
+Finally, `retention: 'consent_7y'` is a named policy label carried on the event. It records which retention class the host assigned. It does not delete anything, and it does not establish that the assignment is the right one — enforcement lives in your storage and retention jobs. These builders produce compliance evidence; they are not legal advice and do not establish that any regulatory obligation has been met.
+
+Continue with [Audit templates](/docs/guides/audit-templates/) for how to call these builders in a host boundary, [Event schema](/docs/reference/event-schema/) for the fields a template fills in, and [Retention](/docs/concepts/retention/) for what the retention labels above are supposed to drive.

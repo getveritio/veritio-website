@@ -1,0 +1,54 @@
+{
+  "rejections": [
+    {
+      "attempt": "'diff' metadata key on change.proposal.created",
+      "rule": "blocked-key",
+      "outcome": "rejected",
+      "errorName": "TypeError",
+      "message": "metadata.diff is not allowed in agent/code audit template metadata"
+    },
+    {
+      "attempt": "'filePath' metadata key on change.files.changed",
+      "rule": "blocked-key",
+      "outcome": "rejected",
+      "errorName": "TypeError",
+      "message": "metadata.filePath is not allowed in agent/code audit template metadata"
+    },
+    {
+      "attempt": "nested 'stdout' blob on agent.tool.called",
+      "rule": "blocked-key",
+      "outcome": "rejected",
+      "errorName": "TypeError",
+      "message": "metadata.result.stdout is not allowed in agent/code audit template metadata"
+    },
+    {
+      "attempt": "git-diff-shaped value under innocuous key 'summary'",
+      "rule": "blocked-value-shape",
+      "outcome": "rejected",
+      "errorName": "TypeError",
+      "message": "metadata.summary looks like raw content or credential material"
+    },
+    {
+      "attempt": "bearer-token-shaped value under innocuous key 'note'",
+      "rule": "blocked-value-shape",
+      "outcome": "rejected",
+      "errorName": "TypeError",
+      "message": "metadata.note looks like raw content or credential material"
+    }
+  ],
+  "minimizedAlternative": {
+    "action": "change.files.changed",
+    "target": {
+      "type": "source_tree",
+      "id": "tree_5f2a"
+    },
+    "metadata": {
+      "diffHash": "a7f5f35426b927411fc9231b56382173",
+      "fileCount": 2,
+      "filePathHashes": [
+        "b1946ac92492d234",
+        "591785b794601e21"
+      ]
+    }
+  }
+}

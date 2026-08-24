@@ -1,0 +1,179 @@
+---
+title: Transactional outbox
+description: Commit an application mutation and its Veritio evidence in one host transaction, then drain the queued governed-change entry into an idempotent evidence target.
+audience: [developer, operator]
+kind: guide
+searchIntent: Commit a Veritio governed-change outbox row inside the host mutation transaction and drain it safely.
+questions:
+  - How do I stop an application mutation and its audit evidence from diverging?
+  - What is the Veritio transactional outbox and how does dispatch work?
+  - What does OutboxQueueFullError mean and how do I recover from it?
+  - Is the Veritio outbox available in Python and Go?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/storage/src/outbox-types.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/storage/src/outbox-dispatcher.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/storage/src/outbox-file.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/storage/src/outbox-shared.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/docs/templates/transactional-outbox.md
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/governed-change.ts
+claimRefs: []
+---
+
+import { Code } from '@astrojs/starlight/components'
+import outboxRoundtrip from '../../../../examples/governed/expected/outbox-roundtrip.txt?raw'
+
+A governed change produces two writes: the application row the user actually changed, and the evidence describing that change. If those writes land in different durability domains, a crash between them produces either a mutation with no evidence or evidence for a mutation that rolled back. The transactional outbox removes the gap by making the evidence part of the same commit the host was already performing, and moving delivery to a separate, restartable step.
+
+## The shape of the problem
+
+```text
+without an outbox
+  BEGIN
+    update invoice -> paid
+  COMMIT                     <- durable
+  append evidence            <- separate system, may fail
+                                crash here = paid invoice, no evidence
+
+with an outbox
+  BEGIN
+    update invoice -> paid
+    insert outbox row        <- same commit
+  COMMIT                     <- both durable or neither
+  drain outbox later         <- retryable, at-least-once
+```
+
+The outbox does not make evidence appending atomic with the mutation. It makes the *intent to append* atomic with the mutation, and leaves a durable record that a later pass can replay until it succeeds.
+
+## The write path
+
+`createGovernedActionDraft` returns a `GovernedChangeDraft`. Its `outboxEntry` field is the complete, self-sufficient handoff: schema version, mutation binding, the audit event inputs, the evidence edge inputs, and — when the caller supplied a parent revision — `expectedParentRevisionRef`. Nothing else from the draft is needed to reconstruct the evidence graph later.
+
+An outbox adapter exposes exactly one write entry point, `transaction`, which stages enqueues and commits them only if the host callback succeeds:
+
+```ts
+import { createPostgresOutboxAdapter } from '@veritio/storage'
+
+const adapter = createPostgresOutboxAdapter({ client })
+
+await adapter.transaction(async (tx) => {
+  await applyInvoiceMutation(after)
+  await tx.enqueue({
+    id: draft.changeRef.id,
+    tenantId: scope.tenantId,
+    payload: draft.outboxEntry,
+  })
+})
+```
+
+The SQL adapters (`createPostgresOutboxAdapter`, `createNeonOutboxAdapter`, `createMysqlOutboxAdapter`, `createMariaDbOutboxAdapter`) delegate `transaction` straight to the injected client's own `transaction`. That is what makes the guarantee real: if the host passes the same executor its application mutation runs on, the invoice row and the outbox row commit or roll back together. The file adapter takes an exclusive lock and publishes a snapshot after the callback resolves, which is process-safe but is still a second durability domain — it does not put the host's database write and the queue write into one commit.
+
+The enqueue is idempotent on `id`. Re-enqueueing the same id with the same payload returns the stored row unchanged; re-enqueueing the same id with a *different* payload throws `outbox idempotency conflict` rather than silently overwriting an evidence intent. Using `draft.changeRef.id` as the row id therefore makes a retried mutation handler safe by construction.
+
+## OutboxPayload is the seam
+
+```ts
+export type OutboxPayload = GovernedChangeDraft["outboxEntry"]
+```
+
+That single line in `outbox-types.ts` is the entire contract between the SDK and the delivery machinery. The queue has no independent notion of what evidence looks like; it is typed directly off whatever the governed draft produces. Change the draft shape and every adapter, the dispatcher, and the byte accounting move with it, because there is no second definition to drift.
+
+Delivery machinery still validates rather than trusts. `validatePayload` runs on enqueue, on every read of a stored row, and again inside `dispatchOutboxEntry`. It fails closed when `schemaVersion` is not the supported value, when `mutationBinding` is outside `same_transaction | not_transaction_bound | best_effort`, when `records` or `edges` is not an array, or when any record or edge carries a `scope.tenantId` that disagrees with the row's tenant. A payload that mixes tenants is refused at the boundary, never partially delivered. The SQL adapters go one step further: each row stores both `entry_json` and `payload_canonical`, and reading a row recomputes canonical JSON and rejects it if the two disagree.
+
+## The dispatch path
+
+```ts
+import { dispatchOutboxEntry } from '@veritio/storage'
+
+await dispatchOutboxEntry(payload, {
+  recordEvent: (input) => store.append(createAuditEvent(input), {
+    idempotencyKey: input.id,
+  }),
+  recordEdge: (input) => edgeSink.append(createEvidenceEdge(input)),
+})
+```
+
+`dispatchOutboxEntry` delivers all `records` first, sequentially, then all `edges`. The ordering is deliberate: an edge is a relation between refs, so the change, activity, and revision events are appended before anything claims a relationship between them. A target that is offline halfway through leaves a prefix of the records appended and the row still undelivered — which is safe only because the target must be idempotent.
+
+Idempotency is a requirement the target owes the queue, not something the queue provides. Every event id and edge id in the payload is derived deterministically by the draft, so an idempotent sink keyed on those ids turns at-least-once delivery into exactly-once effect. A sink that appends blindly will inflate the tenant chain on the first retry.
+
+For scheduled draining, `createOutboxDispatcher` wraps a claim/deliver/settle loop. Every pass requires an explicit finite `DispatchPermit` — `maxEntries`, `maxBytes`, `maxElapsedMs`, `leaseMs`, and a `kind` of `automatic`, `canary`, or `operator`. `validateDispatchOptions` rejects a permit whose `leaseMs` does not exceed `maxElapsedMs`, an `operator` permit with no `approvalId`, and any permit exceeding the delivery-safety ceilings. A per-instance rolling ledger holds request and byte limits *across* passes, so a caller looping one-entry permits cannot walk past the window ceiling.
+
+Claims are leases. `claimDispatchable` grants at most one active lease per tenant, so two dispatchers cannot interleave on the same tenant chain, and a lease whose expiry has passed becomes claimable again — that is the crash-recovery path. `markDispatched` and `markFailed` both assert lease ownership, so a process that lost its lease to a timeout cannot settle a row another worker now owns.
+
+## The verified roundtrip
+
+The checked example drafts an invoice state change, commits the row and the serialized entry together, drains the queue, dispatches the *same stored row a second time*, and verifies both chains:
+
+<Code code={outboxRoundtrip} lang="json" title="verified outbox roundtrip" />
+
+Read it field by field:
+
+- `outboxEntry.recordCount: 3` and `edgeCount: 4` — one governed change expands to three audit events (`change.declared`, `activity.recorded`, `entity.revision.created`) and four edges. All seven are carried by the one row.
+- `queueBefore[0].payloadBytes: 5969` — the exact UTF-8 body size the entry would occupy on the wire, computed by `outboxPayloadByteLength`. This is the unit every byte ceiling counts in.
+- `payloadContainsRawEmail: false` — the customer email was declared `content_digest`, so the queued row holds a digest. Minimization happens in the draft, before the payload is durable, not at delivery time.
+- `appliedInvoiceStatus: "paid"` next to a `dispatched` queue row — the application state and the evidence intent moved together.
+- `replay` — `eventsAfterFirstDrain: 3` and `eventsAfterReplay: 3`, `edgesAfterFirstDrain: 4` and `edgesAfterReplay: 4`. Dispatching the same durable row twice added nothing. This is the property that makes an at-least-once queue safe.
+- `verification.audit.ok` and `verification.edges.ok` — both chains are internally consistent after the replay, so redelivery did not create a sequence gap or a broken previous-hash link.
+
+## Backlog bounds and failure modes
+
+An undrained queue is a liability, not a buffer. The file adapter accepts `maxQueuedBytes`, a hard ceiling over every undelivered row — `pending`, `leased`, `paused`, and `dead` — measured with the same `outboxPayloadByteLength` used for dispatch accounting:
+
+```ts
+const adapter = createFileOutboxAdapter('./.veritio/outbox', {
+  maxQueuedBytes: 5 * 1024 * 1024,
+})
+```
+
+When the next enqueue would cross the ceiling, `enqueue` throws `OutboxQueueFullError` instead of growing the snapshot without bound. The error carries only the ceiling — never queue contents — so it is safe to log. Omitting `maxQueuedBytes` means unbounded, which is the pre-existing behavior for host-managed queues; the SQL adapters do not implement this ceiling and expect the host's own database limits and monitoring to bound the table.
+
+`OutboxQueueFullError` is a signal about *delivery*, not about the current mutation. How you handle it depends on which copy the row represents. When the queued entry is a remote shipment and the authoritative record already committed locally, dropping the enqueue is acceptable and the local evidence stands. When the queued entry is the only path to evidence, failing the mutation is the correct fail-closed response — silently discarding it would produce exactly the invisible gap the outbox exists to prevent.
+
+Delivery failures settle through `markFailed` with an explicit disposition:
+
+```text
+retry   -> status pending, availableAt rescheduled, attempts += 1
+pause   -> status paused, circuitId recorded; the whole tenant stops
+reject  -> status dead, payload retained for inspection
+```
+
+No disposition deletes the payload. A `paused` tenant blocks both `listDispatchable` and `claimDispatchable` for every row of that tenant, and only `resumePaused` with the exact persisted `expectedCircuitId` re-arms it — a stale console cannot reopen a newer hold. Inside `dispatchBatch`, a delivery error marks the entry `retry` and **breaks the pass** rather than skipping to the next row, so a systematic target failure does not turn into a burst of failing attempts.
+
+## The table the host owns
+
+The outbox table belongs to the application, not to Veritio. The minimal portable shape is:
+
+```sql
+create table veritio_outbox (
+  id text primary key,
+  tenant_id text not null,
+  status text not null default 'pending',
+  attempt_count integer not null default 0,
+  next_attempt_at timestamptz,
+  payload_json text not null,
+  created_at timestamptz not null default now(),
+  dispatched_at timestamptz
+);
+```
+
+`payload_json` stores the governed draft's `outboxEntry` as canonical JSON or another byte-stable string format chosen by the host. If you use the built-in SQL adapters instead of hand-rolling the queries, migrate with the exported `POSTGRES_OUTBOX_SCHEMA_SQL` or `MYSQL_OUTBOX_SCHEMA_SQL` constants, which add the lease columns and the three dispatch indexes those adapters query on.
+
+## captureAssurance says how, not whether
+
+Every governed-change event carries `metadata.captureAssurance`, and its `captureMethod` is always the literal `transactional_outbox`. It is not configurable. It records that the evidence was produced through the outbox handoff — that is simply how governed drafts are shaped.
+
+The configurable half is `mutationBinding`, which the caller supplies and which defaults to `not_transaction_bound`. Setting it to `same_transaction` is **the host's own assertion about the host's own transaction**. The SDK cannot observe your database. It has no way to detect that `tx.enqueue` ran on the same connection as your `UPDATE`, and it will not object if you claim `same_transaction` while enqueueing from a different pool, after the commit, or from the file adapter. The value is a first-party claim recorded in evidence, and it is only as good as the code path that set it. Treat it as something to review in code, not something the chain proves.
+
+## What this does not prove
+
+A drained outbox proves that a durable intent existed and was delivered. It does not prove that the host recorded every mutation that mattered — evidence only exists for the code paths that call `createGovernedActionDraft`. It does not prove that the application mutation and the enqueue truly shared one transaction; that is the `mutationBinding` assertion above. It does not prove the delivered evidence is truthful about what happened outside the declared fields; the state commitment covers the fields the entity declared and nothing else.
+
+It also proves nothing about ordering relative to other tenants, or about wall-clock latency. A row can sit `pending` for days and still verify perfectly once drained — the chain is consistent, but the evidence was not timely. Backlog age is an operational signal you have to monitor yourself.
+
+## Language support
+
+The outbox queue is TypeScript-only. `@veritio/storage` ships the file adapter, the SQL adapters, the dispatcher, and the byte accounting; there is no Python or Go equivalent today. The Python and Go SDKs do produce the same governed drafts — `create_governed_action_draft` and `CreateGovernedActionDraft` derive identical ids, changed paths, and outbox entry shape, pinned by conformance fixtures — so a Python or Go host can serialize `outbox_entry` into its own table and drain it with its own worker. What it cannot import is the lease, permit, disposition, and backlog machinery described here.
+
+Continue with [Governed actions](/docs/guides/governed-actions/) for the draft that feeds this queue, [Storage overview](/docs/storage/overview/) to choose an authoritative target for the drain, and [Hash chain](/docs/concepts/hash-chain/) to understand what the post-drain verification result actually asserts.

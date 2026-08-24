@@ -1,0 +1,160 @@
+---
+title: Provenance recorder
+description: Reference the provenance recorder's sink contract, its nine recording calls, the edges each emits, its deterministic ids, and the un-shadowable session stamps.
+audience: [developer, governance]
+kind: guide
+searchIntent: Look up every provenance recorder method, the edges it emits, and its deterministic event and edge ids.
+questions:
+  - Which evidence edges does each provenance recorder method emit?
+  - Why does recordPrompt emit no edges?
+  - Can a caller overwrite metadata.sessionId on a recorded agent event?
+  - Why do two file changes to the same source tree collide on the idempotency key?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/provenance.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/provenance-identity.md
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/conformance/provenance-ids.json
+claimRefs: []
+---
+
+import { Code } from '@astrojs/starlight/components'
+import out from '../../../../examples/agents/expected/provenance-graph.txt?raw'
+
+An agent session produces events that land on unrelated targets: a session id, a tool call id, a source tree, a pull request, a CI run, a deployment. Nothing in those targets says the same session produced them. `createProvenanceRecorder` exists to emit that family of events with consistent identity, consistent attribution metadata, and the evidence-graph edges that reconnect the targets.
+
+The recorder owns no protocol semantics and no storage. It shapes events and edges, then hands both to sinks the host supplies.
+
+## The sink contract
+
+`createProvenanceRecorder(sinks)` takes exactly two functions.
+
+```ts
+interface ProvenanceSinks {
+  recordEvent(input: AuditEventInput): Promise<AuditRecord>
+  recordEdge(input: EvidenceEdgeInput): Promise<EvidenceEdgeRecord>
+}
+```
+
+A conforming store satisfies this shape directly — `createFileEvidenceStore` from `@veritio/storage` is passed to the recorder unchanged in the fixture below. Because the sinks are injected, the recorder never reads environment variables, never opens a connection, and never chooses a tenant.
+
+The ordering contract is fixed and worth internalizing before you wire retries around it:
+
+```text
+record*(input)
+  1. recordEvent(eventInput)          ← always first, awaited
+  2. recordEdge(edge 1)               ← then each edge, sequentially
+  3. recordEdge(edge 2)
+     …
+  → { event, edges }
+```
+
+There is no cross-sink transaction and no compensation. If `recordEvent` succeeds and the third `recordEdge` throws, the event is committed and the graph is short two edges. A host that needs event and edges to commit atomically must wrap both sinks in one transaction of its own. A host that cannot must treat the graph as eventually complete and re-record — which is safe, because the ids are deterministic (see below) and an idempotency-keyed store replays an identical record without duplicating it.
+
+`startSession` returns `{ session, result }`. The session is bound to one tenant scope, one `agent_session` id, and one executing agent actor for its lifetime; those cannot be changed per call.
+
+## Nine recording calls
+
+`startSession` plus eight `record*` methods on the returned session. Each emits exactly one audit event and zero or more edges.
+
+| Call | Event action | Event actor | Target | Edges emitted |
+|---|---|---|---|---|
+| `startSession` | `agent.session.started` | `agentActor` | `agent_session` | session `caused_by` initiating actor (metadata `role: enforced_by`); plus session `caused_by` `change_request` resource when `requestId` is supplied |
+| `recordPrompt` | `agent.prompt.recorded` | `agentActor` | `agent_session` | none |
+| `recordToolCall` | `agent.tool.called` | `agentActor` | `tool_call` | session `created` tool_call; tool_call `read` file per `reads`; tool_call `created`/`modified`/`deleted` file per `modifies` |
+| `recordChangeProposal` | `change.proposal.created` | `agentActor` | `change_proposal` | proposal `part_of` session; proposal `read` file per `rejectedFiles` (metadata `decision: rejected`); proposal `created` diff_hunk per `createdHunks` |
+| `recordFileChange` | `change.files.changed` | `agentActor` | `source_tree` | `changedBy` (default: the session) `created`/`modified`/`deleted` each file; diff_hunk `part_of` file per hunk hash; file `caused_by` proposal when `causedByProposalId` is set |
+| `recordReview` | decision-dependent (below) | `input.reviewer` | `pull_request` | proposal → reviewer, relation decision-dependent — **only when `proposalId` is supplied** |
+| `recordCiRun` | `ci.job.completed` | `input.service` | `ci_run` | artifact `built_by` ci_run; artifact `derived_from` file per `derivedFromFiles` — **all of it only when `artifactId` is supplied** |
+| `recordDeployment` | `deploy.deployed` | `input.service` | `deployment` | artifact `deployed_as` deployment when `artifactId` is set; deployment `satisfies_policy` policy when `policyId` is set |
+| `recordRuntimeEvent` | `input.action` (caller-supplied) | `input.actor` | `runtime_event` | deployment `observed_in` runtime_event when `deploymentId` is set |
+
+Three consequences of the conditionals are easy to miss. `derivedFromFiles` is silently ignored when `artifactId` is absent — the loop lives inside the `artifactId` branch, so a CI run without an artifact records the event and no provenance for what it consumed. A review without `proposalId` records the review event but adds no edge, so nothing in the graph connects the reviewer to the work. And `recordRuntimeEvent` does not constrain `action` at all; the recorder passes the caller's string through, so runtime action vocabulary is the host's responsibility.
+
+Note also that the `change_proposal` event target is a free-form audit-event resource type, while the graph node for the same proposal is an `EvidenceEntity` of type `resource` with `resourceType: "change_proposal"` — the evidence-entity vocabulary has no `change_proposal` member. Query the graph on the resource form.
+
+## recordPrompt emits no edges, and its id carries time
+
+`recordPrompt` is the only method that returns `{ event, edges: [] }`. The prompt is already targeted at the `agent_session` entity, so there is no second entity to connect; adding an edge would restate the target.
+
+Its default id is the one place where an occurrence timestamp enters an identity string:
+
+```text
+occurredAt supplied     evt_prompt__<sessionId>__<promptHash>__<occurredAt as UTC ISO ms>
+occurredAt omitted      evt_prompt__<sessionId>__<promptHash>
+```
+
+The reason is a real defect this shape fixes. Ids feed the per-tenant idempotency key `hashIdempotencyKey(tenantId, id)`. A constant `(sessionId, promptHash)` id meant that a user submitting the *same prompt text twice in one session* produced two records with the same id and different bytes, and the store rejected the second — losing the second occurrence and, depending on batching, the rest of its batch. Appending the instant makes the two submissions two distinct occurrences.
+
+The suffix is the ECMAScript `Date.toISOString()` normalization: UTC, millisecond precision, `Z`. `2026-07-16T12:00:00+02:00` and `2026-07-16T10:00:00Z` name the same instant and therefore derive the same id, so an identical replay stays byte-identical while genuinely distinct occurrences stay distinct. Those three cases are pinned in `spec/conformance/provenance-ids.json`.
+
+## recordReview is actored by the reviewer
+
+Every other session method is actored by the agent. `recordReview` is actored by `input.reviewer`, because the review is the human's act, not the agent's. The decision then drives both the event action and the edge relation:
+
+| `decision` | Event action | Edge relation |
+|---|---|---|
+| `approved` | `review.approval.recorded` | `approved_by` |
+| `changes_requested` | `review.finding.created` | `reviewed_by` |
+| `waived` | `review.waiver.recorded` | `waived_by` |
+
+A `changes_requested` review must never produce `approved_by`. The relation records that the human reviewed the work; asserting approval of rejected work would put a false claim inside a hash-chained record, where it is durable and cited rather than merely wrong.
+
+The trap sits on the other side of that mapping: `decision` is optional, and an omitted `decision` falls through to `review.approval.recorded` and `approved_by`. There is no "unknown decision" state. Set `decision` explicitly on every call.
+
+## recordFileChange's default id is not unique per change
+
+```text
+evt_filechange__<sourceTreeId>__<resultVersion ?? "x">
+```
+
+If your adapter tracks `resultVersion`, this is a good identity — version 42 of `tree_main` is one thing. If it does not, every file change in that source tree derives `evt_filechange__<sourceTreeId>__x`: a constant. The second change collides on the idempotency key and is rejected as a replay whose bytes changed.
+
+Agent-capture adapters that observe file edits without a version counter must therefore supply `input.id` themselves. Every record method accepts an `id` override and uses it verbatim. Pick something already unique per occurrence — a hook invocation id, a turn counter, a tool-call id — not a content hash, which repeats when a file is reverted and re-applied.
+
+## link() writes singletons; record methods write occurrences
+
+Two different edge-id derivations exist, and choosing the wrong one is the difference between an idempotent replay and a rejected batch.
+
+```text
+record-method edge   edge_<ownerEventId>__<fromType>:<fromId>__<relation>__<toType>:<toId>
+link() edge          edge_<fromType>:<fromId>__<relation>__<toType>:<toId>
+```
+
+Record-method edges are scoped by their owning event. This exists for the same reason the prompt id carries time: endpoint-only ids collided whenever a logical link recurred with different bytes — one session modifying the same file again in a later turn produced the same edge id with a new `occurredAt` and `afterHash`, and the store rejected it. Owner-event scoping gives each occurrence its own edge, while a byte-identical replay of the same record still derives the identical id, because owning event ids are themselves deterministic.
+
+`link(from, relation, to, metadata?, occurredAt?)` deliberately keeps the endpoint-only form. It is the escape hatch for a standing assertion about two entities — this deployment `satisfies_policy` that policy, this session `part_of` that activity — where re-linking the same pair *should* replay idempotently rather than accumulate. It returns a bare `EvidenceEdgeRecord`, not a `RecordResult`, because no event accompanies it.
+
+Only `<type>:<id>` from each endpoint contributes to an id. Other entity fields, `pathHash` included, never participate. Treat both forms as opaque identity strings: classify on the `evt_` / `edge_` prefix if you must, but do not parse structure out of them. Stores written before `@veritio/core` 0.4.2 contain the older endpoint-only record-method edge ids and constant prompt ids, so both generations can coexist in one history.
+
+## The two stamps that make a session groupable
+
+Every event a session emits carries `metadata.sessionId` equal to the session id, and — when `startSession` received an `activityEpisodeId` — `metadata.activityEpisodeId` equal to that episode id. Both are applied *after* the caller's metadata is spread in, so a caller cannot shadow either one.
+
+This is a recorder convention, not an event-schema field, and it is load-bearing. Only the session and prompt events target the `agent_session` entity. The tool, change, review, CI, deploy, and runtime events target `tool_call`, `source_tree`, `pull_request`, `ci_run`, `deployment`, `runtime_event` — entities that are shared or isolated and that no edge attributes back to one session on its own. Without the stamp, reading "everything this session did" is a graph traversal with no reliable starting edge. With it, it is a `group by metadata.sessionId`.
+
+The stamp lands before `createAuditEvent` hashes the record, so the attribution is inside the hash chain rather than beside it. Neither key matches the metadata redaction key pattern, and both are non-PII stable ids by construction, so both survive redaction intact.
+
+The checked fixture drives one full session — prompt, tool call, file change, review, CI run, deployment — against the durable file store, passing deliberately forged `sessionId` and `activityEpisodeId` values into both `startSession` and `recordPrompt`. Its output is compared byte-for-byte at build time:
+
+<Code code={out} lang="json" title="verified output" />
+
+`forgedIdsPresentAnywhere: false` is the sharp result: the caller's values are not merely overwritten in the visible field, they never reach the persisted events or edges at all. `callerMetadataPreserved: true` shows the shadowing is narrow — `turnBudget` passed through untouched.
+
+Non-attribution keys are a different story. Caller metadata is spread in *after* the built-in fields on each record method, so a caller can shadow `tool`, `status`, `promptHash`, or `approvalHash`. Only `sessionId`, `activityEpisodeId`, and normalized `riskSignals` are stamped last and protected.
+
+Session context inherits too. `purpose` (default `agent_provenance`), `retention`, and `dataCategories` are captured at `startSession` and applied to every downstream event. No `record*` method can override them; change them by starting a new session.
+
+## TypeScript only
+
+`createProvenanceRecorder` ships in `@veritio/core` for TypeScript. The Python and Go SDKs have no provenance recorder — they cover event creation, canonical JSON, hashing, redaction, risk scoring, and governed-change drafts, but not this composition. That is a tracked parity gap, not a design boundary.
+
+`spec/provenance-identity.md` and `spec/conformance/provenance-ids.json` are normative for exactly this reason: they are the contract a future Python or Go recorder must reproduce byte-for-byte, and the fixture wins where prose and fixture could ever disagree. Changing any derivation is a protocol change that updates the document, the fixture, and every recorder together.
+
+## What a recorded session does and does not show
+
+A verified session chain shows that these events and edges were recorded in this order, under this tenant, with internally consistent bytes, and that they all carry one session id. It does not show that the agent's behavior was captured completely. The recorder records what the host calls it with. An adapter that misses a Bash-driven file write, a tool call that failed before the hook fired, or a review conducted outside the instrumented path leaves a gap the chain cannot reveal, because a gap in what was never recorded is not a gap in the sequence.
+
+Coverage is an adapter property, not a chain property. Assess it separately from verification.
+
+Continue with [Agent events](/docs/ai/agent-events/) for the minimized end-to-end session tutorial, [Evidence graph](/docs/concepts/evidence-graph/) for the entity and relation vocabulary these edges draw from, and [Risk signals](/docs/ai/risk-signals/) for how `riskSignals` on each record method is normalized before hashing.

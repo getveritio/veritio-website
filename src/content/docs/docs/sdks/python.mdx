@@ -1,0 +1,182 @@
+---
+title: Python SDK
+description: Build, hash, and risk-score Veritio evidence in Python 3.11 or newer, and learn exactly which TypeScript capabilities the Python package does not have.
+audience: [developer]
+kind: guide
+searchIntent: Decide whether the Python SDK covers a Veritio workflow before porting it from TypeScript.
+questions:
+  - What does the Veritio Python SDK support and what is missing?
+  - Does the Python SDK include verify_audit_records?
+  - How is Python risk scoring proven identical to TypeScript?
+  - Why is the Python activity-episode template named differently?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['veritio 0.0.1 (Python) at veritio@c4100ee', '@veritio/core@0.4.7']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/python/src/veritio/__init__.py
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/python/src/veritio/event.py
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/python/src/veritio/risk.py
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/python/src/veritio/governed_change.py
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/python/src/veritio/templates.py
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/python/pyproject.toml
+claimRefs: []
+---
+
+import { Code } from '@astrojs/starlight/components'
+import quickstart from '../../../../examples/quickstart/python.py?raw'
+import expectedOutput from '../../../../examples/quickstart/expected/python.txt?raw'
+import riskParitySource from '../../../../examples/risk/parity.py?raw'
+import riskParityOutput from '../../../../examples/risk/expected/parity-python.txt?raw'
+import governedDraftSource from '../../../../examples/governed/action-draft.py?raw'
+import governedDraftOutput from '../../../../examples/governed/expected/action-draft-python.txt?raw'
+
+The Python SDK is a producer, not a verifier. It builds portable audit events, evidence edges, evidence commits, governed action drafts, risk assessments, and `security.risk` assertions, and it hashes all of them with the same canonical bytes TypeScript and Go produce. It does not verify record chains, does not record provenance, does not assemble export bundles, and does not own storage.
+
+That boundary is the most important thing on this page. A Python service can participate fully in a Veritio deployment on the write side. On the read-and-prove side, one of the three chain verifiers exists in Python and two do not.
+
+## What the package contains
+
+The distribution is one module tree with five files, and everything public is re-exported from the package root.
+
+```text
+veritio/
+  event.py            events, edges, commits, canonical JSON, hashing, redaction
+  governed_change.py  entity definitions, change and action drafts, revision ids
+  risk.py             signal normalization, per-step scoring, episode rollup, assertions
+  risk_policy.py      temperature-derived policies over DEFAULT_RISK_POLICY
+  templates.py        26 event builders plus the audit-log classification helpers
+```
+
+There is no `store.py`, no `provenance.py`, and no `export_bundle.py`. Their absence is a package boundary, not a protocol gap: the protocol defines those behaviors, and at the verified revision only TypeScript implements them.
+
+## Install the verified revision
+
+The package is `veritio` version `0.0.1` and is installed from the pinned checkout rather than from an index.
+
+```sh
+git clone https://github.com/getveritio/veritio.git
+git -C veritio checkout c4100ee7b678d0c6b227c67ae6ea1d8a1f373967
+python3 -m pip install -e ./veritio/sdks/python
+```
+
+`pyproject.toml` declares `requires-python = ">=3.11"`. Confirm which checkout is actually imported:
+
+```sh
+python3 -c "import veritio; print(veritio.__file__)"
+```
+
+The printed path must resolve inside the checked-out `veritio/sdks/python/src/veritio` directory. If it resolves anywhere else, every hash on this page is being produced by code you have not pinned.
+
+## Create the shared event
+
+<Code code={quickstart} lang="python" title="src/examples/quickstart/python.py" />
+
+```sh
+python3 src/examples/quickstart/python.py
+```
+
+<Code code={expectedOutput} lang="text" title="verified output" />
+
+`create_audit_event` fails closed before it produces anything. It raises on a missing `actor.id`, `actor.type`, `action`, `target.id`, or `target.type`, and on an `action` that does not match the dotted lowercase protocol form. It sorts and de-duplicates `dataCategories`, drops `None` fields entirely, and passes `metadata` through deterministic key-pattern redaction before the value is ever hashed. Redaction happens on the way in, so a redacted event and its hash are consistent by construction; there is no separate "redact later" step to forget.
+
+## What Python has and what it does not
+
+| Capability | Python surface | Status |
+| --- | --- | --- |
+| Events, edges, canonical JSON, hashing | `create_audit_event`, `create_evidence_edge`, `canonical_json`, `hash_audit_event`, `hash_audit_record`, `hash_evidence_edge`, `hash_evidence_edge_record` | present |
+| Idempotency digest | `hash_idempotency_key` | present |
+| Evidence commits | `create_evidence_commit`, `hash_evidence_commit`, `verify_evidence_commits` | present |
+| Governed changes | `define_entity`, `create_governed_change_draft`, `create_governed_action_draft`, `governed_revision_id` | present |
+| Risk | `normalize_risk_signals`, `score_risk_signals`, `rollup_episode_risk`, `risk_policy`, `band_of`, `with_risk_signals` | present |
+| `security.risk` assertions | `create_security_risk_assertion`, `hash_assertion_record`, `build_security_risk_assessed_event` | present |
+| Templates | 26 builders plus `audit_templates`, `audit_template_sets` | present |
+| Audit-record verifier | `verify_audit_records` | **absent — TypeScript only** |
+| Edge-record verifier | `verify_evidence_edge_records` | **absent — TypeScript only** |
+| Provenance recorder | `create_provenance_recorder` | **absent — TypeScript only** |
+| Export bundles (`vevb-1`) | `build_export_bundle`, `verify_export_bundle` | **absent — TypeScript only** |
+| Stores and recorders | `AuditStore`, `MemoryAuditStore`, `create_audit_recorder` | **absent — TypeScript only** |
+
+The four absent groups are not stubs that raise; the names do not exist. `from veritio import verify_audit_records` is an `ImportError`, not a runtime failure later.
+
+### The verifier asymmetry
+
+Veritio has three independent chains. Python implements the verifier for exactly one of them.
+
+```text
+audit record chain   →  verify_audit_records          absent in Python
+edge record chain    →  verify_evidence_edge_records  absent in Python
+commit ledger        →  verify_evidence_commits       present in Python
+```
+
+`verify_evidence_commits` walks each `streamId` independently and returns `{"ok": True}` or `{"ok": False, "index": n, "reason": "..."}` at the first failure. It checks the hash algorithm, the `veritio-json-v1` canonicalization label, the `veritio-merkle-v1` tree algorithm, per-stream sequence continuity, previous-hash linkage, member-manifest normalization, `recordCount`, the recomputed `recordsRoot`, and the recomputed commit hash.
+
+It deliberately does not reconcile member record hashes against independently verified records. A commit chain built entirely over fabricated record hashes verifies clean in isolation. The module's own docstring says to compose it with `verify_audit_records` and `verify_evidence_edge_records` — functions that do not exist in this package. Treat a Python-side commit pass as a statement about the ledger, and run end-to-end record verification in a TypeScript process or against your own implementation of the rules in [Hash chain](/docs/concepts/hash-chain/).
+
+## Risk scoring is protocol math, not a TypeScript detail
+
+`risk.py` is a byte-for-byte port of the TypeScript scorer. Every operation uses only clamp, floor, divide, and multiply — never `pow`, `exp`, or `log` — because those are the operations whose results are guaranteed to agree across language runtimes. Every constant lives in `DEFAULT_RISK_POLICY` under `policyVersion` `veritio.reference.v1`.
+
+The parity fixture scores the same three pinned signal sets the TypeScript fixture scores and prints the score, level, policy version, and ordered factor contributions.
+
+<Code code={riskParitySource} lang="python" title="src/examples/risk/parity.py" />
+
+<Code code={riskParityOutput} lang="text" title="verified output" />
+
+Two details make this a real comparison rather than a cosmetic one. The first scenario is deliberately sparse, so the fail-closed normalization defaults — `reversibility: recoverable`, `envCriticality: production`, magnitudes `0` — are exercised in both languages instead of being supplied by the fixture. And every number is rendered through `canonical_json`, so a saturated score prints as `1` the way TypeScript emits it rather than as Python's `1.0`. Comparing raw `repr()` would report a divergence on a score that is byte-identical under hashing.
+
+Factor order is part of the contract. The line is emitted in the order the scorer returns, not sorted, so a reordered breakdown shows up as a diff.
+
+`score_risk_signals(signals, policy=DEFAULT_RISK_POLICY)` takes the policy as an optional keyword, matching TypeScript. Go requires it explicitly. Python raises on an unknown `operationType`, `reversibility`, or `envCriticality`, and on a magnitude that is not a non-negative integer — it never silently degrades an unrecognized signal to a low score.
+
+One small surface asymmetry: `clamp01` and `round4` are public in `veritio.risk` but are not re-exported from the package root, so `from veritio import round4` fails while `from veritio.risk import round4` works. `_sat` is private in both. `band_of` is re-exported from the root.
+
+## Governed action drafts derive identical identifiers
+
+`create_governed_action_draft` is the host application's server-side mutation boundary helper. It is present in Python with the same semantics as `createGovernedActionDraft` and `CreateGovernedActionDraft`, pinned by `spec/conformance/governed-action-draft.json`.
+
+<Code code={governedDraftSource} lang="python" title="src/examples/governed/action-draft.py" />
+
+<Code code={governedDraftOutput} lang="json" title="verified output" />
+
+Three invariants are visible in that output.
+
+**One seed drives both identifiers.** The change id and the activity id are both `<prefix>_<entityType>_<entityId>_<seed>` over the same `sha256(tenantId:idempotencyKey)` digest, so a replayed mutation reproduces the same change and activity pair in Python that it does in TypeScript instead of forking the evidence graph per SDK.
+
+**`define_entity` is the only place field capture is decided.** `internalNotes` is declared `omit`, so it never enters the state commitment and can never become a governed changed path — `omittedFieldPresent` is `false` and `changedPaths` contains only `/plan` and `/seatCount` even though the operator prose also changed. `accountEmail` is declared `content_digest`, so the commitment carries a digest envelope rather than the address.
+
+**A draft is input, not evidence.** `eventsCarryStoreAssignedSequence` and `eventsCarryRecordHash` are both `false`. The draft has no sequence and no record hash because nothing has been appended yet. Python cannot close that gap in-process: there is no conforming `AuditStore` in this package, so `draft["outboxEntry"]` has to be written by your own transaction and drained to a store a TypeScript process owns, or to the hosted ingest path. The `mutationBinding` of `same_transaction` is a declaration about how you persist it, not something the SDK enforces.
+
+`create_governed_action_draft` raises when no governed field changes, when a required ref is missing, and when a `keyed_digest` field is declared without `digestKeys.keyedDigest`. Pin `occurredAt` in tests: when omitted it falls back to `datetime.now(timezone.utc)` and the draft stops being reproducible.
+
+## Templates: same count, one different name
+
+Python exports 26 event builders, the same 26 TypeScript exports, grouped by `audit_template_sets` into `auth`, `organization`, `data`, `agent`, and `code`. They are a convenience layer over `create_audit_event`, and they are **not** pinned by conformance fixtures. Nothing in CI would notice if one language's template drifted in the metadata it stamps.
+
+One name genuinely diverges:
+
+```text
+TypeScript  episodeStartedTemplate
+Go          EpisodeStartedTemplate
+Python      activity_episode_started_template
+```
+
+The emitted event is the same. A mechanical camelCase-to-snake_case translation will miss it, which is exactly the failure mode to expect when porting a TypeScript agent-instrumentation module. The builder stamps `activityEpisodeId` as a reserved, un-shadowable grouping key, along with `authSessionId` and `authContextId` in reserved metadata that caller-supplied metadata cannot override.
+
+## Failure behavior
+
+The SDK raises rather than degrading. `create_audit_event` rejects missing identities and malformed actions. `create_evidence_edge` rejects relations outside the supported vocabulary and entity types outside the evidence entity set. `create_evidence_commit` rejects a non-positive sequence and a `previousCommitHash` that is neither `None` nor a `sha256:` digest. `canonical_json` rejects non-finite numbers instead of inventing an unstable representation for them.
+
+Never replace one of those exceptions with an empty tenant, a default actor, or a partially normalized dictionary. An event that was recorded with a substituted identity is worse than an event that was never recorded, because the chain will verify and the claim will be wrong.
+
+## Verify your checkout
+
+Run the upstream suite against the pinned source:
+
+```sh
+PYTHONPATH=sdks/python/src python3 -m unittest discover -s sdks/python/tests
+```
+
+Then run `bun run verify:examples` in this website to re-execute both fixtures on this page and diff their stdout against the committed expected output.
+
+## Where to go next
+
+Read [Cross-language parity matrix](/docs/reference/parity-matrix/) for the full capability table across all three SDKs, including which behaviors are pinned by shared fixtures and which are merely present. Use [FastAPI](/docs/frameworks/fastapi/) for a complete Python application example. If your architecture needs the conforming authoritative-store interface or a record-chain verifier in-process, take the TypeScript path or implement the missing capability in the OSS repository before documenting it as available.

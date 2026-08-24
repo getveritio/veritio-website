@@ -1,0 +1,239 @@
+---
+title: Outbox adapters
+description: Reference for the Veritio outbox adapters, the dispatch contract, the HTTP ingest target, and the finite delivery-safety policy that bounds every attempt.
+audience: [developer, operator]
+kind: reference
+searchIntent: Look up Veritio outbox adapter, dispatcher, ingest target, and delivery-safety signatures with their fail-closed rules.
+questions:
+  - What does createFileOutboxAdapter do and what options does it take?
+  - What DDL do the Veritio SQL outbox adapters expect?
+  - In what order does dispatchOutboxEntry deliver records and edges?
+  - What are the default delivery-safety limits and what happens at the queue ceiling?
+  - Does an outbox row ever contain credentials or server error text?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/storage/src/outbox-file.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/storage/src/outbox-sql.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/storage/src/outbox-dispatcher.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/storage/src/outbox-types.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/storage/src/outbox-shared.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/storage/src/ingest-target.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/storage/src/delivery-safety.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/ingest-delivery-control.md
+claimRefs: []
+---
+
+import { Code } from '@astrojs/starlight/components'
+import outboxRoundtrip from '../../../../examples/governed/expected/outbox-roundtrip.txt?raw'
+
+An outbox row is evidence that has already been committed but not yet delivered. Between that commit and the delivery sit the cases that break naive queues: two workers claiming the same row, a process that dies mid-attempt, a target that holds delivery indefinitely, and an outage that grows a backlog without limit. `@veritio/storage` exports one adapter interface, two storage backings, two dispatchers, one HTTP target, and a finite safety policy that bounds all of them.
+
+## The module surface
+
+| Export | Module | Role |
+| --- | --- | --- |
+| `createFileOutboxAdapter` | `outbox-file.ts` | Process-safe file queue with an optional backlog ceiling |
+| `OutboxQueueFullError` | `outbox-file.ts` | Typed refusal at that ceiling |
+| `createPostgresOutboxAdapter`, `createNeonOutboxAdapter`, `createMysqlOutboxAdapter`, `createMariaDbOutboxAdapter` | `outbox-sql.ts` | SQL queues that run inside the host's transaction |
+| `POSTGRES_OUTBOX_SCHEMA_SQL`, `MYSQL_OUTBOX_SCHEMA_SQL` | `outbox-types.ts` | The DDL those adapters query against |
+| `dispatchOutboxEntry`, `createOutboxDispatcher` | `outbox-dispatcher.ts` | Delivery to a local `OutboxEvidenceTarget` |
+| `createHttpIngestTarget`, `createHttpOutboxDispatcher`, `DEFAULT_HTTP_INGEST_TIMEOUT_MS` | `ingest-target.ts` | Delivery over HTTP to a conforming ingest endpoint |
+| `DEFAULT_DELIVERY_SAFETY_POLICY`, `parseDeliverySafetyPolicy` | `delivery-safety.ts` | The finite ceilings every dispatch pass is checked against |
+
+Everything here is TypeScript-only. The Python and Go SDKs produce the same governed drafts, but the queue machinery has no port yet.
+
+## createFileOutboxAdapter
+
+```ts
+import { createFileOutboxAdapter } from '@veritio/storage'
+
+const adapter = createFileOutboxAdapter('./.veritio/outbox', {
+  maxQueuedBytes: 5 * 1024 * 1024,
+})
+```
+
+The adapter keeps one `entries.json` snapshot in `dir`. Every mutating operation runs inside `withLock`, which creates `.outbox.lock` with the `wx` flag, retries every 10 ms for up to 500 attempts, and removes the lock in a `finally`. Writes go to a uniquely named temporary file in the same directory and are published with `rename`, so a reader never observes a half-written snapshot and a crash mid-write leaves the previous complete one.
+
+`maxQueuedBytes` must be a positive safe integer; anything else throws a `TypeError` at construction. Omitting it means unbounded, which is the pre-existing behavior for host-managed queues.
+
+## The transaction and enqueue contract
+
+`transaction` is the only write entry point on `OutboxAdapter`:
+
+```ts
+await adapter.transaction(async (tx) => {
+  await applyInvoiceMutation(after)
+  await tx.enqueue({
+    id: draft.changeRef.id,
+    tenantId: scope.tenantId,
+    payload: draft.outboxEntry,
+  })
+})
+```
+
+The file adapter stages enqueues against a cloned snapshot and writes only after the callback resolves, so a throwing callback discards them. The SQL adapters hand `transaction` straight to the injected client's own `transaction`, which is what puts the application row and the queue row in a single commit.
+
+`OutboxEnqueueInput` has four fields: `id`, `tenantId`, `payload`, and an optional `availableAt` accepting a string or `Date`. `createPendingEntry` normalizes it into an `OutboxStoredEntry` with `status: "pending"`, `attempts: 0`, and ISO `createdAt` / `updatedAt` / `availableAt`, cloning the payload so later caller mutation cannot reach durable state.
+
+Enqueue is idempotent on `id`. Identity is compared as `tenantId` plus `canonicalJson(payload)` — not timestamps or attempt counters — so re-enqueueing the same id with the same payload returns the stored row, and re-enqueueing it with a different payload throws `outbox idempotency conflict` rather than overwriting a recorded intent.
+
+`validatePayload` runs on enqueue, on every read of a stored row, and again inside `dispatchOutboxEntry`. It requires `schemaVersion` to equal `2026-06-23`, `mutationBinding` to be one of `same_transaction`, `not_transaction_bound`, or `best_effort`, `records` and `edges` to be arrays, and every record and edge to carry a `scope.tenantId` matching the row's tenant. A payload that mixes tenants is refused at the boundary, never partially delivered.
+
+Queue order is `createdAt` then `id`, compared as strings. Both are ISO-8601 UTC, so lexicographic order is chronological order, and the ordering survives restarts without depending on file names or insertion order.
+
+## The SQL adapters and their DDL
+
+```ts
+import { createPostgresOutboxAdapter, POSTGRES_OUTBOX_SCHEMA_SQL } from '@veritio/storage'
+
+const adapter = createPostgresOutboxAdapter({ client, tableName: 'app.veritio_outbox_entries' })
+```
+
+`client` must satisfy `SqlOutboxExecutor`: an `execute(statement, params)` plus a `transaction(run)` that gives the callback a session on one real database transaction. The adapter issues parameterized statements only — `$n` for Postgres, `?` for MySQL — and `tableName` passes through `quoteTableName`, which accepts a plain or schema-qualified identifier matching `[A-Za-z_][A-Za-z0-9_]*` and rejects anything else before a statement is generated. `createNeonOutboxAdapter` is the Postgres dialect; `createMariaDbOutboxAdapter` (and the `createMariaDBOutboxAdapter` spelling) is the MySQL dialect.
+
+Run the exported DDL from your own migration tooling. The Postgres form:
+
+```sql
+CREATE TABLE IF NOT EXISTS veritio_outbox_entries (
+  id text PRIMARY KEY,
+  tenant_id text NOT NULL,
+  payload_canonical text NOT NULL,
+  entry_json text NOT NULL,
+  status text NOT NULL,
+  attempts integer NOT NULL,
+  available_at text NOT NULL,
+  created_at text NOT NULL,
+  updated_at text NOT NULL,
+  dispatched_at text,
+  last_error text
+);
+
+CREATE INDEX IF NOT EXISTS veritio_outbox_dispatch_idx
+  ON veritio_outbox_entries (status, available_at, tenant_id, created_at, id);
+
+CREATE INDEX IF NOT EXISTS veritio_outbox_tenant_claim_idx
+  ON veritio_outbox_entries (tenant_id, status, available_at, created_at, id);
+
+CREATE INDEX IF NOT EXISTS veritio_outbox_tenant_guard_idx
+  ON veritio_outbox_entries (tenant_id, id);
+```
+
+`MYSQL_OUTBOX_SCHEMA_SQL` is the same shape with backtick quoting, `varchar` keys, `longtext` payload columns, and the three indexes declared as `KEY`s.
+
+Three details in that table are load-bearing. Timestamps are stored as text because the adapter compares normalized ISO strings, which keeps ordering and lease expiry identical across drivers that would otherwise apply their own time zone and precision handling. `entry_json` holds the complete serialized entry while `payload_canonical` holds only `canonicalJson(payload)`; every read recomputes the canonical form and throws `stored outbox entry integrity check failed` when the two disagree, so a row edited outside the adapter is caught before it can drive a delivery. The indexes exist because `claimDispatchable` filters on status, availability, and tenant simultaneously.
+
+Claiming is transactional. The adapter first locks a single stable tenant row (`ORDER BY id ASC LIMIT 1 FOR UPDATE`), then selects candidates with `FOR UPDATE SKIP LOCKED`, excluding any tenant that has a `paused` row or an unexpired `leased` row. The result is at most one active lease per tenant across every worker, and an expired lease becomes claimable again — that is the crash-recovery path, not an error path. `markDispatched` and `markFailed` both call `assertLease`, so a worker whose lease expired cannot settle a row another worker now owns.
+
+## dispatchOutboxEntry and OutboxEvidenceTarget
+
+```ts
+import { dispatchOutboxEntry, type OutboxEvidenceTarget } from '@veritio/storage'
+
+const target: OutboxEvidenceTarget = {
+  recordEvent: (input) => store.append(createAuditEvent(input), { idempotencyKey: input.id }),
+  recordEdge: (input) => edgeSink.append(createEvidenceEdge(input)),
+}
+
+await dispatchOutboxEntry(payload, target)
+```
+
+`recordEvent` takes an `AuditEventInput` and returns an `AuditRecord`; `recordEdge` takes an `EvidenceEdgeInput` and returns an `EvidenceEdgeRecord`. That is the entire interface — the queue never learns how the target stores anything.
+
+Ordering is fixed:
+
+```text
+validatePayload(payload)
+  → for each payload.records[i]  → target.recordEvent   (sequential)
+  → for each payload.edges[i]    → target.recordEdge    (sequential)
+```
+
+Records first, because an edge is a relation between refs. Appending `change.declared`, `activity.recorded`, and `entity.revision.created` before anything claims a relation between them means a target that reads its own graph never observes an edge pointing at an event that does not exist yet. A target that fails halfway leaves a prefix appended and the row still undelivered.
+
+That prefix is safe only because idempotency is owed by the target, not provided by the queue. Every event and edge id in the payload is derived deterministically by the governed draft, so a sink keyed on those ids turns at-least-once delivery into exactly-once effect. A sink that appends blindly inflates the tenant chain on the first retry.
+
+## Permits and the two dispatchers
+
+`createOutboxDispatcher({ adapter, target, deliverySafety? })` drives a local target; `createHttpOutboxDispatcher({ adapter, target, deliverySafety? })` drives an HTTP one with a single POST per entry. Both expose `dispatchBatch(options)` and both require a `DispatchPermit`, checked by `validateDispatchOptions`:
+
+| Rule | Failure |
+| --- | --- |
+| `kind` is `automatic`, `canary`, or `operator` | `permit.kind is invalid` |
+| `maxEntries`, `maxBytes`, `maxElapsedMs`, `leaseMs` are positive safe integers | `permit.<field> must be a positive safe integer` |
+| `leaseMs` exceeds `maxElapsedMs` | `permit.leaseMs must exceed permit.maxElapsedMs` |
+| an `operator` permit carries `approvalId` | `permit.approvalId is required` |
+| `maxBytes` within `hard.rollingSendBytes`, `maxEntries` within `hard.rollingRequests`, `maxElapsedMs` within `hard.windowMs` | exceeds the corresponding hard limit |
+| an `automatic` permit stays within `hard.automaticReplayBatches` | `automatic permit exceeds the hard replay canary limit` |
+
+A pass stops at the first of: `maxEntries` reached, `maxElapsedMs` elapsed, the rolling ledger out of requests or bytes, or no claimable entry. `createRollingWindowLedger` holds request and byte accounting per dispatcher instance across passes, so looping one-entry permits cannot walk past the window ceiling; bytes are reserved before the send, not after it. Its scope boundary is one process — the per-tenant single active lease is what serializes concurrent dispatchers.
+
+The two dispatchers differ on failure. The local one marks `retry` and breaks. The HTTP one honors the typed verdict: `retry` and `pause` break the pass, while `reject` dead-letters the row and continues, because a single malformed entry should not block the rest of the tenant's backlog.
+
+## createHttpIngestTarget
+
+```ts
+import { createHttpIngestTarget, DEFAULT_HTTP_INGEST_TIMEOUT_MS } from '@veritio/storage'
+
+const target = createHttpIngestTarget({
+  baseUrl: process.env.VERITIO_BASE_URL,  // resolved at the process boundary
+  key: process.env.VERITIO_INGEST_KEY,    // never read inside the SDK
+  timeoutMs: DEFAULT_HTTP_INGEST_TIMEOUT_MS,
+})
+```
+
+`baseUrl` and `key` are required non-empty strings, `path` defaults to `/api/ingest`, `fetchImpl` defaults to the global `fetch` and throws if neither is a function, and `timeoutMs` defaults to `DEFAULT_HTTP_INGEST_TIMEOUT_MS`, which is `10_000`. `postBatch` sends `x-veritio-delivery: live-v1`; `dispatchEntry` sends `replay-v1`. An empty batch returns early with zeroed counts and no network call. Before sending, the encoded body is measured against `hard.batchBytes` and refused locally as a `413` `IngestClientError`.
+
+Every attempt is bounded because an unbounded one is indistinguishable from a hang. `AbortSignal.timeout(attemptTimeoutMs)` is attached to each request, `dispatchEntry`'s `timeoutMs` can only lower the configured value (`Math.min`), and `createHttpOutboxDispatcher` clamps each in-flight request to the permit time remaining. A slow target therefore cannot make a pass outlive its permit, and it cannot outlive the lease either — `leaseMs` must exceed `maxElapsedMs` — so a stalled worker's row returns to the queue instead of wedging.
+
+| Class | Trigger | Disposition |
+| --- | --- | --- |
+| `IngestRetryableError` | `5xx`, or a body disposition of `retry` | `retry` |
+| `IngestPausedError` | body disposition `pause`, or a known legacy pause code | `pause` |
+| `IngestConflictError` | `409` with no explicit disposition | `reject` |
+| `IngestRejectedError` | explicit body disposition `reject` | `reject` |
+| `IngestClientError` | any other `4xx`, and the local `413` | `reject` |
+
+Disposition resolves in that order: a validated `deliveryDisposition` in the body wins outright, then a recognized legacy pause code, then the status-only fallback of `5xx` to retry and everything else to reject. Message text is written by the SDK from the status; server prose is never echoed. From a pause response only a `circuitId` matching `^[A-Za-z0-9_-]{1,128}$` and a positive integer `retryAfterSeconds` are retained, and `resolveCircuitId` substitutes a locally generated id when the server omitted one so the hold stays resumable. `resumePaused` then re-arms rows only when the operator supplies that exact `expectedCircuitId`.
+
+## Delivery-safety policy
+
+`DEFAULT_DELIVERY_SAFETY_POLICY` is deep-frozen and conservative:
+
+| Field | Default |
+| --- | --- |
+| `recommended.queuedBytes` | 5 MiB |
+| `recommended.rollingSendBytes` | 1 MiB |
+| `hard.batchBytes` | 1 MiB |
+| `hard.queuedBytes` | 64 MiB |
+| `hard.rollingSendBytes` | 2 MiB |
+| `hard.rollingRequests` | 30 |
+| `hard.windowMs` | 60000 |
+| `hard.automaticReplayBatches` | 1 |
+
+`parseDeliverySafetyPolicy(undefined)` returns those defaults. Any other input must be a complete object with both branches: every threshold a positive safe integer, so zero can never be read as unlimited, and `automaticReplayBatches` exactly `0` or `1`, which caps unattended recovery at one canary batch. Three cross-checks then run — `recommended.queuedBytes` within `hard.queuedBytes`, `recommended.rollingSendBytes` within `hard.rollingSendBytes`, and `hard.batchBytes` within `hard.rollingSendBytes` — and the result is frozen. A partial policy fails closed rather than inheriting defaults for the fields it omitted.
+
+The backlog ceiling is enforced separately, by the file adapter's own `maxQueuedBytes`; the policy's `queuedBytes` fields are the thresholds a host maps onto that option, not a wire the adapter reads for itself. At the ceiling the behavior is deliberate:
+
+```text
+backlog(pending + leased + paused + dead) + newEntryBytes > maxQueuedBytes
+  → throw OutboxQueueFullError
+  → every existing row stays exactly where it is
+```
+
+Existing evidence is retained and the newest enqueue is refused. Nothing is evicted to make room, because evicting the oldest row would silently delete the evidence the queue exists to protect. `dispatched` rows do not count toward the ceiling, and the error carries only the ceiling value, so it is safe to log. The SQL adapters do not implement this ceiling and rely on the host's own database limits.
+
+## What an entry carries
+
+The checked roundtrip drafts an invoice change, commits it with the serialized entry, drains the queue, and dispatches the same stored row a second time:
+
+<Code code={outboxRoundtrip} lang="json" title="verified outbox roundtrip" />
+
+`payloadContainsRawEmail: false` is the minimization result: the email field was declared `content_digest` on the entity, so the durable row holds a digest. Minimization happens in the draft, before the payload is durable — the queue never sees the raw value and has nothing to strip at delivery time. `payloadBytes: 5969` is `outboxPayloadByteLength`, the exact UTF-8 size of the request body, which is the unit every ceiling in this page counts in.
+
+Three things are structurally absent from a row. The ingest key lives only in the target's closure, injected at the host's process boundary, and never touches the payload or the table. Server response text never lands in `lastError`, which stores an SDK-authored single-line summary truncated at 256 characters with no stack trace. And nothing but the governed draft's own `records` and `edges` is stored, because `OutboxPayload` is typed directly as `GovernedChangeDraft["outboxEntry"]`.
+
+## What a drained row proves
+
+`replay` shows three events and four edges after both drains: redelivery added nothing, and both chains still verify. That proves the durable intent survived storage as plain text and that the target's idempotency held. It does not prove the host recorded every mutation that mattered, that the enqueue truly shared the application's transaction — `mutationBinding` is a first-party assertion the SDK cannot observe — or that the row was delivered promptly. A row can sit `pending` for days and verify perfectly once drained; backlog age is an operational signal to monitor separately.
+
+Continue with the [transactional outbox guide](/docs/guides/transactional-outbox/) for the write path in context, [governed changes](/docs/concepts/governed-changes/) for the draft that produces each payload, and [storage overview](/docs/storage/overview/) to choose an authoritative target for the drain.

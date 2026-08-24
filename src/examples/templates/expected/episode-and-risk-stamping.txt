@@ -1,0 +1,107 @@
+{
+  "beforeStamping": {
+    "actor": {
+      "type": "service",
+      "id": "svc_release_bot"
+    },
+    "action": "activity.episode.started",
+    "target": {
+      "type": "activity_episode",
+      "id": "aep_release_2026_08_09_01"
+    },
+    "metadata": {
+      "domain": "release",
+      "releaseId": "rel_4471",
+      "riskSignals": {
+        "operationType": "read"
+      },
+      "activityEpisodeId": "aep_release_2026_08_09_01",
+      "startReason": "deploy_requested"
+    },
+    "id": "evt_episode_started_01",
+    "occurredAt": "2026-08-09T10:00:00.000Z",
+    "scope": {
+      "tenantId": "org_acme",
+      "environment": "production"
+    },
+    "purpose": "change_provenance",
+    "retention": "security_1y"
+  },
+  "afterStamping": {
+    "actor": {
+      "type": "service",
+      "id": "svc_release_bot"
+    },
+    "action": "activity.episode.started",
+    "target": {
+      "type": "activity_episode",
+      "id": "aep_release_2026_08_09_01"
+    },
+    "metadata": {
+      "domain": "release",
+      "releaseId": "rel_4471",
+      "riskSignals": {
+        "operationType": "destructive",
+        "reversibility": "irreversible",
+        "envCriticality": "production",
+        "dataVolume": 0,
+        "fanOut": 3,
+        "referenceCount": 0
+      },
+      "activityEpisodeId": "aep_release_2026_08_09_01",
+      "startReason": "deploy_requested"
+    },
+    "id": "evt_episode_started_01",
+    "occurredAt": "2026-08-09T10:00:00.000Z",
+    "scope": {
+      "tenantId": "org_acme",
+      "environment": "production"
+    },
+    "purpose": "change_provenance",
+    "retention": "security_1y"
+  },
+  "proof": {
+    "action": "activity.episode.started",
+    "actionIsEpisodeStarted": true,
+    "targetIsTheEpisode": {
+      "type": "activity_episode",
+      "id": "aep_release_2026_08_09_01"
+    },
+    "callerClaimSurvivesWithoutStamp": true,
+    "stampOverwritesCallerClaim": true,
+    "callerClaimAbsentAfterStamping": true,
+    "unrelatedCallerKeysPreserved": {
+      "domain": "release",
+      "releaseId": "rel_4471"
+    },
+    "activityEpisodeIdUnshadowable": true,
+    "directStamp": {
+      "operationType": "destructive",
+      "reversibility": "irreversible",
+      "envCriticality": "production",
+      "dataVolume": 0,
+      "fanOut": 3,
+      "referenceCount": 0
+    },
+    "callerMetadataUnmutated": "read"
+  },
+  "riskHiddenByTheShadowAttempt": {
+    "callerClaimScore": 0.05,
+    "callerClaimLevel": "low",
+    "stampedScore": 1,
+    "stampedLevel": "critical"
+  },
+  "sealedEvent": {
+    "schemaVersion": "2026-06-10",
+    "action": "activity.episode.started",
+    "riskSignals": {
+      "dataVolume": 0,
+      "envCriticality": "production",
+      "fanOut": 3,
+      "operationType": "destructive",
+      "referenceCount": 0,
+      "reversibility": "irreversible"
+    },
+    "activityEpisodeId": "aep_release_2026_08_09_01"
+  }
+}

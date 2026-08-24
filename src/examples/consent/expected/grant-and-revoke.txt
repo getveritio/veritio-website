@@ -1,0 +1,40 @@
+{
+  "granted": {
+    "action": "consent.granted",
+    "target": {
+      "type": "consent",
+      "id": "cns_marketing_email_01"
+    },
+    "purpose": "consent_management",
+    "lawfulBasis": "consent",
+    "retention": "consent_7y",
+    "metadata": {
+      "purposeId": "purpose_marketing_email",
+      "subjectId": "sub_9f2c41"
+    }
+  },
+  "revoked": {
+    "action": "consent.revoked",
+    "target": {
+      "type": "consent",
+      "id": "cns_marketing_email_01"
+    },
+    "purpose": "consent_management",
+    "lawfulBasis": "consent",
+    "retention": "consent_7y",
+    "metadata": {
+      "purposeId": "purpose_marketing_email",
+      "subjectId": "sub_9f2c41"
+    }
+  },
+  "sameConsentResource": true,
+  "sameSubject": true,
+  "sequences": [
+    1,
+    2
+  ],
+  "previousHashLinked": true,
+  "verification": {
+    "ok": true
+  }
+}

@@ -1,13 +1,8 @@
 ---
 /**
- * GDPR consent banner for Google Analytics only. Umami is cookieless and
- * deliberately not gated (see the analytics design spec). GA4 runs in
- * "basic" consent mode: gtag.js is never requested until the visitor
- * accepts, and never again after a decline. Choice persists in
- * localStorage under `veritio-consent`; bump CONSENT_VERSION in the script
- * below to re-prompt everyone after a material policy change. Footer
- * elements with [data-cookie-settings] re-open the banner so consent can
- * be withdrawn as easily as it was given.
+ * Renders the privacy choice UI shared by marketing and documentation pages.
+ * Consent behavior lives in ConsentScript so Starlight client-side navigation
+ * cannot strand newly rendered controls without event handlers.
  */
 import { localeFromPathname, cookieBannerStrings } from '../i18n'
 
@@ -20,131 +15,28 @@ const t = cookieBannerStrings[locale]
   hidden
   role="region"
   aria-label={t.ariaLabel}
-  class="fixed inset-x-0 bottom-0 z-50 border-t border-line-strong bg-surface shadow-[0_-4px_24px_rgba(0,0,0,0.08)]"
+  class="cookie-banner"
 >
-  <div class="container flex flex-col gap-4 py-5 sm:flex-row sm:items-center sm:justify-between">
-    <p class="max-w-2xl text-[14px] leading-relaxed text-ink-soft">
+  <div class="cookie-banner__inner">
+    <p>
       {t.message}{' '}
-      <a class="text-ink hover:text-accent" href="/legal/privacy">{t.privacy}</a>
+      <a href="/legal/privacy/">{t.privacy}</a>
     </p>
-    <div class="flex shrink-0 items-center gap-3">
-      <button type="button" id="cookie-decline" class="doc-btn">{t.decline}</button>
-      <button type="button" id="cookie-accept" class="doc-btn doc-btn--solid">{t.accept}</button>
+    <div class="cookie-banner__actions">
+      <button type="button" id="cookie-decline" onclick="window.VeritioConsent?.decline()">{t.decline}</button>
+      <button type="button" id="cookie-accept" class="cookie-banner__accept" onclick="window.VeritioConsent?.accept()">{t.accept}</button>
     </div>
   </div>
 </div>
 
-<script>
-  import { GA_MEASUREMENT_ID } from '../config/analytics'
-
-  const CONSENT_KEY = 'veritio-consent'
-  const CONSENT_VERSION = 1
-
-  type Choice = 'granted' | 'denied'
-
-  const banner = document.getElementById('cookie-banner')!
-  const acceptBtn = document.getElementById('cookie-accept')!
-  const declineBtn = document.getElementById('cookie-decline')!
-
-  function readChoice(): Choice | null {
-    try {
-      const parsed = JSON.parse(localStorage.getItem(CONSENT_KEY) ?? 'null')
-      if (parsed?.v === CONSENT_VERSION && (parsed.ga === 'granted' || parsed.ga === 'denied')) {
-        return parsed.ga
-      }
-    } catch {
-      /* corrupt or unavailable storage → treat as no choice */
-    }
-    return null
-  }
-
-  function saveChoice(ga: Choice) {
-    try {
-      localStorage.setItem(CONSENT_KEY, JSON.stringify({ v: CONSENT_VERSION, ga }))
-    } catch {
-      /* private mode without storage: banner will re-appear next visit */
-    }
-  }
-
-  declare global {
-    interface Window {
-      dataLayer?: unknown[]
-      gtag?: (...args: unknown[]) => void
-    }
-  }
-
-  let gaLoaded = false
-  function loadGa() {
-    if (gaLoaded) return
-    gaLoaded = true
-    window.dataLayer = window.dataLayer || []
-    window.gtag = function gtag() {
-      // GA reads arguments objects, not spread arrays.
-      // eslint-disable-next-line prefer-rest-params
-      window.dataLayer!.push(arguments)
-    }
-    window.gtag('consent', 'default', {
-      ad_storage: 'denied',
-      ad_user_data: 'denied',
-      ad_personalization: 'denied',
-      analytics_storage: 'granted',
-    })
-    window.gtag('js', new Date())
-    window.gtag('config', GA_MEASUREMENT_ID)
-    const s = document.createElement('script')
-    s.async = true
-    s.src = `https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`
-    document.head.appendChild(s)
-  }
-
-  /** Best-effort removal of _ga* cookies when consent is withdrawn. */
-  function clearGaCookies() {
-    const expiry = 'expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'
-    const parts = location.hostname.split('.')
-    const domains = [location.hostname]
-    if (parts.length >= 2) domains.push('.' + parts.slice(-2).join('.'))
-    for (const raw of document.cookie.split(';')) {
-      const name = raw.split('=')[0]?.trim()
-      if (!name?.startsWith('_ga')) continue
-      document.cookie = `${name}=; ${expiry}`
-      for (const domain of domains) {
-        document.cookie = `${name}=; ${expiry}; domain=${domain}`
-      }
-    }
-  }
-
-  acceptBtn.addEventListener('click', () => {
-    saveChoice('granted')
-    banner.hidden = true
-    if (gaLoaded) {
-      // Re-accept after a mid-session withdrawal: gtag.js is already present,
-      // so flipping the consent signal back is all that's needed.
-      window.gtag?.('consent', 'update', { analytics_storage: 'granted' })
-    } else {
-      loadGa()
-    }
-  })
-
-  declineBtn.addEventListener('click', () => {
-    saveChoice('denied')
-    banner.hidden = true
-    if (gaLoaded) {
-      // Withdrawal mid-session: stop collection and drop GA's cookies.
-      window.gtag?.('consent', 'update', { analytics_storage: 'denied' })
-      clearGaCookies()
-    }
-  })
-
-  for (const el of document.querySelectorAll('[data-cookie-settings]')) {
-    el.addEventListener('click', () => {
-      banner.hidden = false
-      // Move focus into the revealed region so the reopen is perceivable to
-      // screen-reader and keyboard users.
-      acceptBtn.focus()
-    })
-  }
-
-  const choice = readChoice()
-  if (choice === null) banner.hidden = false
-  else if (choice === 'granted') loadGa()
-</script>
+<style>
+  .cookie-banner[hidden] { display: none; }
+  .cookie-banner { position: fixed; z-index: 100; inset: auto 0 0; border-top: 1px solid var(--color-line-strong, var(--sl-color-hairline-shade)); background: var(--color-surface, var(--sl-color-bg)); box-shadow: 0 -4px 24px rgb(0 0 0 / 0.1); color: var(--color-ink-soft, var(--sl-color-gray-2)); }
+  .cookie-banner__inner { display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; width: min(100% - 2rem, 1180px); margin-inline: auto; padding-block: 1rem; }
+  .cookie-banner p { max-width: 48rem; margin: 0; font-family: var(--font-serif, var(--sl-font)); font-size: 0.88rem; line-height: 1.55; }
+  .cookie-banner a { color: var(--color-ink, var(--sl-color-white)); text-decoration: underline; text-underline-offset: 0.16em; }
+  .cookie-banner__actions { display: flex; flex: none; gap: 0.65rem; }
+  .cookie-banner button { cursor: pointer; border: 1px solid var(--color-line-strong, var(--sl-color-gray-4)); background: transparent; color: var(--color-ink, var(--sl-color-white)); padding: 0.68rem 0.9rem; font-family: var(--font-mono, var(--sl-font-mono)); font-size: 0.72rem; }
+  .cookie-banner .cookie-banner__accept { border-color: var(--color-evergreen, var(--sl-color-accent)); background: var(--color-evergreen, var(--sl-color-accent)); color: var(--color-surface, var(--sl-color-black)); }
+  @media (max-width: 42rem) { .cookie-banner__inner { align-items: stretch; flex-direction: column; } .cookie-banner__actions { justify-content: flex-end; } }
+</style>

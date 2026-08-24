@@ -1,0 +1,310 @@
+---
+title: Governed change API
+description: Signatures, capture modes, reserved context keys, derived identifiers, and outbox shape for the Veritio governed-change draft builders in TypeScript, Python, and Go.
+audience: [developer, governance]
+kind: reference
+searchIntent: Look up governed-change draft signatures, capture modes, reserved metadata keys, derived ids, and outbox shape.
+questions:
+  - What is the signature of createGovernedActionDraft?
+  - Which capture modes does defineEntity actually implement?
+  - Why is metadata.traceId rejected as reserved by Veritio?
+  - What does the governed-change outboxEntry contain?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/governed-change.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/python/src/veritio/governed_change.py
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/go/governed_change.go
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/conformance/governed-action-draft.json
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/conformance/governed-revision-id.json
+claimRefs: []
+---
+
+import { Code } from '@astrojs/starlight/components'
+import actionDraftSource from '../../../../examples/governed/action-draft.ts?raw'
+import actionDraftOutput from '../../../../examples/governed/expected/action-draft.txt?raw'
+
+A host application that mutates a row and then separately "logs" the change produces two artifacts that can disagree. The governed-change builders remove that gap: one call at the mutation boundary derives the change identity, the activity identity, the minimized state commitment, the changed paths, the event set, the edge set, and a single outbox entry to append. This page is the signature and semantics reference for those builders across the three SDKs.
+
+## The six exported symbols
+
+| Symbol | Role |
+| --- | --- |
+| `defineEntity` | Declares one governed entity type and its per-field capture policy. |
+| `createGovernedActionDraft` | Host-facing helper. Derives ids, idempotency hash, and changed paths, then delegates. |
+| `createGovernedChangeDraft` | Lower-level builder. Owns event, edge, revision, and outbox semantics. |
+| `governedRevisionId` | Derives the deterministic revision id from entity, state digest, and change id. |
+| `mergeVeritioMetadata` | Merges caller metadata with SDK-owned context keys, rejecting shadowing. |
+| `refKey` | Formats an authority-qualified `EvidenceRef` into a stable join key. |
+
+`createGovernedActionDraft` is the one most applications call. It is a derivation layer only — every protocol decision belongs to `createGovernedChangeDraft`, which it calls.
+
+## Signatures
+
+### TypeScript
+
+```ts
+function defineEntity<Row extends Record<string, unknown>>(
+  definition: {
+    authority: string
+    type: string
+    schemaRef: string
+    fieldSetRef: string
+    identity(row: Row): string
+    fields: Partial<Record<keyof Row & string, { capture: CaptureMode }>>
+    lineagePolicy?: 'linear' | 'dag'   // RESERVED, not enforced by any SDK
+  },
+): GovernedEntity<Row>                  // adds ref(rowOrId: Row | string): EvidenceRef
+
+function createGovernedActionDraft<Row extends Record<string, unknown>>(input: {
+  scope: EvidenceScope & { tenantId: string }
+  entity: GovernedEntity<Row>
+  before?: Row
+  after: Row
+  actionType: string
+  activityType: string
+  initiatedBy: EvidenceRef
+  performedBy: EvidenceRef
+  producer: EvidenceRef
+  occurredAt?: string | Date            // defaults to new Date()
+  idempotencyKey: string
+  changeId?: string
+  activityId?: string
+  changedPaths?: string[]               // inferred from the field policy when absent
+  context?: VeritioContextMetadata
+  metadata?: Record<string, unknown>
+  capturePolicyRef?: { id: string; version: string }
+  expectedParentRevisionRef?: EvidenceRef
+  mutationBinding?: 'same_transaction' | 'not_transaction_bound' | 'best_effort'
+  digestKeys?: { keyedDigest?: { keyVersion: string; secret: string } }
+}): GovernedChangeDraft
+
+function createGovernedChangeDraft<Row extends Record<string, unknown>>(input: {
+  scope: EvidenceScope & { tenantId: string }
+  entity: GovernedEntity<Row>
+  before?: Row
+  after: Row
+  changedPaths: string[]                // required here, never inferred
+  change: {
+    id: string
+    type: string
+    initiatedBy: EvidenceRef
+    authorizationAssertionRef?: EvidenceRef
+    delegationAssertionRef?: EvidenceRef
+  }
+  activity: { id: string; type: string; performedBy: EvidenceRef }
+  producer: EvidenceRef
+  occurredAt: string | Date             // required here, no default
+  idempotencyKeyHash: string            // required here, caller-computed
+  // context / metadata / capturePolicyRef / expectedParentRevisionRef
+  // / mutationBinding / digestKeys as above
+}): GovernedChangeDraft
+
+function governedRevisionId(
+  entityType: string, entityId: string, stateDigest: string, changeId: string,
+): string
+
+function mergeVeritioMetadata(
+  callerMetadata?: Record<string, unknown>, context?: VeritioContextMetadata,
+): Record<string, unknown>
+
+function refKey(ref: EvidenceRef): string
+```
+
+### Python
+
+```python
+def define_entity(
+    *,                                  # keyword-only
+    authority: str,
+    entity_type: str,                   # emitted as the protocol key "type"
+    schema_ref: str,
+    field_set_ref: str,
+    identity: Callable[[dict[str, Any]], str],
+    fields: dict[str, dict[str, str]],
+    lineage_policy: str | None = None,
+) -> dict[str, Any]                     # a plain dict; there is no .ref() method
+
+def create_governed_action_draft(input_action: dict[str, Any]) -> dict[str, Any]
+def create_governed_change_draft(input_change: dict[str, Any]) -> dict[str, Any]
+
+def governed_revision_id(
+    entity_type: str, entity_id: str, state_digest: str, change_id: str,
+) -> str
+
+def merge_veritio_metadata(
+    caller_metadata: dict[str, Any] | None = None,
+    context: dict[str, Any] | None = None,
+) -> dict[str, Any]
+
+def ref_key(ref: dict[str, Any]) -> str
+```
+
+The two draft builders take one dictionary whose keys are the protocol camelCase names — `scope`, `entity`, `after`, `actionType`, `idempotencyKey`, `occurredAt`, `mutationBinding`, `digestKeys`. Only `define_entity` uses snake_case parameters.
+
+### Go
+
+```go
+func DefineEntity(definition GovernedEntityDefinition) (GovernedEntityDefinition, error)
+
+func CreateGovernedActionDraft(input GovernedActionDraftInput) (GovernedChangeDraft, error)
+func CreateGovernedChangeDraft(input GovernedChangeDraftInput) (GovernedChangeDraft, error)
+
+func GovernedRevisionID(entityType, entityID, stateDigest, changeID string) string
+
+func MergeVeritioMetadata(callerMetadata, context map[string]any) (map[string]any, error)
+
+func RefKey(ref EvidenceRef) (string, error)
+
+type GovernedEntityDefinition struct {
+    Authority, Type, SchemaRef, FieldSetRef string
+    Identity      func(map[string]any) string   // must be non-nil
+    Fields        map[string]EntityFieldPolicy  // EntityFieldPolicy{Capture string}
+    LineagePolicy string                        // RESERVED, not enforced
+}
+```
+
+`GovernedActionDraftInput` mirrors the TypeScript field names in Go casing: `ActionType`, `IdempotencyKey`, `ChangeID`, `ActivityID`, `MutationBinding`, `DigestKeys`, plus `AuthorizationAssertionRef` and `DelegationAssertionRef` on the nested `GovernedChangeDeclaration` used by `CreateGovernedChangeDraft`.
+
+## Capture modes
+
+`defineEntity` is the only place field capture is decided. The v1 state-commitment builder implements four of the eight declared modes. The other four are reserved names in the type: selecting one is a draft-time failure, never a silently weaker commitment.
+
+| Mode | Status | What lands in `stateCommitment.fields[key]` |
+| --- | --- | --- |
+| `omit` | implemented | Nothing. The key is absent and can never become a changed path. |
+| `full` | implemented | The normalized JSON value. |
+| `content_digest` | implemented | `{ captureMode: 'content_digest', digest: 'sha256:…' }` |
+| `keyed_digest` | implemented | `{ algorithm: 'hmac-sha256', keyVersion, digest: 'sha256:…' }` |
+| `randomized_digest` | reserved | Fails closed at draft time. |
+| `reference` | reserved | Fails closed at draft time. |
+| `redact` | reserved | Fails closed at draft time. |
+| `encrypt` | reserved | Fails closed at draft time. |
+
+A reserved mode raises `capture mode <mode> is not supported by the current governed-change draft helper`. A `keyed_digest` field without key material raises `digestKeys.keyedDigest is required for keyed_digest fields`; the key version and secret are each checked for a non-empty string. Key material is injected per call at the host boundary and is never stored in the draft.
+
+Fields are iterated in sorted key order and any field not declared in `fields` is invisible to the commitment. That is what stops the outbox from becoming a copy of the application row.
+
+## Two digests from one idempotency key
+
+`createGovernedActionDraft` consumes the raw `idempotencyKey` twice, with two different separators, and stores neither the key nor anything from which the key can be read back.
+
+```text
+idempotencyKey  +  scope.tenantId
+        │
+        ├── sha256("tenantId:idempotencyKey")      → first 16 hex → id seed
+        │       used in chg_<type>_<entityId>_<seed>
+        │       and     act_<type>_<entityId>_<seed>
+        │
+        └── sha256("tenantId\0idempotencyKey")     → full 64 hex
+                stored as metadata.idempotencyKeyHash
+```
+
+The id seed is short and appears in publicly visible identifiers, so it is deliberately not the same value as the hash a store uses for idempotency conflict detection. The NUL separator in `hashIdempotencyKey` keeps the tenant/key boundary unambiguous — two different tenant-and-key splits cannot collide onto one hash. Both derivations are tenant-scoped, so the same application-level key in two tenants produces unrelated values.
+
+The revision id is derived separately and is content-addressed **plus** change-scoped:
+
+```text
+rev_<entityType>_<entityId>_<digest12>_<change8>
+                              │           │
+                              │           └── first 8 hex of sha256(changeId)
+                              └── 12 hex after the "sha256:" prefix of the state digest
+```
+
+Content addressing alone would merge a rollback with the earlier revision it restores, because both commit byte-identical state. Mixing in the change id keeps a rollback distinct while a replay of the same change stays idempotent.
+
+## Reserved context keys
+
+Nine keys belong to Veritio. `mergeVeritioMetadata` applies caller metadata first (sorted, with `null`/`undefined` values dropped), then writes the context keys over the top so a caller cannot shadow them.
+
+```text
+authSessionId   authContextId    activityEpisodeId
+traceId         correlationId    causationEventId
+changeId        capturePolicyId  collectionSource
+```
+
+Passing any of them inside `metadata` instead of `context` is rejected before anything is built, with the message `metadata.<key> is reserved by Veritio` (a `TypeError` in TypeScript and Python, a returned `error` in Go). These keys are what Change, Trace, and Explain projections group on; a caller-supplied value under the same name would silently corrupt that grouping.
+
+## Draft output and outbox shape
+
+Every builder returns the same structure: `changeRef`, `activityRef`, `entityRef`, `revision`, `events`, `edges`, and `outboxEntry`.
+
+```text
+outboxEntry
+  schemaVersion              "2026-06-23"          frozen literal
+  mutationBinding            "not_transaction_bound"  default when unset
+  expectedParentRevisionRef  present only when a parent was resolved
+  records                    the same three AuditEventInput values as .events
+  edges                      the same EvidenceEdgeInput values as .edges
+```
+
+`schemaVersion` is a fixed string, not a version negotiated at runtime; a consumer that sees a different value is reading a different format. `mutationBinding` accepts `same_transaction`, `not_transaction_bound`, or `best_effort` and defaults to `not_transaction_bound` — the honest default, since the SDK cannot observe whether the host actually enrolled the append in its transaction. The value is copied into `metadata.captureAssurance` on all three events alongside `captureMethod: 'transactional_outbox'`.
+
+The three events are always `change.declared`, `activity.recorded`, and `entity.revision.created`, and the base edges are always `has_activity`, `has_output`, `performed_by`, and `generated`. A fifth `derived_from` edge and `outboxEntry.expectedParentRevisionRef` appear only when `before` was supplied **and** the caller passed `expectedParentRevisionRef`. The builders never fabricate a placeholder parent: a synthetic parent would assert a `derived_from` edge to a revision that never existed and hand the store an optimistic-concurrency token its real head can never match.
+
+## Verified fixture
+
+This example runs in CI and its output is byte-compared.
+
+<Code code={actionDraftSource} lang="ts" title="src/examples/governed/action-draft.ts" />
+
+<Code code={actionDraftOutput} lang="json" title="verified output" />
+
+What each block proves:
+
+- `changeId` and `activityId` share the suffix `312ca4bde590b545`. One seed, two ids — a replayed request reproduces the same change/activity pair instead of forking the graph.
+- `revisionId` ends `_a71e2768812c_fe34f6d0`, and `a71e2768812c` is exactly the first twelve hex characters of the state digest below it. The derivation is visible in the id itself.
+- `changedPaths` contains `/plan` and `/seatCount` only. `internalNotes` changed in the row but is declared `omit`, and `accountEmail` did not change, so neither is a governed path.
+- `omittedFieldPresent: false` and the absence of `internalNotes` from `committedFields` prove the omit policy is enforced in the commitment, not just in the diff.
+- `accountEmailCommitment` is a `content_digest` object. The address itself never enters evidence.
+- `eventsCarryStoreAssignedSequence: false` and `eventsCarryRecordHash: false` are the important ones. A draft is input, not evidence.
+
+## Fail-closed behavior
+
+| Condition | Result |
+| --- | --- |
+| `scope.tenantId` empty | `scope.tenantId is required` |
+| `actionType`, `activityType`, or `idempotencyKey` empty | `<field> is required` |
+| Any `EvidenceRef` missing a part | `ref.authority` / `ref.kind` / `ref.type` / `ref.id is required` |
+| `initiatedBy`, `performedBy`, or `producer` is not `kind: 'principal'` | `principal ref is required` |
+| `identity(row)` returns an empty string | `entity.id is required` |
+| No governed field changed | `at least one governed field must change` |
+| Reserved key in `metadata` | `metadata.<key> is reserved by Veritio` |
+| Reserved capture mode | `capture mode <mode> is not supported…` |
+| `keyed_digest` without key material | `digestKeys.keyedDigest is required for keyed_digest fields` |
+| Unparseable `occurredAt` | `occurredAt must be a valid date` |
+| Non-finite number in a captured field | `field values must be finite JSON numbers` |
+
+Nothing degrades into a partial draft. TypeScript and Python raise (Python raises `ValueError` for the `occurredAt` case and `TypeError` elsewhere); Go returns a zero-value `GovernedChangeDraft` and an `error`.
+
+A timezone-naive `occurredAt` string is interpreted as UTC in all three SDKs rather than as host-local time, because `occurredAt` is hashed evidence and a host-local reading would make the same input hash differently on two machines.
+
+## API-shape drift between SDKs
+
+The derived bytes are identical across languages — that is pinned by `spec/conformance/governed-action-draft.json` and `governed-revision-id.json`. The call shapes are not identical, and porting code needs these differences.
+
+- **Python `define_entity` is keyword-only** and takes `entity_type`, not `type`, since `type` is a builtin. The value is emitted under the protocol key `type`. Its other parameters are snake_case (`schema_ref`, `field_set_ref`, `lineage_policy`) while the draft-builder dictionaries stay camelCase.
+- **Python and Go return plain data.** Only the TypeScript `defineEntity` attaches a `ref(rowOrId)` method to the returned entity. In Python and Go the entity ref is resolved internally from `identity(row)`; use `ref_key` / `RefKey` to format a ref you already hold.
+- **Go `DefineEntity` validates `Identity` is non-nil** and returns `errors.New("identity is required")` otherwise. TypeScript and Python do not check this at definition time; a missing identity function surfaces later, when the draft builder calls it.
+- **Go takes `OccurredAt` as a plain string.** There is no `time.Time` overload. It parses RFC 3339 with optional nanoseconds, falls back to the timezone-naive layout, and formats to millisecond precision. TypeScript accepts `string | Date` and Python accepts `str | datetime`.
+- **Go's capture mode is an untyped `string`.** TypeScript has a `CaptureMode` union, so a typo fails at compile time there and at draft time in Go and Python.
+- **`createGovernedChangeDraft` requires what the action helper derives.** Calling it directly means supplying `change.id`, `activity.id`, `changedPaths`, `occurredAt`, and `idempotencyKeyHash` yourself.
+
+## Authorization and delegation refs
+
+`authorizationAssertionRef` and `delegationAssertionRef` are accepted **only** by `createGovernedChangeDraft`, nested inside `change`. `GovernedActionDraftInput` has no field for them in any of the three SDKs. To attach either one, call the lower-level builder and derive the ids and idempotency hash yourself.
+
+Both land in `metadata` on the `change.declared` event and are dropped when absent. They are references to assertion records; the builder does not resolve, fetch, or validate the assertion they point at.
+
+## What this does not prove
+
+A returned draft is a set of well-formed inputs. It is not evidence, and several things it contains are claims rather than proofs.
+
+- **No record exists yet.** The draft carries no store-assigned sequence and no record hash. Nothing is evidence until a conforming `AuditStore` appends `outboxEntry` and assigns both.
+- **`mutationBinding` is a declaration.** `same_transaction` records what the host says it did. The SDK cannot observe the host's transaction and does not verify the claim.
+- **The state commitment covers declared fields only.** A field with no policy, or one set to `omit`, is outside the digest. Its later modification is invisible to any check against this revision.
+- **`content_digest` is not confidentiality for low-entropy values.** An email address or a status enum can be recovered by guessing and hashing candidates. Use `keyed_digest` with host-held key material when that matters.
+- **`changedPaths` describes the `before`/`after` pair the host passed in.** It does not prove the database row actually changed, or that the host passed its real prior state.
+- **`idempotencyKeyHash` does not enforce idempotency.** It only makes tenant-scoped conflict detection possible in a store that implements the uniqueness constraint.
+
+Continue with [Governed changes](/docs/concepts/governed-changes/) for the model these builders serve, the [governed actions guide](/docs/guides/governed-actions/) for wiring one into a mutation boundary, and the [transactional outbox guide](/docs/guides/transactional-outbox/) for making `mutationBinding: 'same_transaction'` true rather than merely declared. The [hash chain](/docs/concepts/hash-chain/) page explains what the store adds once the outbox entry is appended.

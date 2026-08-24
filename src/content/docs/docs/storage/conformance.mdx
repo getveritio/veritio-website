@@ -1,0 +1,168 @@
+---
+title: Store conformance suite
+description: Run createAuditStoreConformanceTests against a custom AuditStore to prove tenant-scoped ordering, idempotency uniqueness, cloned reads, and fail-closed integrity.
+audience: [developer, operator]
+kind: guide
+searchIntent: Prove a custom Veritio AuditStore is authoritative by running the published storage conformance suite.
+questions:
+  - How do I test a custom Veritio AuditStore?
+  - What does createAuditStoreConformanceTests actually check?
+  - Why does mutateStoredRecord have to bypass the store API?
+  - Do derived archives or ClickHouse projections need to pass conformance?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7', '@veritio/storage@0.4.7']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/storage/src/conformance.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/storage/package.json
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/storage/src/__tests__/index.test.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/storage/integration/live-databases.test.ts
+claimRefs: []
+---
+
+import { Aside, Code } from '@astrojs/starlight/components'
+import example from '../../../../examples/storage/conformance-suite.ts?raw'
+import expectedOutput from '../../../../examples/storage/expected/conformance-suite.txt?raw'
+
+The `AuditStore` interface has two methods, and both are easy to implement wrongly. A store can persist records, return them, satisfy its own unit tests, and still leak one tenant's sequence into another, silently accept a reused idempotency key, hand out mutable references to stored evidence, or serve a record that was edited in the database after it was written. `@veritio/storage/conformance` exports the executable definition of what an authoritative store must do, so those failures surface as a failing test instead of as unverifiable evidence years later.
+
+## The suite is a list, not a framework
+
+```sh
+bun add @veritio/core@0.4.7 @veritio/storage@0.4.7
+```
+
+`createAuditStoreConformanceTests(options)` returns a plain array of `{ name, run }` objects. It does not call `describe`, `test`, `it`, or any runner global. Each `run()` is an async function that throws on failure, using `node:assert/strict` internally, which means the suite executes under any Node-compatible or Bun runtime and adapts to whatever test runner the host already uses.
+
+`options` has exactly two fields:
+
+| Field | Purpose |
+| --- | --- |
+| `name` | A label for the target under test. The suite carries it but does not read it — the returned check names are fixed strings, so use `name` in your own `describe` block or report. |
+| `createTarget()` | Builds one fresh `AuditStoreConformanceTarget`. May return a promise. |
+
+The target is the adapter's side of the contract:
+
+| Field | Required | Purpose |
+| --- | --- | --- |
+| `store` | yes | The `AuditStore` under test — the only surface the checks exercise. |
+| `mutateStoredRecord(corruption)` | yes | Rewrites persisted bytes out of band. May return a promise. |
+| `close()` | no | Releases pools, drops temporary tables, disconnects clients. May return a promise. |
+
+`corruption` carries `{ tenantId, sequence, mutate }`. Your implementation loads the stored record for that tenant and sequence, passes it to `mutate`, and writes back either the value `mutate` returned or the record it mutated in place — `mutate(record) ?? record` is the whole rule.
+
+## One target per check
+
+The suite creates and destroys a target around every individual check:
+
+```text
+for each check returned by createAuditStoreConformanceTests(options)
+  createTarget()        → fresh store + fresh corruption seam
+    await check.run()   → asserts only through the AuditStore API
+  finally
+    await close?.()     → runs even when the check threw
+```
+
+This isolation is load-bearing rather than tidy. The suite reuses fixed identifiers — tenants `org_conformance_a` and `org_conformance_b`, events `evt_conformance_01` through `evt_conformance_03` — across every check. A target that hands back the same table, collection, or directory on each call will see sequence 1 already taken and fail for reasons that have nothing to do with the invariant under test. For live databases, `createTarget()` should generate a uniquely named table or collection, apply the schema, and drop it in `close()`.
+
+## What each check proves
+
+The suite is five checks. Each isolates one invariant, and each maps to a class of production incident.
+
+**Tenant-scoped chains and deterministic listing.** Two events are appended to tenant A, one to tenant B. Tenant A must produce sequences 1 and 2 with `previousHash` moving from `null` to the first record's hash; tenant B must independently start again at sequence 1 with `previousHash: null`. Listing tenant A must return exactly the two records the appends returned — a `deepEqual` against the values `append` handed back, which also proves the store does not re-stamp `appendedAt` or drop envelope fields on the read path. The listed records are then passed to `verifyAuditRecords`, and paging with `{ afterSequence: 1, limit: 1 }` must return only the second record. This is the check that catches a global sequence counter, a missing tenant predicate in the list query, and off-by-one paging.
+
+**Idempotency uniqueness.** The same event is appended twice under the key `invite:user-456`. The second call must return the original record rather than creating a second one, and the tenant must still hold exactly one record. A third append that reuses the same key with different event bytes must reject with a message matching `/idempotency conflict/`. Returning a fresh record on replay and silently overwriting on conflict are both failures; so is accepting the conflicting append, which would make one key describe two different claims.
+
+**Fail-closed scope and tip checks.** An event with no `scope.tenantId` must reject with `/scope\.tenantId is required/` before anything is written. Then, after one successful append, a compare-and-append carrying a deliberately wrong `expectedPreviousHash` must reject with `/expectedPreviousHash does not match tenant chain tip/`. Both messages are matched by regex, so a custom store has to include those substrings in the errors it throws. Reusing the wording is the cheapest way to stay compatible.
+
+**Cloned reads.** The check takes the record `append` returned, sets `event.metadata.role` to a different value, and overwrites `hash` with a sentinel. A subsequent `list` must still return the original metadata and the original hash, and must still verify. Any store that keeps a reference to a live in-memory object — or returns the same object it stored — fails here. Serializing on write and parsing on read, as a real database column does, satisfies this without extra work.
+
+**Fail-closed integrity.** One record is corrupted through `mutateStoredRecord`, then `list` must reject with `/stored audit record integrity check failed/`. Not return the tampered record with a flag. Not return it silently. Reject.
+
+## The corruption seam is the point
+
+`mutateStoredRecord` exists because the store's own API cannot express the threat being tested. Evidence is not attacked through `append`; it is attacked through a direct `UPDATE`, a restored backup, an accidental migration, or an operator with database access. So the test seam has to reach the same layer.
+
+```text
+application path   append() ── list()
+                        │        ▲
+                        ▼        │
+                   persisted bytes (row, document, file)
+                        ▲
+                        │
+test-only path     mutateStoredRecord()
+```
+
+If `mutateStoredRecord` were implemented by calling back into the store, the check would prove nothing: the store would re-derive a consistent hash and the corruption would never exist. Implement it against the raw storage layer — a SQL `UPDATE ... SET record_json = $1 WHERE tenant_id = $2 AND sequence = $3`, a document replace, or a direct rewrite of the serialized row. The repository's own live suites do exactly that for Postgres, MySQL, MariaDB, and Mongo.
+
+The invariant this forces is worth stating plainly: an authoritative store must re-verify integrity on **read**, not only at append time. Append-time hashing protects nothing against an edit that happens afterwards.
+
+<Aside type="caution" title="Test seam only">
+`mutateStoredRecord` must not be reachable from the `AuditStore` interface or from application code. It belongs in test harness code beside the connection setup, never in the adapter you ship.
+</Aside>
+
+## A custom store, run end to end
+
+This checked fixture implements an `AuditStore` from scratch — one that serializes each record into a JSON string, exactly as a database column would — and runs the published suite against it. It never reimplements hashing; `hashAuditRecord` and `hashIdempotencyKey` come from `@veritio/core`.
+
+<Code code={example} lang="ts" title="src/examples/storage/conformance-suite.ts" />
+
+Run it from the website checkout:
+
+```sh
+bun src/examples/storage/conformance-suite.ts
+```
+
+The build executes the fixture and requires this exact output:
+
+<Code code={expectedOutput} lang="json" title="verified output" />
+
+`checkCount: 5` is the current size of the contract. Treat that number as a floor rather than a constant: a store pinned to `@veritio/storage@0.4.7` proves the five invariants that release defines, and a later release can add checks a passing store has not yet seen.
+
+## Wiring it into a host runner
+
+Because the suite returns data, adapting it to a runner is a loop. With `bun:test`:
+
+```ts
+import { describe, test } from 'bun:test'
+import { createPostgresAuditStore } from '@veritio/storage'
+import { createAuditStoreConformanceTests } from '@veritio/storage/conformance'
+
+describe('postgres AuditStore conformance', () => {
+  for (const conformanceTest of createAuditStoreConformanceTests({
+    name: 'postgres',
+    async createTarget() {
+      const harness = await createPostgresHarness() // host-owned: pool, unique table, schema
+      return {
+        store: createPostgresAuditStore({ client: harness.executor, tableName: harness.tableName }),
+        async mutateStoredRecord({ tenantId, sequence, mutate }) {
+          const record = await harness.readRecordJson(tenantId, sequence)
+          await harness.writeRecordJson(tenantId, sequence, mutate(record) ?? record)
+        },
+        close: () => harness.close(),
+      }
+    },
+  })) {
+    test(conformanceTest.name, conformanceTest.run)
+  }
+})
+```
+
+The same loop works with `node:test`, Vitest, or Jest — only the `describe`/`test` import changes. The harness, not `@veritio/storage`, owns connection strings, credentials, containers, schema application, and cleanup. Keep environment-variable reads in the test bootstrap; the storage package does not read them.
+
+Gate the live suite on the presence of its connection string so contributors without containers still run the in-memory checks, which is how the upstream repository skips its Postgres, Neon, MySQL, MariaDB, and Mongo suites when those URLs are absent.
+
+## What is out of scope
+
+**Derived tiers do not run this suite.** The object archive (R2, S3, MinIO) and the ClickHouse read model are not `AuditStore` implementations and must never be. Object storage cannot perform a transactional compare-and-append; ClickHouse has no synchronous unique constraint or transactional tip check. Both are eventually consistent, both are fed from an authoritative store, and neither may own a sequence number or answer a definitive verification or DSAR request. Running conformance against them would either fail or, worse, encourage an adapter to fake the guarantees. A Redis tenant-tip cache is in the same category: validate it as a cache beside a durable store, not as a store.
+
+**Evidence commits are not required.** `AuditStore` is `append` and `list`. The suite never calls a commit API, never constructs an `EvidenceCommit`, and never asks a target for one. A store that only appends and lists audit records is fully conformant. Commit support is a separate capability — the file store implements it — and its own hashing rules are verified independently.
+
+## What a green suite does and does not prove
+
+A passing run means the store satisfies the tenant-ordering, idempotency, fail-closed, cloning, and read-integrity invariants under the suite's single-process, low-volume scenarios. It supports an argument that the store is trustworthy as an evidence authority.
+
+It does not prove concurrency safety: the checks are sequential, so a store whose sequence assignment races under parallel writers can still pass. It does not prove durability or crash safety — an in-memory fake passes every check, as the fixture above demonstrates. It does not exercise backup, restore, retention, or access control. And it says nothing about whether your application recorded the right events in the first place.
+
+Pair conformance with a concurrency test against your real backend, a restart test, and the operational controls around the append boundary.
+
+Continue with [Storage overview](/docs/storage/overview/) to see which boundaries are authoritative and which are derived, [Postgres storage](/docs/storage/postgres/) for a transactional adapter that already passes this suite, or the [hash chain](/docs/concepts/hash-chain/) concept for the invariants the integrity checks are defending.

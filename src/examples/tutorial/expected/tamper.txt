@@ -1,0 +1,12 @@
+{
+  "changedRecord": {
+    "ok": false,
+    "index": 1,
+    "reason": "hash_mismatch"
+  },
+  "droppedRecord": {
+    "ok": false,
+    "index": 0,
+    "reason": "sequence_mismatch"
+  }
+}

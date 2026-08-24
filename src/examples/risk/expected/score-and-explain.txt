@@ -1,0 +1,218 @@
+{
+  "policyVersion": "veritio.reference.v1",
+  "bands": {
+    "low": 0.05,
+    "medium": 0.25,
+    "high": 0.5,
+    "critical": 0.75
+  },
+  "factorOrder": [
+    "operationType",
+    "dataVolume",
+    "fanOut",
+    "referenceCount",
+    "reversibility",
+    "envCriticality"
+  ],
+  "scenarios": [
+    {
+      "name": "read-config-lookup",
+      "signals": {
+        "operationType": "read"
+      },
+      "normalized": {
+        "operationType": "read",
+        "reversibility": "recoverable",
+        "envCriticality": "production",
+        "dataVolume": 0,
+        "fanOut": 0,
+        "referenceCount": 0
+      },
+      "assessment": {
+        "score": 0.05,
+        "level": "low",
+        "policyVersion": "veritio.reference.v1",
+        "factors": [
+          {
+            "key": "operationType",
+            "value": "read",
+            "kind": "base",
+            "weight": 1,
+            "contribution": 0.05
+          },
+          {
+            "key": "dataVolume",
+            "value": 0,
+            "kind": "additive",
+            "weight": 0.5,
+            "contribution": 0
+          },
+          {
+            "key": "fanOut",
+            "value": 0,
+            "kind": "additive",
+            "weight": 0.3,
+            "contribution": 0
+          },
+          {
+            "key": "referenceCount",
+            "value": 0,
+            "kind": "additive",
+            "weight": 0.2,
+            "contribution": 0
+          },
+          {
+            "key": "reversibility",
+            "value": "recoverable",
+            "kind": "multiplier",
+            "weight": 1,
+            "contribution": 1
+          },
+          {
+            "key": "envCriticality",
+            "value": "production",
+            "kind": "multiplier",
+            "weight": 1,
+            "contribution": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "bulk-export-staging",
+      "signals": {
+        "operationType": "bulk",
+        "reversibility": "reversible",
+        "envCriticality": "staging",
+        "dataVolume": 5000,
+        "fanOut": 3,
+        "referenceCount": 12
+      },
+      "normalized": {
+        "operationType": "bulk",
+        "reversibility": "reversible",
+        "envCriticality": "staging",
+        "dataVolume": 5000,
+        "fanOut": 3,
+        "referenceCount": 12
+      },
+      "assessment": {
+        "score": 0.3718,
+        "level": "medium",
+        "policyVersion": "veritio.reference.v1",
+        "factors": [
+          {
+            "key": "operationType",
+            "value": "bulk",
+            "kind": "base",
+            "weight": 1,
+            "contribution": 0.55
+          },
+          {
+            "key": "dataVolume",
+            "value": 5000,
+            "kind": "additive",
+            "weight": 0.5,
+            "contribution": 0.1961
+          },
+          {
+            "key": "fanOut",
+            "value": 3,
+            "kind": "additive",
+            "weight": 0.3,
+            "contribution": 0.0129
+          },
+          {
+            "key": "referenceCount",
+            "value": 12,
+            "kind": "additive",
+            "weight": 0.2,
+            "contribution": 0.0155
+          },
+          {
+            "key": "reversibility",
+            "value": "reversible",
+            "kind": "multiplier",
+            "weight": 0.6,
+            "contribution": 0.6
+          },
+          {
+            "key": "envCriticality",
+            "value": "staging",
+            "kind": "multiplier",
+            "weight": 0.8,
+            "contribution": 0.8
+          }
+        ]
+      }
+    },
+    {
+      "name": "destructive-drop-production",
+      "signals": {
+        "operationType": "destructive",
+        "reversibility": "irreversible",
+        "envCriticality": "production",
+        "dataVolume": 250000,
+        "fanOut": 40,
+        "referenceCount": 180
+      },
+      "normalized": {
+        "operationType": "destructive",
+        "reversibility": "irreversible",
+        "envCriticality": "production",
+        "dataVolume": 250000,
+        "fanOut": 40,
+        "referenceCount": 180
+      },
+      "assessment": {
+        "score": 1,
+        "level": "critical",
+        "policyVersion": "veritio.reference.v1",
+        "factors": [
+          {
+            "key": "operationType",
+            "value": "destructive",
+            "kind": "base",
+            "weight": 1,
+            "contribution": 0.85
+          },
+          {
+            "key": "dataVolume",
+            "value": 250000,
+            "kind": "additive",
+            "weight": 0.5,
+            "contribution": 0.1999
+          },
+          {
+            "key": "fanOut",
+            "value": 40,
+            "kind": "additive",
+            "weight": 0.3,
+            "contribution": 0.0738
+          },
+          {
+            "key": "referenceCount",
+            "value": 180,
+            "kind": "additive",
+            "weight": 0.2,
+            "contribution": 0.0626
+          },
+          {
+            "key": "reversibility",
+            "value": "irreversible",
+            "kind": "multiplier",
+            "weight": 1.3,
+            "contribution": 1.3
+          },
+          {
+            "key": "envCriticality",
+            "value": "production",
+            "kind": "multiplier",
+            "weight": 1,
+            "contribution": 1
+          }
+        ]
+      }
+    }
+  ]
+}

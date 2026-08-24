@@ -1,0 +1,128 @@
+---
+title: Risk scoring
+description: How Veritio turns six non-PII operation signals into a deterministic, explainable 0..1 risk score that TypeScript, Python, and Go reproduce byte-for-byte.
+audience: [developer, operator, governance]
+kind: concept
+searchIntent: Understand how Veritio derives a deterministic explainable 0..1 risk score from six operation signals.
+questions:
+  - How does Veritio calculate a risk score for an operation?
+  - What are RiskSignals and which values are allowed?
+  - Why does normalizeRiskSignals throw instead of scoring zero?
+  - What do the six factors in a RiskAssessment mean?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/risk-score.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/risk-scoring.md
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/risk-signals.schema.json
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/conformance/risk-scoring-default-policy.json
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/conformance/risk-signals-normalization.json
+claimRefs: []
+---
+
+import { Code } from '@astrojs/starlight/components'
+import scoreOutput from '../../../../examples/risk/expected/score-and-explain.txt?raw'
+import failClosedOutput from '../../../../examples/risk/expected/signals-fail-closed.txt?raw'
+
+An audit trail records what happened. It does not tell a reviewer which of ten thousand recorded operations deserves attention first. Veritio answers that with a deterministic score: a small closed vocabulary of signals about one operation, a fixed formula, and a factor-by-factor breakdown that lets anyone recompute the number and see where it came from.
+
+The score is not a heuristic that drifts between releases or between runtimes. `scoreRiskSignals` (`score_risk_signals` in Python, `ScoreRiskSignals` in Go) reads only its inputs and a policy of pinned constants. Given the same signals and the same policy, all three SDKs emit the same digits.
+
+## Six signals, four closed vocabularies
+
+A caller describes one operation with `RiskSignals`. Only `operationType` is required.
+
+```text
+RiskSignals
+  operationType   required   read | create | update | config
+                             bulk | permission | delete | destructive
+  reversibility   optional   reversible | recoverable | irreversible
+  envCriticality  optional   sandbox | development | staging | production
+  dataVolume      optional   non-negative integer
+  fanOut          optional   non-negative integer
+  referenceCount  optional   non-negative integer
+```
+
+The three enum vocabularies are closed and protocol-fixed; `spec/risk-signals.schema.json` pins them and rejects additional properties. The three magnitudes are counts, not measurements: rows touched, downstream targets affected, references pointing at the target. Every one of these six fields is structural. None of them is a place for a user identifier, a file path, a prompt, or free text, which is what makes signals safe to carry on an event without further minimization.
+
+## The per-step formula
+
+Scoring seeds a base from the operation class, adds three saturating magnitude boosts, then scales the sum by two multipliers.
+
+```text
+dvBoost = round4(maxBoost * weights.dataVolume     * sat(dataVolume,     k.dataVolume))
+foBoost = round4(maxBoost * weights.fanOut         * sat(fanOut,         k.fanOut))
+rcBoost = round4(maxBoost * weights.referenceCount * sat(referenceCount, k.referenceCount))
+
+score   = clamp01(round4(
+            (operationBase + dvBoost + foBoost + rcBoost)
+            * reversibilityFactor
+            * envCriticalityFactor))
+```
+
+Three primitives do all the work. `clamp01(x)` is `min(1, max(0, x))`. `round4(x)` is `floor(x * 10000 + 0.5) / 10000`, a half-up round to four decimals built from floor and integer arithmetic. `sat(x, K)` is `x / (x + K)`: zero at zero, asymptotic to one, so a magnitude of a million adds more than a magnitude of a thousand without ever escaping the boost ceiling.
+
+The magnitude weights in the reference policy sum to exactly `1.0` (`0.5 + 0.3 + 0.2`), so the three additive boosts together can never exceed `magnitude.maxBoost`, which is `0.4`. The additive part of a score is bounded before the multipliers see it. The multipliers can push the product above `1.0` — an irreversible destructive operation in production multiplies by `1.3` — and `clamp01` is what brings it back inside the unit interval, as the final step and nowhere earlier.
+
+`bandOf` then maps the score to a level with half-open thresholds: `none` below `bands.low`, `low` below `bands.medium`, `medium` below `bands.high`, `high` below `bands.critical`, `critical` at or above it. Under `DEFAULT_RISK_POLICY` (`veritio.reference.v1`) those cut points are `0.05 / 0.25 / 0.50 / 0.75`.
+
+## Why the math is pow-free
+
+Every operation above is comparison, addition, multiplication, division, or floor, evaluated in the written order. There is no `pow`, `exp`, or `log` anywhere in the scorer, and the episode-decay path applies `decayPerWindow` by repeated multiplication rather than exponentiation.
+
+This is a deliberate constraint, not a stylistic one. Transcendental functions are implemented per-runtime and are permitted to differ in the last bits; a score that used `exp` could disagree between Node, CPython, and Go in the fourth decimal, which is exactly where `round4` reads. Restricting the algorithm to IEEE-754 doubles under the four basic operations plus floor makes the result reproducible across the three SDKs, and the `spec/conformance/risk-*.json` fixtures pin that agreement in CI. The same constraint is why the module is crypto-free and importable from a browser bundle through the `@veritio/core/risk-score` subpath: a UI can recompute a displayed score without pulling in `node:crypto`.
+
+## The factor breakdown
+
+Every assessment returns `score`, `level`, `policyVersion`, and exactly six `factors` in a fixed order. The executable example below scores three fixed scenarios under the reference policy. Its output is byte-compared in CI.
+
+<Code code={scoreOutput} lang="json" title="verified risk scoring output" />
+
+Read one factor entry at a time. `key` names the signal. `value` is the normalized signal — an enum member or a number, never free text. `kind` is `base` for the operation seed, `additive` for the three magnitude boosts, and `multiplier` for reversibility and environment criticality. `weight` is the policy constant applied, and `contribution` is what that factor actually put into the score. For additive factors `contribution` is the rounded boost; for multipliers the convention is that `weight` and `contribution` are both the factor itself.
+
+That convention is what makes the breakdown self-checking. Take `bulk-export-staging`: add the base and the three additive contributions, `0.55 + 0.1961 + 0.0129 + 0.0155 = 0.7745`, then multiply by the two multiplier contributions, `0.7745 * 0.6 * 0.8 = 0.37176`, then `round4` to `0.3718`. That is the reported score. A reviewer can recompute any assessment from its own factors without the policy in hand.
+
+The three scenarios also show the shape of the curve. `read-config-lookup` supplies nothing but `operationType`, scores `0.05`, and lands in `low` rather than `none` because banding is half-open and `0.05` is not below `0.05`. `destructive-drop-production` reaches a pre-clamp product of `1.5422` and reports `1`. Notice what the factors preserve: the clamped score hides the overshoot, but the factor list still shows a `0.85` base, a near-saturated `0.1999` data-volume boost, and a `1.3` irreversibility multiplier, so the reason for the ceiling survives even though the number does not distinguish it from any other saturated operation.
+
+## Fail-closed normalization
+
+`normalizeRiskSignals` runs before any arithmetic. It rejects unknown enum members and rejects magnitudes that are not finite non-negative integers — negative, fractional, `NaN`, and `Infinity` all raise a `TypeError`. It never coerces, never substitutes a neutral value, and never lets malformed input arrive at the scorer as a low number.
+
+<Code code={failClosedOutput} lang="json" title="verified fail-closed normalization output" />
+
+The distinction matters because the failure mode of a silently-degrading scorer is invisible. A typo in an operation class — `exfiltrate` instead of `destructive` — would produce a base of zero and a score of zero, and a zero score looks exactly like a safe operation in every dashboard downstream. Throwing turns a mislabelled high-risk operation into a loud application error at the call site instead of a quiet clean bill of health in the evidence.
+
+The first half of that output shows the other side of the contract. Absent `reversibility` normalizes to `recoverable`, absent `envCriticality` to `production`, and absent magnitudes to `0`. Those defaults are the conservative end of each vocabulary, not the neutral middle: a caller who omits a signal can never score lower than a caller who states the safe value explicitly. Normalization is also non-mutating, which the `inputUnchanged` line proves — the caller's object is left alone and a fresh, fully-populated shape is returned.
+
+## Carrying signals on an event
+
+`withRiskSignals(metadata, signals)` returns a new metadata object with the normalized signals at `metadata.riskSignals`. The stamp is applied **after** the caller's keys are spread, so a host cannot shadow the scored envelope by supplying its own `riskSignals` key. Because the helper normalizes on the way in, the stored value is always the fully-defaulted shape the scorer reads, and invalid signals fail at record time rather than at scoring time.
+
+```text
+{ ...callerMetadata }        caller keys land first
+        ↓
+riskSignals: normalized(...)  stamped last, un-shadowable
+        ↓
+redaction → canonical JSON → hash
+```
+
+The same ordering discipline governs `metadata.sessionId` and `metadata.activityEpisodeId` on agent capture. See [Redaction](/docs/concepts/redaction/) for what happens to metadata before it is hashed.
+
+One consequence deserves stating plainly: a `security.risk` assertion is a standalone record rather than an audit event, so it is not passed through metadata redaction. The SDK scorer only ever emits enum tokens and normalized numbers in `RiskFactor.value`, which is safe. A host that hand-builds factors owns the obligation to keep personal data out of `value`, because the assertion body is preserved verbatim for integrity.
+
+## What a score does not prove
+
+A score is a claim about a described operation, not a measurement of what occurred.
+
+- **It inherits the honesty of its inputs.** Normalization validates shape, not truth. An operation labelled `read` when it deleted a table scores `0.05` and the arithmetic is still correct. Signals should be derived at the mutation boundary from what the code is actually about to do, not accepted from a client.
+- **It is not a probability.** `0.3718` is a position on a policy-defined scale. It does not mean a 37% chance of anything.
+- **It is meaningless without its policy version.** `policyVersion` rides on every assessment for this reason. A `0.6` under `veritio.reference.v1` and a `0.6` under a retuned policy are not comparable, and bands are the part most often retuned.
+- **The clamp erases distinctions at the top.** Any pre-clamp product at or above `1.0` reports `1`. Two operations of very different magnitude can both be `critical` with a score of `1`; the `factors` array, not the score, is where the difference survives.
+- **Scoring is not integrity.** The number is reproducible, but reproducibility is not tamper-evidence. An assessment only becomes evidence once it is recorded and chained — see [Hash chain](/docs/concepts/hash-chain/).
+- **It is not a compliance determination.** A band is an operational triage signal that supports a review; it is evidence tooling, and it is not legal advice.
+
+## Related
+
+- [Risk policy reference](/docs/reference/risk-policy/) — every policy constant, temperature-derived policies, and override rules.
+- [Hash chain](/docs/concepts/hash-chain/) — how a recorded assessment becomes tamper-evident evidence.
+- [Redaction](/docs/concepts/redaction/) — what runs over metadata before canonicalization and hashing.

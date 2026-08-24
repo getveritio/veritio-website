@@ -1,0 +1,145 @@
+{
+  "episode": [
+    {
+      "occurredAt": "2026-08-09T10:00:00.000Z",
+      "score": 0.12,
+      "action": "auth.login.failed"
+    },
+    {
+      "occurredAt": "2026-08-09T10:00:40.000Z",
+      "score": 0.12,
+      "action": "auth.login.failed"
+    },
+    {
+      "occurredAt": "2026-08-09T10:01:30.000Z",
+      "score": 0.12,
+      "action": "auth.login.failed"
+    },
+    {
+      "occurredAt": "2026-08-09T10:02:10.000Z",
+      "score": 0.12,
+      "action": "auth.login.failed"
+    },
+    {
+      "occurredAt": "2026-08-09T10:05:00.000Z",
+      "score": 0.1
+    },
+    {
+      "occurredAt": "2026-08-09T10:12:00.000Z",
+      "score": 0.2,
+      "action": "data.export.completed"
+    }
+  ],
+  "configuredRules": [
+    {
+      "actions": [
+        "auth.login.failed"
+      ],
+      "windowSeconds": 300,
+      "threshold": 4,
+      "boost": 0.55
+    },
+    {
+      "actions": [
+        "data.export.started",
+        "data.export.completed"
+      ],
+      "windowSeconds": 600,
+      "threshold": 3,
+      "boost": 0.4
+    }
+  ],
+  "withoutFrequencyRules": {
+    "policyVersion": "veritio.reference.v1",
+    "configuredRuleCount": 0,
+    "score": 0.2,
+    "level": "low",
+    "peak": 0.2,
+    "velocityScore": 0.16,
+    "stepCount": 6,
+    "emitsFrequencyFields": false
+  },
+  "withFrequencyRules": {
+    "policyVersion": "acme.burst-detection.v1",
+    "configuredRuleCount": 2,
+    "score": 0.55,
+    "level": "high",
+    "peak": 0.2,
+    "velocityScore": 0.16,
+    "stepCount": 6,
+    "emitsFrequencyFields": true,
+    "frequencyScore": 0.55,
+    "frequencyMatches": [
+      {
+        "actions": [
+          "auth.login.failed"
+        ],
+        "windowSeconds": 300,
+        "threshold": 4,
+        "count": 4,
+        "fired": true,
+        "boost": 0.55
+      },
+      {
+        "actions": [
+          "data.export.started",
+          "data.export.completed"
+        ],
+        "windowSeconds": 600,
+        "threshold": 3,
+        "count": 1,
+        "fired": false,
+        "boost": 0
+      }
+    ]
+  },
+  "ruleEffect": {
+    "scoreBefore": 0.2,
+    "scoreAfter": 0.55,
+    "levelBefore": "low",
+    "levelAfter": "high",
+    "peakUnchanged": true,
+    "velocityUnchanged": true,
+    "firedBoosts": [
+      {
+        "actions": [
+          "auth.login.failed"
+        ],
+        "count": 4,
+        "boost": 0.55
+      }
+    ],
+    "unfiredRules": [
+      {
+        "actions": [
+          "data.export.started",
+          "data.export.completed"
+        ],
+        "count": 1,
+        "threshold": 3
+      }
+    ]
+  },
+  "replacesWholesale": {
+    "v1Actions": [
+      [
+        "auth.login.failed"
+      ],
+      [
+        "data.export.started",
+        "data.export.completed"
+      ]
+    ],
+    "v2Actions": [
+      [
+        "data.export.started",
+        "data.export.completed"
+      ]
+    ],
+    "v2RuleCount": 1,
+    "v2DroppedLoginRule": true,
+    "omittedKeyKeepsBaseRules": 0,
+    "omittedKeyWindowSeconds": 30,
+    "defaultPolicyStillRuleFree": true
+  }
+}

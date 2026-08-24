@@ -1,0 +1,199 @@
+---
+title: Governed actions
+description: Produce change, activity, and revision evidence inside the server-side mutation that changes the row, instead of reconstructing it later from logs.
+audience: [developer, operator, governance]
+kind: tutorial
+searchIntent: Emit governed change evidence at a server mutation boundary using defineEntity and createGovernedActionDraft.
+questions:
+  - How do I record a governed create or update with Veritio?
+  - What does createGovernedActionDraft actually return?
+  - Why do the change id and activity id share the same suffix?
+  - Which fields of my database row end up in evidence?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/governed-change.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/conformance/governed-action-draft.json
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/docs/integrations.md
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/docs/templates/typescript-api-route.md
+claimRefs: []
+---
+
+import { Aside, Code } from '@astrojs/starlight/components'
+import actionDraftExample from '../../../../examples/governed/action-draft.ts?raw'
+import actionDraftOutput from '../../../../examples/governed/expected/action-draft.txt?raw'
+import failClosedExample from '../../../../examples/governed/fail-closed.ts?raw'
+import failClosedOutput from '../../../../examples/governed/expected/fail-closed.txt?raw'
+
+Audit trails scraped from application logs are reconstructions. They are written after the fact, by a process that did not hold the transaction, from text that was never designed to answer "who changed which field, from what, to what, under whose authority". A governed action inverts that: the mutation boundary itself produces the evidence, from the same before and after rows the database write uses, in the same transaction.
+
+`defineEntity` and `createGovernedActionDraft` are the two calls that do it. Both are pinned across the TypeScript, Python, and Go SDKs by `spec/conformance/governed-action-draft.json`, so the same row change produces the same ids, the same changed paths, and the same state digest in every language.
+
+## Where this code lives
+
+The helper belongs in the host application's server-side mutation path: the route handler, server action, or service method that has already authorized the request, resolved the tenant, and loaded the row for update.
+
+```text
+browser            → intent only (form state, validation, optimistic UI)
+adapter            → passes request/auth context through
+host mutation path → defineEntity + createGovernedActionDraft   ← evidence is produced here
+                     db write + outbox insert, one transaction
+outbox dispatcher  → createAuditEvent + AuditStore.append
+```
+
+It does not belong in an adapter package. Adapters translate framework shapes; they do not own changed-path derivation, idempotency, storage, or protocol semantics. It does not belong in browser code at all: the browser cannot be trusted for the tenant id, the actor identity, the before row, or the transaction, and any digest key material passed to the helper must never leave the server.
+
+## Declaring the entity and its capture policy
+
+`defineEntity` registers what a governed row *is* for evidence purposes. It stores a declaration; it never reads your database or your environment.
+
+Five things are required, and each one carries weight later:
+
+- `authority` — who is authoritative for this identifier namespace. It qualifies every ref the entity produces, so ids stay safe to join across systems.
+- `type` — the entity type, used in refs, event targets, and derived ids.
+- `schemaRef` and `fieldSetRef` — stable pointers to the row schema version and the governed field-set version. They are recorded inside the state commitment so a later reader can tell which field set a digest was computed over.
+- `identity(row)` — extracts the entity id from a row.
+- `fields` — the per-field capture policy. This is the only place capture is decided.
+
+Four capture modes are implemented in the v1 state-commitment builder: `full` commits the value, `content_digest` commits `sha256` of the field's canonical JSON, `keyed_digest` commits an HMAC-SHA-256 under a caller-supplied key version and secret, and `omit` excludes the field entirely. The remaining declared modes (`randomized_digest`, `reference`, `redact`, `encrypt`) are reserved: selecting one throws at draft time rather than silently producing a weaker commitment.
+
+The consequence that matters most is negative. The commitment loop iterates `entity.fields` only. A column you did not declare cannot enter the state commitment, cannot become a changed path, and cannot leak into the outbox — which is what keeps the outbox from becoming a shadow copy of your production table.
+
+## Building the draft
+
+<Code code={actionDraftExample} lang="ts" title="src/examples/governed/action-draft.ts" />
+
+Run it with:
+
+```sh
+bun src/examples/governed/action-draft.ts
+```
+
+### One seed, two ids
+
+`createGovernedActionDraft` derives a single 16-hex seed and uses it for both generated ids:
+
+```text
+idSeed   = sha256("<tenantId>:<idempotencyKey>")[0..16]
+changeId = chg_<entityType>_<entityId>_<idSeed>
+activityId = act_<entityType>_<entityId>_<idSeed>
+```
+
+Because both ids come from one seed, a replayed request — the same tenant, the same idempotency key — reproduces the same change/activity pair instead of forking a second branch into the evidence graph. You can override either id explicitly when the host already owns a change identifier.
+
+The seed is deliberately *not* the idempotency hash that goes into the records. That value is `hashIdempotencyKey(tenantId, idempotencyKey)`, a full SHA-256 over `tenantId`, a NUL byte, and the key. It is stamped on all three events and is what a store uses to reject a conflicting replay. The seed is a short public id suffix; the hash is the integrity token. Neither is reversible to the raw key.
+
+The revision id is derived differently again, from content plus cause:
+
+```text
+revisionId = rev_<entityType>_<entityId>_<digest12>_<change8>
+             digest12 = first 12 hex of the state digest
+             change8  = first 8 hex of sha256(changeId)
+```
+
+Content-addressing alone would collapse a rollback that restores a byte-identical earlier state into the earlier revision. Mixing in the change makes that rollback a distinct revision node while keeping a replay of the *same* change idempotent.
+
+### Changed paths
+
+When you do not pass `changedPaths`, the helper infers them. It walks the declared fields in sorted key order, skips `omit` fields and fields absent from the after row, and compares canonical JSON of the before and after values. A create (no `before`) marks every declared, present, non-omitted field as changed. The lower-level builder then sorts the result, so `revision.changedPaths` is always a sorted array of top-level JSON Pointers.
+
+Two limits are worth stating plainly. Paths are top-level only: a change deep inside a `full`-captured object registers as one pointer for that field, not a pointer to the nested leaf. And the escape rules are JSON Pointer's own — `~` becomes `~0`, `/` becomes `~1` — so a field name containing a slash still produces one valid segment.
+
+## What the verified output proves
+
+<Code code={actionDraftOutput} lang="json" title="verified output" />
+
+Read it field by field:
+
+- `changeAndActivityShareOneSeed: true` proves the two ids were derived from one `sha256(tenantId:idempotencyKey)` value, so replay is idempotent rather than graph-forking.
+- `changedPaths` is `["/plan", "/seatCount"]`. `internalNotes` also changed in the after row, but it is declared `omit`, so it is invisible to the derivation. `status`, `id`, and `accountEmail` are governed but unchanged, so they are committed without being listed as changed.
+- `committedFields` lists the five declared, non-omitted fields, and `omittedFieldPresent: false` confirms the `omit` decision held all the way into the commitment.
+- `accountEmailCommitment` shows a `content_digest` field: the evidence carries `{ captureMode, digest }`, never the address. The digest is over the field's canonical JSON, so it is stable across languages and comparable across revisions without disclosing the value.
+- `digest` is `sha256` over the canonical JSON of the whole committed field map, labelled with the `veritio-json-v1` canonicalization, plus the `schemaRef` and `fieldSetRef` that say what was committed.
+- `eventActions` is exactly `change.declared`, `activity.recorded`, `entity.revision.created` — one event for the intent, one for the execution, one for the resulting state.
+- `edgeRelations` is exactly `has_activity`, `has_output`, `performed_by`, `generated`.
+
+The graph those four edges describe:
+
+```text
+change ──has_activity──▶ activity ──performed_by──▶ principal
+   │                        │
+   └────has_output─────────▶│
+                            └──generated──▶ revision ──▶ entity
+```
+
+A fifth edge, `derived_from`, is appended only when you supply both a `before` row and an `expectedParentRevisionRef`. The helper never fabricates a placeholder parent: a synthetic one would assert lineage to a revision that never existed and hand the store an optimistic-concurrency token its real head can never match. When the parent is unknown, lineage is left open for the host store to resolve.
+
+## The draft is input, not evidence
+
+`draftIsInputOnly` is the part most easily misread. `eventsCarryStoreAssignedSequence` and `eventsCarryRecordHash` are both `false`, and that is correct: the helper returns `AuditEventInput` values. Nothing here has a tenant-local sequence number, a previous hash, a record hash, or an append time. Those belong to the store.
+
+```text
+createGovernedActionDraft → AuditEventInput[] + EvidenceEdgeInput[] + outboxEntry
+createAuditEvent          → validated, redacted AuditEvent
+AuditStore.append         → AuditRecord (sequence, previousHash, hash, appendedAt)
+```
+
+Until a conforming [`AuditStore`](/docs/storage/overview/) has appended the records, nothing has been proven — a draft is a well-formed proposal, not a tamper-evident fact. The `outboxEntry` exists to make that hop recoverable: it carries `schemaVersion`, the records, the edges, the `mutationBinding`, and the expected parent when one was supplied. Insert it in the same transaction as the row write.
+
+```ts
+await db.transaction(async (tx) => {
+  await tx.subscription.update(after)
+  await tx.veritioOutbox.insert(draft.outboxEntry)
+})
+```
+
+`mutationBinding` records how strong that coupling actually was — `same_transaction`, `best_effort`, or the default `not_transaction_bound`. It is a claim about your delivery path, stamped into each event's capture assurance. Declare what is true; the value is evidence about the evidence.
+
+## Three principals, three different questions
+
+The helper takes three principal refs because they answer three questions that routinely have different answers.
+
+- `initiatedBy` — whose authority the change runs under. It becomes the actor on `change.declared`.
+- `performedBy` — who executed it. It becomes the actor on `activity.recorded` and the target of the `performed_by` edge. This may be an `ai_agent`, a `service`, or a `system`, not just a `user`.
+- `producer` — which component emitted the evidence. It becomes the actor on `entity.revision.created`.
+
+An agent acting under a user's delegated authority is the case this shape exists for: `initiatedBy` stays the human, `performedBy` becomes the agent, `producer` stays the API service. Collapsing all three into one field destroys exactly the distinction an after-the-fact reviewer needs. Each ref is authority-qualified, and the audit actor id is written as `<authority>:<id>` so identifiers from different identity systems never silently collide.
+
+Two further conventions apply to metadata. Reserved context keys — `traceId`, `correlationId`, `activityEpisodeId`, `changeId`, `capturePolicyId`, `collectionSource`, and the auth-session keys — are applied after caller metadata and cannot be shadowed; passing one inside `metadata` throws. And `occurredAt` defaults to `new Date()`, which is fine in production and fatal for reproducibility, so pin it whenever you need byte-stable output.
+
+## Fail-closed behavior
+
+A governed mutation either produces a complete, attributable draft or throws before any evidence exists. There is no partial draft and no degraded mode.
+
+<Code code={failClosedExample} lang="ts" title="src/examples/governed/fail-closed.ts" />
+
+<Code code={failClosedOutput} lang="json" title="verified output" />
+
+Each case removes exactly one guarantee from an otherwise valid input, so the thrown error is attributable to that removal alone:
+
+- **Missing tenant scope.** Without `scope.tenantId` there is no chain to append to and no idempotency scope. `scope.tenantId is required`.
+- **Empty idempotency key.** A blank or whitespace key would make replays indistinguishable from new changes. `idempotencyKey is required`.
+- **Refs missing `authority` or `id`.** An unqualified reference cannot be joined safely across systems, so refs are validated before they cross the SDK boundary.
+- **Producer that is not a principal.** Passing an `entity` ref where a principal belongs throws `principal ref is required` rather than writing an actor that cannot be resolved.
+- **No governed field changed.** An update that touches nothing governed throws `at least one governed field must change`. A no-op must not mint a new revision. If you genuinely need to record a change the field policy cannot see, pass `changedPaths` explicitly and accept that you are asserting it.
+
+Two more failures live in the commitment builder: a `keyed_digest` field without `digestKeys.keyedDigest` throws, and a reserved capture mode throws instead of downgrading to a weaker commitment.
+
+## What this does not prove
+
+A well-formed draft proves that the values you passed were derived deterministically under the declared field policy. It does not prove any of the following.
+
+It does not prove the mutation happened. The draft is built from rows you supplied; if the database write later rolls back and the outbox insert rolls back with it, no evidence is created — but if you insert the outbox row outside the transaction, you can produce evidence for a write that never landed. That is what `mutationBinding` is for, and it is a self-declared value.
+
+It does not prove the before row was the true prior state. The helper compares what you hand it. A stale read produces a truthful record of a false comparison. Load the row for update inside the same transaction.
+
+It does not prove tamper-evidence on its own. Sequence numbers, previous hashes, and record hashes are added by the store; a draft that is never appended is only a proposal. See [Hash chain](/docs/concepts/hash-chain/).
+
+It does not prove the actors were who they claimed. `initiatedBy` and `performedBy` are asserted by your server from its own authenticated context. Veritio records the assertion; your authorization layer is what makes it credible.
+
+And it does not prove that omitted fields were unchanged — only that they were never governed. `omit` is a decision to have no evidence about a field, which is a legitimate minimization choice and a permanent one for records already written. Choose the field set before you start recording.
+
+This is evidence tooling. It supports compliance work and legal review; it is not legal advice, and a valid draft is not a legal conclusion.
+
+## Next
+
+- [Evidence graph](/docs/concepts/evidence-graph/) — how change, activity, revision, and entity nodes connect once the edges are appended.
+- [Hash chain](/docs/concepts/hash-chain/) — what the store adds to turn a draft into tamper-evident evidence.
+- [Redaction](/docs/concepts/redaction/) — deterministic minimization for the metadata that travels alongside a governed change.
+- [Storage overview](/docs/storage/overview/) — which adapters can own authoritative ordering for the append.

@@ -1,0 +1,51 @@
+{
+  "derivedIds": {
+    "changeId": "chg_subscription_sub_9f31_312ca4bde590b545",
+    "activityId": "act_subscription_sub_9f31_312ca4bde590b545",
+    "entityId": "sub_9f31",
+    "revisionId": "rev_subscription_sub_9f31_a71e2768812c_fe34f6d0",
+    "idSeed": "312ca4bde590b545",
+    "changeAndActivityShareOneSeed": true
+  },
+  "changedPaths": [
+    "/plan",
+    "/seatCount"
+  ],
+  "stateCommitment": {
+    "algorithm": "sha256",
+    "canonicalization": "veritio-json-v1",
+    "schemaRef": "acme://schemas/subscription@3",
+    "fieldSetRef": "acme://fieldsets/subscription-governed@1",
+    "digest": "sha256:a71e2768812cca4e3609ce7e24460967d253e1ddab13d9a8898f4fd31a3564cb",
+    "committedFields": [
+      "accountEmail",
+      "id",
+      "plan",
+      "seatCount",
+      "status"
+    ],
+    "omittedFieldPresent": false,
+    "accountEmailCommitment": {
+      "captureMode": "content_digest",
+      "digest": "sha256:aa69b0bc0b21a0ca7b5b5d1beb7556eb7d598f21d638db3eb9770ddd4fb30e45"
+    }
+  },
+  "eventActions": [
+    "change.declared",
+    "activity.recorded",
+    "entity.revision.created"
+  ],
+  "edgeRelations": [
+    "has_activity",
+    "has_output",
+    "performed_by",
+    "generated"
+  ],
+  "draftIsInputOnly": {
+    "note": "create_governed_action_draft returns evidence INPUTS, not persisted records. Append draft['outboxEntry'] through a conforming AuditStore inside the same mutation to make it evidence.",
+    "eventsCarryStoreAssignedSequence": false,
+    "eventsCarryRecordHash": false,
+    "outboxMutationBinding": "same_transaction",
+    "outboxSchemaVersion": "2026-06-23"
+  }
+}

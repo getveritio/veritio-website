@@ -1,0 +1,71 @@
+{
+  "eventActions": [
+    "agent.session.started",
+    "agent.prompt.recorded",
+    "agent.tool.called",
+    "change.files.changed",
+    "review.approval.recorded",
+    "ci.job.completed",
+    "deploy.deployed"
+  ],
+  "eventIds": [
+    "evt_session__session_release_42",
+    "evt_prompt__session_release_42__sha256:prompt-content-hash__2026-08-09T13:00:05.000Z",
+    "evt_tool__tool_edit_01",
+    "evt_filechange__tree_main__42",
+    "evt_review__pr_1042",
+    "evt_ci__ci_run_9001",
+    "evt_deploy__deploy_42"
+  ],
+  "attribution": {
+    "sessionId": "session_release_42",
+    "activityEpisodeId": "episode_release_42",
+    "eventCount": 7,
+    "everyEventCarriesSessionId": true,
+    "everyEventCarriesActivityEpisodeId": true,
+    "distinctSessionIds": [
+      "session_release_42"
+    ],
+    "distinctActivityEpisodeIds": [
+      "episode_release_42"
+    ]
+  },
+  "callerCannotShadow": {
+    "suppliedSessionId": "session_forged_by_caller",
+    "suppliedActivityEpisodeId": "episode_forged_by_caller",
+    "recordedOnSessionEvent": {
+      "sessionId": "session_release_42",
+      "activityEpisodeId": "episode_release_42"
+    },
+    "recordedOnPromptEvent": {
+      "sessionId": "session_release_42",
+      "activityEpisodeId": "episode_release_42"
+    },
+    "forgedIdsPresentAnywhere": false,
+    "callerMetadataPreserved": true
+  },
+  "edgeRelations": [
+    "caused_by",
+    "created",
+    "read",
+    "modified",
+    "modified",
+    "approved_by",
+    "built_by",
+    "derived_from",
+    "deployed_as",
+    "satisfies_policy"
+  ],
+  "verification": {
+    "ok": true,
+    "audit": {
+      "ok": true
+    },
+    "edges": {
+      "ok": true
+    },
+    "commits": {
+      "ok": true
+    }
+  }
+}

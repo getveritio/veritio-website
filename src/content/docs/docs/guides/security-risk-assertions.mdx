@@ -1,0 +1,138 @@
+---
+title: Security risk assertions
+description: How createSecurityRiskAssertion, hashAssertionRecord, and buildSecurityRiskAssessedEvent turn a computed risk conclusion into an append-only record and a queryable audit event.
+audience: [developer, operator, governance]
+kind: guide
+searchIntent: Stamp and hash a security.risk assertion record and derive its security.risk.assessed audit event.
+questions:
+  - How do I record a risk conclusion as an append-only Veritio assertion?
+  - Is a security.risk assertion an audit event or a separate record?
+  - How does hashAssertionRecord relate to hashAuditRecord?
+  - Why can I not import createSecurityRiskAssertion from @veritio/core/risk-score?
+  - What happens if a risk score is NaN or above 1?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/risk.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/security-risk-assertion.schema.json
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/conformance/security-risk-assertion.json
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/conformance/assertion-hashing.json
+claimRefs: []
+---
+
+import { Code } from '@astrojs/starlight/components'
+import assertionOutput from '../../../../examples/risk/expected/assertion-and-hash.txt?raw'
+
+A risk score is a conclusion someone reached about an operation. Six months later a reviewer needs to know what the conclusion was, which policy produced it, and that nobody edited it afterwards. Veritio answers that with a security risk assertion: a small append-only record that states the conclusion, names its producer, and hashes exactly like an audit record.
+
+## An assertion is a record, not an event
+
+An audit event says *this happened*. An assertion says *this was concluded about that*. They are different record types with different envelopes, and the SDK keeps them apart on purpose.
+
+```text
+audit event                       assertion
+  action: string                    recordType: "assertion.recorded"
+  actor / target                     type: "security.risk"
+  metadata: free-form, REDACTED      producer / subject: closed refs
+  → hashAuditRecord                  conclusion / factors: closed shape
+                                     → hashAssertionRecord
+```
+
+The practical consequence is redaction. `createAuditEvent` runs every metadata value through `redactMetadata`, which recursively replaces values under keys matching `password`, `secret`, `token`, `api_key`, `authorization`, `email`, `phone`, or `ssn` with a stable marker before hashing. An assertion has no metadata bag. It has a fixed set of documented fields, and `createSecurityRiskAssertion` never calls the redactor.
+
+That is safe only because every assertion field is structural: identifiers, an ISO timestamp, a score, a level, a policy version, and factor rows drawn from the closed risk-signal vocabulary. Nothing in an assertion is free-form, so nothing needs minimizing. It also means you must not smuggle personal data into a factor `key` or `value` expecting the redactor to catch it. It will not run.
+
+Assertions are not stored by `AuditStore`. The conforming store owns the audit chain; an assertion is a standalone record your host persists alongside it, and it is referenced from an evidence commit as a member with `recordType: "assertion.record"`.
+
+## The builder stamps an envelope; it never scores
+
+`createSecurityRiskAssertion` contains no scoring math. It takes a conclusion you already computed and wraps it.
+
+```text
+RiskSignals
+   ↓ scoreRiskSignals / rollupEpisodeRisk      pure math, no crypto
+RiskAssessment  score, level, policyVersion, factors
+   ├→ createSecurityRiskAssertion   → assertion.recorded → hashAssertionRecord
+   └→ buildSecurityRiskAssessedEvent → AuditEventInput   → createAuditEvent → store
+```
+
+This split matters. If the envelope builder re-derived the score, an assertion could disagree with the number your application acted on, and there would be no way to tell which one was authoritative. Because the builder only stamps, the assertion is a record of a decision, not a second scoring engine that may drift from the first.
+
+The builder copies field by field. Only `key`, `value`, `kind`, `weight`, and `contribution` survive from each factor; only `score`, `level`, `policyVersion`, and `assessment` survive from the conclusion. Extra properties a host attaches to its own factor objects are dropped rather than carried into the canonical hash.
+
+Three fields are constants, never inputs: `recordType` is `assertion.recorded`, `schemaVersion` is `2026-06-23`, and `recordAuthority` is `veritio`.
+
+## Fixed producer authority, hashed idempotency key
+
+Two fields carry the security weight of the record.
+
+`producer.authority` is hard-coded to `veritio.detectors`. You supply a `producerId` and nothing else; `kind` is `principal` and `type` is `service`. A detector — hosted or self-run — therefore cannot claim to be a different evidence authority. Anything in the graph asserting a risk conclusion under this record type is, by construction, attributed to the detector authority, and a reviewer reading `producer.authority` learns nothing that a caller was free to choose.
+
+The raw `idempotencyKey` is never stored. `createSecurityRiskAssertion` writes `idempotencyKeyHash`, computed as `sha256(tenantId + NUL + idempotencyKey)` in lowercase hex, and the raw string is discarded with the input object. Two consequences follow: keys may safely embed host identifiers, and the same key under two tenants produces two different hashes, so a deduplication index cannot collide across tenant boundaries.
+
+Optional scope fields are omitted when absent rather than written as empty strings. `workspaceId` and `environment` appear only when you pass truthy values. Because omission changes the canonical bytes, an assertion built with `environment: ''` and one built without `environment` are the same record with the same hash.
+
+`occurredAt` defaults to now and is normalized the same way governed changes normalize it: a `Date` becomes an ISO string, and a zone-less string is read as UTC. An invalid date throws rather than silently becoming `Invalid Date`.
+
+## Hashing, and parity with hashAuditRecord
+
+`hashAssertionRecord` is deliberately the same rule as `hashAuditRecord`:
+
+1. Remove the stored `hash` field, if the record carries one.
+2. Serialize the remaining documented fields with `veritio-json-v1` canonical JSON.
+3. SHA-256 those bytes.
+4. Return **bare lowercase hex** — no `sha256:` prefix.
+
+Step 1 is the invariant that makes a persisted record re-verifiable. A digest that fed back into its own recomputation could never be checked, because writing the hash would change the input that produced it. Every SDK enforces the exclusion its own way: TypeScript destructures `hash` off, Python filters on `key != 'hash'`, and Go rebuilds the payload from the twelve documented fields, so an unknown column added by a host store cannot silently enter the digest.
+
+Step 4 is the one that trips people up. Evidence commits reference member records as `sha256:<hex>`, and the assertion schema itself constrains `idempotencyKeyHash` to bare 64-character hex. The bare hex is the cross-language source of truth; the prefix is a commit-manifest presentation detail, added at the commit boundary.
+
+## A verified end-to-end run
+
+This example scores one irreversible production bulk delete, stamps the assertion, hashes it, derives the assessed event, and stores that event as an audit record. Every id, timestamp, and append time is pinned so the digests are reproducible; the output below is byte-compared in CI.
+
+<Code code={assertionOutput} lang="json" title="verified output" />
+
+Read the `hashParity` block rather than the digests. It shows that `rawIdempotencyKeyStored` is `false`, that re-hashing each record in its persisted hash-carrying form reproduces the same digest, that overwriting a stored `hash` with a tampered value does not change the recomputed digest, and that the two records — assertion and audit record — produce different digests. The tampered audit record fails chain verification with `hash_mismatch`, which is the same failure the [hash chain](/docs/concepts/hash-chain/) page describes.
+
+Note the conclusion: the raw score saturates and the record stores `1` with level `critical`. The clamp happens in the scorer, not the envelope.
+
+## The assessed event and the un-shadowable episode id
+
+An assertion is durable but not queryable in the audit timeline. `buildSecurityRiskAssessedEvent` produces the companion event:
+
+- `action` is `security.risk.assessed`.
+- `target` is the subject's `type` and `id`.
+- `actor` defaults to a service principal with the `producerId`, overridable.
+- `metadata.riskAssessment` carries `score`, `level`, `policyVersion`, `assessment`, and `factors` when you supply them.
+- `metadata.riskSignals` is added by `withRiskSignals` when normalized signals are passed.
+- `metadata.activityEpisodeId` is stamped by `mergeVeritioMetadata` **after** your metadata.
+
+That ordering is the point. Reserved context keys — `activityEpisodeId` among them — are applied last, and supplying one yourself throws `metadata.activityEpisodeId is reserved by Veritio` rather than being quietly overwritten. Change, Trace, and Explain read models group on that key; if a host could shadow it, one episode's assessment could be attributed to another. See [activity episodes](/docs/concepts/activity-episodes/) for what the grouping buys you.
+
+The function returns an `AuditEventInput`, not a finished event. Your recorder still runs `createAuditEvent`, which is where redaction and hashing happen — so anything you add under `metadata` *is* redacted, unlike the assertion beside it.
+
+## Where these builders live
+
+`createSecurityRiskAssertion`, `hashAssertionRecord`, and `buildSecurityRiskAssessedEvent` import `node:crypto`. They are exported from the **root** `@veritio/core` package only.
+
+The `@veritio/core/risk-score` subpath is deliberately crypto-free so risk math can run in a browser bundle: `scoreRiskSignals`, `rollupEpisodeRisk`, `normalizeRiskSignals`, `withRiskSignals`, and `DEFAULT_RISK_POLICY` live there. The assertion builders do not, and importing them from that subpath fails. Score in the browser if you like; stamp and hash on the server or at the edge.
+
+Python and Go expose the same three functions as `create_security_risk_assertion` / `hash_assertion_record` / `build_security_risk_assessed_event` and `CreateSecurityRiskAssertion` / `HashAssertionRecord` / `BuildSecurityRiskAssessedEvent`, pinned by the shared conformance fixtures.
+
+## Fail-closed guards
+
+Because the builders never recompute a score, a corrupt conclusion would otherwise ride straight into the canonical hash. `assertRiskConclusion` prevents that. Both builders throw a `TypeError` when:
+
+- `conclusion.score` is not a number, is `NaN` or `Infinity`, or falls outside `[0,1]` — `conclusion.score must be a finite number in [0,1]`.
+- `conclusion.level` is not one of `none`, `low`, `medium`, `high`, `critical`.
+- `scope.tenantId`, `producerId`, or (for the assertion) `idempotencyKey` is missing or blank.
+- `subject` is missing an `authority`, `type`, or `id`, or its `kind` is outside the eight supported evidence-ref kinds.
+
+One guard is asymmetric and worth knowing: the `assessment` enum check — `step` or `episode_rollup` — runs in `createSecurityRiskAssertion` only. `buildSecurityRiskAssessedEvent` validates the score and level but passes `assessment` through to metadata unchecked. Validate it yourself if the value comes from an untrusted boundary.
+
+## What an assertion proves
+
+A verified assertion hash proves that the record's bytes are unchanged since it was stamped, and that the conclusion is attributed to the detector authority with a tenant-scoped idempotency hash. It does not prove the score was *correct*, that the policy was appropriate, or that the detector observed everything relevant — those are questions about your policy and your capture coverage, not about the record. Veritio produces evidence about a conclusion; it does not validate the judgement inside it.
+
+Continue with [risk scoring](/docs/concepts/risk-scoring/) for how the conclusion is derived, [risk policy tuning](/docs/guides/risk-policy-tuning/) for changing the constants behind it, and [evidence commits](/docs/concepts/evidence-commits/) for publishing an assertion digest alongside audit records.

@@ -1,0 +1,31 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro'
+import Nav from './Nav.astro'
+import Footer from './Footer.astro'
+
+type Locale = 'en' | 'de' | 'ko'
+const { locale = 'en' } = Astro.props as { locale?: Locale }
+
+const plans = [
+  { name: 'Pro', monthly: '$29', annual: '$24.17' },
+  { name: 'Team', monthly: '$99', annual: '$82.50' },
+  { name: 'Compliance', monthly: '$499', annual: '$415.83' },
+  { name: 'Enterprise', monthly: 'Custom', annual: 'Custom' },
+]
+
+const copy = {
+  en: { title: 'Veritio pricing — OSS free, Cloud catalog', description: 'Self-host the open-source Veritio stack without a license fee or review the current Cloud catalog rates and implementation boundary.', eyebrow: 'Pricing · Verified catalog', heading: 'Open source is free. Cloud is the optional operating path.', lead: 'The protocol, SDKs, storage interfaces, examples, and verifier are Apache-2.0. Cloud’s source-of-truth catalog currently lists the rates below. Plan subscription resolution and some feature entitlements are not yet represented here as active guarantees.', monthly: 'Monthly', annual: 'Annual, effective monthly', noteTitle: 'What this page deliberately does not promise', note: 'Retention enforcement, regional compute, plan-specific feature gates, service levels, and legal outcomes require separate implementation evidence. Contact us before treating any plan detail beyond the catalog price as a contractual commitment.', oss: 'Use open source', cloud: 'Discuss Cloud' },
+  de: { title: 'Veritio Preise — OSS kostenlos, Cloud-Katalog', description: 'Open-Source-Veritio ohne Lizenzgebühr selbst hosten oder die aktuellen Cloud-Katalogpreise und Implementierungsgrenzen prüfen.', eyebrow: 'Preise · Geprüfter Katalog', heading: 'Open Source ist kostenlos. Cloud ist der optionale Betriebsweg.', lead: 'Protokoll, SDKs, Storage-Schnittstellen, Beispiele und Verifier sind Apache-2.0. Der Cloud-Quellkatalog enthält die folgenden Preise. Abonnementauflösung und einige Feature-Entitlements werden hier nicht als aktive Garantien dargestellt.', monthly: 'Monatlich', annual: 'Jährlich, effektiv pro Monat', noteTitle: 'Was diese Seite bewusst nicht verspricht', note: 'Retention-Durchsetzung, Compute-Region, planspezifische Feature-Gates, Service-Level und rechtliche Ergebnisse benötigen separate Implementierungsnachweise. Planangaben jenseits des Katalogpreises sind ohne Bestätigung keine vertragliche Zusage.', oss: 'Open Source nutzen', cloud: 'Cloud besprechen' },
+  ko: { title: 'Veritio 요금 — 무료 OSS, Cloud 카탈로그', description: '오픈 소스 Veritio를 라이선스 비용 없이 직접 호스팅하거나 현재 Cloud 카탈로그 가격과 구현 경계를 확인하세요.', eyebrow: '요금 · 검증된 카탈로그', heading: '오픈 소스는 무료입니다. Cloud는 선택형 운영 경로입니다.', lead: '프로토콜, SDK, 스토리지 인터페이스, 예제, 검증기는 Apache-2.0입니다. Cloud 소스 카탈로그에는 아래 가격이 정의되어 있습니다. 구독 연결과 일부 기능 권한은 여기서 활성 보장으로 제시하지 않습니다.', monthly: '월간', annual: '연간 결제 시 월 환산', noteTitle: '이 페이지가 의도적으로 약속하지 않는 것', note: '보존 실행, 컴퓨트 지역, 플랜별 기능 게이트, 서비스 수준, 법률 결과는 별도의 구현 근거가 필요합니다. 카탈로그 가격 이외의 세부사항을 계약상 약속으로 보기 전에 문의하세요.', oss: '오픈 소스 사용', cloud: 'Cloud 문의' },
+}[locale]
+---
+
+<BaseLayout title={copy.title} description={copy.description} claimRefs={['cloud-price-catalog']}>
+  <Nav />
+  <main id="main-content">
+    <section class="container border-b border-line py-16 sm:py-24"><span class="eyebrow">{copy.eyebrow}</span><h1 class="mt-5 max-w-[14ch] text-[clamp(48px,7vw,88px)] font-medium leading-[0.98] tracking-[-0.02em]">{copy.heading}</h1><p class="mt-8 max-w-3xl text-xl leading-relaxed text-ink-soft">{copy.lead}</p></section>
+    <section class="container py-16 sm:py-20"><div class="grid sm:grid-cols-2 lg:grid-cols-4">{plans.map((plan) => <article class="border border-line p-7 sm:-ml-px"><h2 class="text-3xl font-medium">{plan.name}</h2><dl class="mt-8 space-y-5"><div><dt class="font-mono text-xs uppercase tracking-wider text-ink-muted">{copy.monthly}</dt><dd class="mt-1 text-3xl">{plan.monthly}</dd></div><div><dt class="font-mono text-xs uppercase tracking-wider text-ink-muted">{copy.annual}</dt><dd class="mt-1 text-xl text-ink-soft">{plan.annual}</dd></div></dl></article>)}</div><p class="mt-4 font-mono text-xs text-ink-muted">USD · Public price catalog verified on 2026-08-09.</p></section>
+    <section class="border-y border-line-strong bg-surface-raised"><div class="container py-16"><span class="eyebrow">{copy.noteTitle}</span><p class="mt-5 max-w-3xl text-lg leading-relaxed text-ink-soft">{copy.note}</p><div class="mt-8 flex flex-wrap gap-3"><a class="doc-btn doc-btn--solid" href="/open-source/">{copy.oss}</a><a class="doc-btn" href="mailto:hello@getveritio.com?subject=Veritio%20Cloud">{copy.cloud}</a></div></div></section>
+  </main>
+  <Footer />
+</BaseLayout>

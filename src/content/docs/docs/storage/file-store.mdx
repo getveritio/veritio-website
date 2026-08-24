@@ -1,0 +1,79 @@
+---
+title: File store
+description: Run the published local evidence store, reopen it from disk, verify all chains, and understand its single-directory operating boundary.
+audience: [developer, operator]
+kind: tutorial
+searchIntent: Persist, reopen, and verify a local Veritio evidence chain with the published file store.
+questions:
+  - How do I persist Veritio records without a database?
+  - What files does the Veritio file store create?
+  - How do I verify file-backed evidence after a restart?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/storage@0.4.7', 'file-store tests at veritio@c4100ee']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/storage/src/file-store.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/storage/src/__tests__/file-store.test.ts
+claimRefs: []
+---
+
+import { Aside, Code } from '@astrojs/starlight/components'
+import example from '../../../../examples/storage/file-store.ts?raw'
+import expectedOutput from '../../../../examples/storage/expected/file-store.txt?raw'
+
+The file store is the smallest durable OSS boundary. It writes event, edge, and commit chains into one operator-owned directory and can reopen them in a later process. It is useful for local tools, single-host services, and integration proofs; it is not a multi-writer database substitute.
+
+## Install the exact tested packages
+
+```sh
+bun add @veritio/core@0.4.7 @veritio/storage@0.4.7
+```
+
+The storage package receives its directory from your host. It does not discover paths or credentials from environment variables.
+
+## Persist, reopen, and verify
+
+This checked fixture creates a fresh directory, appends two events, constructs a second store instance to model a process restart, reads the records, and verifies the event, edge, and commit chains.
+
+<Code code={example} lang="ts" title="src/examples/storage/file-store.ts" />
+
+Run it from the website checkout:
+
+```sh
+bun src/examples/storage/file-store.ts
+```
+
+The build executes the fixture and requires this exact output:
+
+<Code code={expectedOutput} lang="json" title="verified output" />
+
+`reopenedEventCount` proves that the second store instance read the persisted records. The event sequences prove tenant-local ordering. Empty edge and commit chains are valid, so all three verifier results are `ok: true`.
+
+## Files and ownership
+
+One directory represents one tenant and contains three independent JSONL chains:
+
+| File | Contents | Sequence owner |
+| --- | --- | --- |
+| `events.jsonl` | Canonical audit records | File store |
+| `edges.jsonl` | Canonical evidence-edge records | File store |
+| `commits.jsonl` | Commit envelopes binding event and edge members | File store |
+
+The caller owns the directory, permissions, encryption at the host or disk layer, backups, restore procedure, and retention policy. The store requires `scope.tenantId` on every append and rejects a replay when the same derived idempotency identity carries different canonical content.
+
+## Concurrency and crash boundary
+
+The implementation serializes access with a lock file and writes each JSONL append through a temporary file plus rename. Use a local filesystem whose exclusive-create and rename semantics you have verified. Do not put one tenant directory behind multiple independent writers or an unproven network filesystem.
+
+<Aside type="caution" title="One directory, one writer boundary">
+  A lock file is not a distributed consensus system. If more than one service instance can append for a tenant, use a transaction-capable authoritative store such as Postgres.
+</Aside>
+
+## Production verification checklist
+
+1. Restart between append and read, as the fixture does.
+2. Back up the whole tenant directory, not individual JSONL files at unrelated points in time.
+3. Restore into an isolated directory and run `verify()` before accepting the restore.
+4. Corrupt a copied line in a non-production restore and confirm verification fails closed.
+5. Alert on stale lock recovery and every non-`ok` verification result.
+
+For concurrent service writers, continue with [Postgres and Neon](/docs/storage/postgres/). For a complete host boundary, read [Self-hosting](/docs/storage/self-hosting/).

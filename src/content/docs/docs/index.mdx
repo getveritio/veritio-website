@@ -1,0 +1,93 @@
+---
+title: Veritio documentation
+description: Start with the open-source Veritio SDKs, record a portable audit event, verify its hash chain, and choose an optional managed path.
+audience: [newcomer, developer]
+kind: overview
+searchIntent: Learn what Veritio does and complete the shortest verified open-source audit-event workflow.
+questions:
+  - What is Veritio and what can I build with it?
+  - How do I record and verify my first Veritio event?
+  - Which Veritio SDK should I start with?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7', 'veritio@c4100ee']
+sourceRefs:
+  - https://github.com/getveritio/veritio/tree/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks
+claimRefs: [cloud-managed-path]
+sidebar:
+  order: 1
+---
+
+import { Aside, Code, TabItem, Tabs } from '@astrojs/starlight/components'
+import tsQuickstart from '../../../examples/quickstart/typescript.ts?raw'
+import pythonQuickstart from '../../../examples/quickstart/python.py?raw'
+import goQuickstart from '../../../examples/quickstart/go.go?raw'
+
+Veritio records application actions as portable evidence: normalized events, deterministic canonical bytes, ordered record chains, relationships, and independently verifiable exports. You can run the core workflow locally without an account.
+
+<Aside type="note" title="Open source first">
+  [Veritio Cloud](/docs/cloud/overview/) is optional. It operates a managed ingest and storage boundary; it does not replace the public event contract or independent verification path.
+</Aside>
+
+## Start with the complete path
+
+The TypeScript tutorial is the complete checked path today: create two events, append them through a store, read the resulting records, verify the chain, then prove that changed or missing evidence fails verification.
+
+1. [Install the verified SDK release](/docs/start/installation/).
+2. [Record two events into one tenant-local chain](/docs/start/record-first-event/).
+3. [Change and remove records to observe verification failures](/docs/start/verify-a-chain/).
+4. [Choose durable storage or an optional managed path](/docs/start/choose-your-path/).
+
+That sequence is executable from the checked fixtures used by the pages. It is not a prose-only quickstart.
+
+## The same event in three languages
+
+TypeScript, Python, and Go share the portable event, canonical JSON, deterministic redaction, and event-hash semantics. They do not currently expose identical storage and record-verification APIs, so the tabs below stop at the capability each SDK actually provides.
+
+<Tabs syncKey="language">
+  <TabItem label="TypeScript">
+    ```sh
+    bun add @veritio/core@0.4.7
+    ```
+  </TabItem>
+  <TabItem label="Python">
+    ```sh
+    git clone https://github.com/getveritio/veritio.git
+    git -C veritio checkout c4100ee7b678d0c6b227c67ae6ea1d8a1f373967
+    python3 -m pip install -e ./veritio/sdks/python
+    ```
+  </TabItem>
+  <TabItem label="Go">
+    ```sh
+    go get github.com/getveritio/veritio/sdks/go@c4100ee7b678d0c6b227c67ae6ea1d8a1f373967
+    ```
+  </TabItem>
+</Tabs>
+
+<Tabs syncKey="language">
+  <TabItem label="TypeScript"><Code code={tsQuickstart} lang="ts" title="src/examples/quickstart/typescript.ts" /></TabItem>
+  <TabItem label="Python"><Code code={pythonQuickstart} lang="python" title="src/examples/quickstart/python.py" /></TabItem>
+  <TabItem label="Go"><Code code={goQuickstart} lang="go" title="src/examples/quickstart/go.go" /></TabItem>
+</Tabs>
+
+## What the first event describes
+
+All three fixtures use the same event identifier, actor, action, target, tenant scope, purpose, lawful basis, retention label, and minimized metadata. The verification suite confirms that all three languages produce the same event-hash prefix.
+
+The host still decides whether the claim is true, resolves the tenant and actor from trusted server context, and minimizes metadata before recording it. Veritio makes the recorded bytes and their later ordering checkable.
+
+## Choose the page that matches your job
+
+| You need to… | Continue with |
+| --- | --- |
+| Understand event input versus stored records | [Audit events](/docs/concepts/audit-events/) |
+| See exactly how tampering becomes detectable | [Hash chain](/docs/concepts/hash-chain/) |
+| Integrate an application framework | [Framework guides](/docs/frameworks/nextjs/) |
+| Select authoritative storage | [Storage overview](/docs/storage/overview/) |
+| Capture agent activity safely | [Agent events](/docs/ai/agent-events/) |
+| Look up exact fields and errors | [Reference](/docs/reference/event-schema/) |
+
+## Keep the trust boundary explicit
+
+Veritio records evidence supplied by your application. Your host still owns authentication, authorization, tenant resolution, durable storage, encryption, key management, backups, and retention enforcement. Never put secrets, access tokens, raw prompts, full diffs, or unnecessary personal data into event metadata.
+
+Begin with [Installation](/docs/start/installation/). If `@veritio/core@0.4.7` is already installed, continue directly to [Record your first audit event](/docs/start/record-first-event/).

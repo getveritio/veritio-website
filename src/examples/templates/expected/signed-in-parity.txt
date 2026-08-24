@@ -1,0 +1,74 @@
+{
+  "templateEvent": {
+    "id": "evt_session_created_01",
+    "schemaVersion": "2026-06-10",
+    "occurredAt": "2026-08-09T10:00:00.000Z",
+    "actor": {
+      "type": "user",
+      "id": "usr_314"
+    },
+    "action": "auth.session.created",
+    "target": {
+      "type": "session",
+      "id": "ses_918"
+    },
+    "metadata": {
+      "mfa": true,
+      "securityContext": {
+        "ipAddressHash": "sha256:ip-address-hash",
+        "location": {
+          "country": "DE",
+          "region": "BE"
+        },
+        "method": "password",
+        "provider": "credentials",
+        "userAgentHash": "sha256:user-agent-hash"
+      }
+    },
+    "scope": {
+      "tenantId": "org_acme",
+      "environment": "production"
+    },
+    "purpose": "access_management",
+    "lawfulBasis": "contract",
+    "retention": "security_1y"
+  },
+  "handBuiltEvent": {
+    "id": "evt_session_created_01",
+    "schemaVersion": "2026-06-10",
+    "occurredAt": "2026-08-09T10:00:00.000Z",
+    "actor": {
+      "type": "user",
+      "id": "usr_314"
+    },
+    "action": "auth.session.created",
+    "target": {
+      "type": "session",
+      "id": "ses_918"
+    },
+    "metadata": {
+      "mfa": true,
+      "securityContext": {
+        "ipAddressHash": "sha256:ip-address-hash",
+        "location": {
+          "country": "DE",
+          "region": "BE"
+        },
+        "method": "password",
+        "provider": "credentials",
+        "userAgentHash": "sha256:user-agent-hash"
+      }
+    },
+    "scope": {
+      "tenantId": "org_acme",
+      "environment": "production"
+    },
+    "purpose": "access_management",
+    "lawfulBasis": "contract",
+    "retention": "security_1y"
+  },
+  "canonicalJsonIdentical": true,
+  "templateHash": "6578ca5c8481fe8c7683b2168faac6c1392229655a19da4f15f6e6822f40ecde",
+  "handBuiltHash": "6578ca5c8481fe8c7683b2168faac6c1392229655a19da4f15f6e6822f40ecde",
+  "hashesIdentical": true
+}

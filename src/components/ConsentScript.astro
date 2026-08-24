@@ -1,0 +1,135 @@
+---
+/**
+ * Installs one delegated analytics-consent controller in the document head.
+ * The classic inline boot runs before third-party analytics and rebinds
+ * controls after Starlight swaps the current page body.
+ */
+import { GA_MEASUREMENT_ID } from '../config/analytics'
+---
+
+<meta name="veritio-ga-id" content={GA_MEASUREMENT_ID} />
+<script is:inline>
+(() => {
+  const CONSENT_KEY = 'veritio-consent'
+  const CONSENT_VERSION = 1
+
+  /** Reads only the versioned analytics choice used by this site. */
+  function readChoice() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(CONSENT_KEY) || 'null')
+      if (parsed && parsed.v === CONSENT_VERSION && (parsed.ga === 'granted' || parsed.ga === 'denied')) return parsed.ga
+    } catch {
+      /* Unavailable or corrupt storage means the visitor must choose again. */
+    }
+    return null
+  }
+
+  /** Persists a deliberate analytics choice without storing visitor data. */
+  function saveChoice(ga) {
+    try {
+      localStorage.setItem(CONSENT_KEY, JSON.stringify({ v: CONSENT_VERSION, ga }))
+    } catch {
+      /* Private browsing can make storage unavailable; the banner then returns. */
+    }
+  }
+
+  let gaLoaded = document.querySelector('script[src*="googletagmanager.com/gtag/js"]') !== null
+  let lastSettingsTrigger = null
+
+  /** Restores keyboard focus after the modal-like banner closes. */
+  function restoreSettingsFocus() {
+    const trigger = lastSettingsTrigger?.isConnected
+      ? lastSettingsTrigger
+      : document.querySelector('[data-cookie-settings]')
+    trigger?.focus({ preventScroll: true })
+  }
+
+  /** Loads GA4 only after an explicit grant and never during initial rendering. */
+  function loadGa() {
+    if (gaLoaded) return
+    const measurementId = document.querySelector('meta[name="veritio-ga-id"]')?.content
+    if (!measurementId) return
+    gaLoaded = true
+    window.dataLayer = window.dataLayer || []
+    window.gtag = function gtag() { window.dataLayer.push(arguments) }
+    window.gtag('consent', 'default', {
+      ad_storage: 'denied',
+      ad_user_data: 'denied',
+      ad_personalization: 'denied',
+      analytics_storage: 'granted',
+    })
+    window.gtag('js', new Date())
+    window.gtag('config', measurementId)
+    const script = document.createElement('script')
+    script.async = true
+    script.src = `https://www.googletagmanager.com/gtag/js?id=${measurementId}`
+    document.head.appendChild(script)
+  }
+
+  /** Removes GA cookies on a best-effort basis after consent withdrawal. */
+  function clearGaCookies() {
+    const expiry = 'expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'
+    const parts = location.hostname.split('.')
+    const domains = [location.hostname]
+    if (parts.length >= 2) domains.push('.' + parts.slice(-2).join('.'))
+    for (const raw of document.cookie.split(';')) {
+      const name = raw.split('=')[0]?.trim()
+      if (!name?.startsWith('_ga')) continue
+      document.cookie = `${name}=; ${expiry}`
+      for (const domain of domains) document.cookie = `${name}=; ${expiry}; domain=${domain}`
+    }
+  }
+
+  /** Applies the stored choice to the controls in the current page body. */
+  function initializeCookieBanner() {
+    const banner = document.getElementById('cookie-banner')
+    if (!banner) return
+    banner.dataset.consentReady = 'true'
+    const choice = readChoice()
+    banner.hidden = choice !== null
+    if (choice === 'granted') loadGa()
+  }
+
+  /** Applies a deliberate choice or reopens the settings surface. */
+  function applyConsentAction(action, trigger) {
+    const banner = document.getElementById('cookie-banner')
+    const accept = document.getElementById('cookie-accept')
+    if (!banner || !accept) return
+    banner.dataset.consentAction = action
+
+    if (action === 'accept') {
+      saveChoice('granted')
+      banner.hidden = true
+      restoreSettingsFocus()
+      if (gaLoaded) window.gtag?.('consent', 'update', { analytics_storage: 'granted' })
+      else loadGa()
+      return
+    }
+    if (action === 'decline') {
+      saveChoice('denied')
+      banner.hidden = true
+      restoreSettingsFocus()
+      if (gaLoaded) {
+        window.gtag?.('consent', 'update', { analytics_storage: 'denied' })
+        clearGaCookies()
+      }
+      return
+    }
+    lastSettingsTrigger = trigger || document.activeElement
+    banner.hidden = false
+    accept.focus()
+  }
+
+  if (!window.__veritioConsentInstalled) {
+    window.__veritioConsentInstalled = true
+    window.VeritioConsent = {
+      accept: () => applyConsentAction('accept'),
+      decline: () => applyConsentAction('decline'),
+      settings: (trigger) => applyConsentAction('settings', trigger),
+    }
+    document.addEventListener('astro:page-load', initializeCookieBanner)
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initializeCookieBanner)
+    else initializeCookieBanner()
+  }
+})()
+</script>

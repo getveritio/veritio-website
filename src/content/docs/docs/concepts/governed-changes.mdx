@@ -1,0 +1,154 @@
+---
+title: Changes, activities, and revisions
+description: How Veritio splits one governed mutation into a Change, an Activity, and a Revision, and what the state commitment actually commits to.
+audience: [developer, governance]
+kind: concept
+searchIntent: Understand Veritio governed changes, activities, revisions, and state commitments before wiring a mutation boundary.
+questions:
+  - What is the difference between a Veritio change, an activity, and a revision?
+  - What does a Veritio stateCommitment digest actually commit to?
+  - Why does a rollback to an identical state get a different governedRevisionId?
+  - When is revision.parents populated in a governed change draft?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/governed-change.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/conformance/governed-revision-id.json
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/docs/review-backlog.md
+claimRefs: []
+---
+
+import { Code } from '@astrojs/starlight/components'
+import captureModesOutput from '../../../../examples/governed/expected/capture-modes.txt?raw'
+import lineageOutput from '../../../../examples/governed/expected/lineage-and-revision-id.txt?raw'
+
+A single audit row that says `subscriber.updated` cannot answer who authorized the mutation, which process actually executed it, or what state the row was left in. Those are three different facts with three different actors and three different lifetimes. Veritio's governed-change model records them as three linked records instead of one, and commits to the resulting state through a minimized projection rather than the raw row.
+
+## Three records, not one
+
+`createGovernedActionDraft` turns one host mutation into a Change, an Activity, and a Revision. Each has its own authority-qualified `EvidenceRef` (`{ authority, kind, type, id }`) so it can be referenced from anywhere in the evidence graph.
+
+```text
+Change      chg_...   declared intent
+  what was asked, by whom (initiatedBy),
+  under which authorization/delegation assertion,
+  with a tenant-scoped idempotency-key hash
+
+Activity    act_...   execution
+  who or what actually performed it (performedBy):
+  a service, an operator session, an AI agent
+
+Revision    rev_...   resulting governed state
+  stateCommitment, changedPaths, parents, generatedBy
+```
+
+They separate because they vary independently. A support agent initiates; a billing service performs. One change can drive several activities, and one activity can produce revisions of several entities. Collapsing them into one event would force the initiating human and the executing service into a single `actor` field and lose the distinction that most access reviews are actually asking about.
+
+In the current protocol the draft is not a new record kind. It is three ordinary audit events plus evidence edges, so a v1 store can append it without claiming atomicity that the [EvidenceCommit](/docs/concepts/evidence-commits/) protocol does not yet provide:
+
+```text
+events                          edges
+  change.declared                 change   -has_activity->  activity
+  activity.recorded               change   -has_output->    revision
+  entity.revision.created         activity -performed_by->  principal
+                                  activity -generated->     revision
+                                  revision -derived_from->  parent   (conditional)
+```
+
+All three events carry the same `idempotencyKeyHash`, the same `captureAssurance`, and the same merged Veritio context metadata, so a replay collapses cleanly at the store's idempotency boundary rather than half-appending.
+
+## The state commitment covers the post-policy fields, never the row
+
+`defineEntity` declares an allowlist. Only keys present in `fields` can enter a commitment or become a changed path; everything else in the host row is invisible to Veritio by construction. The builder walks the declared keys in sorted order, applies each field's capture mode, and produces a `fields` object. The digest is taken over that object:
+
+```text
+host row  ──► field policy ──► fields (post-policy) ──► canonicalJson ──► sha256
+                                     │
+                                     └── this object is what ships in evidence
+```
+
+`stateCommitment.digest` is therefore a commitment to the minimized projection, not to the database record. Anyone holding the evidence can recompute it from `fields` alone — no access to the source system required. The commitment also carries `schemaRef` and `fieldSetRef`, so a later widening or narrowing of the governed field set shows up as a different `fieldSetRef` rather than as a silent change in what the digest covers.
+
+`changedPaths` is derived from the same allowlist: JSON Pointer segments, sorted, compared with canonical JSON on both sides. A field whose capture mode is `omit` is excluded from change detection entirely, and a draft in which no governed field changed fails with `at least one governed field must change` rather than emitting an empty revision.
+
+## How each capture mode renders
+
+Four modes are implemented. They render into `fields` in distinguishable shapes:
+
+```text
+full            key: <the canonicalized JSON value itself>
+content_digest  key: { captureMode: "content_digest", digest: "sha256:..." }
+keyed_digest    key: { algorithm: "hmac-sha256", keyVersion, digest: "sha256:..." }
+omit            key absent from the object entirely
+```
+
+Note the asymmetry: the `keyed_digest` shape carries `algorithm` and `keyVersion` but no `captureMode` key. Read the mode from the shape — an `algorithm` member means a keyed digest — not from the presence of a single field name.
+
+`randomized_digest`, `reference`, `redact`, and `encrypt` are reserved. Selecting one throws at draft time instead of degrading to a weaker commitment, which is the point: a capture policy that quietly downgrades is worse than one that stops.
+
+The fixture below defines one entity exercising all four implemented modes, then attempts each reserved mode:
+
+<Code code={captureModesOutput} lang="json" title="verified output: governed/capture-modes" />
+
+Reading it field by field:
+
+- `changedPaths` lists `/billingCity`, `/email`, and `/plan`. The row's `internalNote` also changed, but it is an `omit` field, so it is not a governed change path. The row's `id` is not declared in `fields` at all, so it is not governed either.
+- `plan` is committed in the clear because it is `full`. Enum-like governed state is usually worth reading directly in an export.
+- `billingCity` is a `content_digest`. Two revisions with the same city produce the same digest, which is what makes equality checks possible without the value.
+- `email` is a `keyed_digest`: the HMAC is computed with a host-supplied secret injected at the capture boundary. The `keyVersion` travels with the digest so a rotation is legible later.
+- `stateCommitmentDigest` is `sha256(canonicalJson(fields))` over exactly the object above.
+- `leakProofs` are computed by scanning the fully serialized draft — events, edges, revision, and outbox entry. The raw email, the HMAC secret, and the omitted note are all absent from the whole draft, not just from the commitment.
+
+One property to understand before choosing modes: `content_digest` is an unsalted SHA-256 over canonical bytes. For a low-entropy value — a city, a boolean, a status enum — a holder of the evidence can confirm a guess by recomputing. That is often acceptable and sometimes desirable. When it is not, `keyed_digest` moves the guessing barrier behind a key that never enters evidence. The trade is symmetric: without that key nobody, including you, can recompute the digest from a candidate value.
+
+## How governedRevisionId is derived
+
+The revision id is a pure function of four inputs:
+
+```text
+rev_<entityType>_<entityId>_<digest12>_<change8>
+
+digest12 = first 12 hex chars of stateCommitment.digest (after "sha256:")
+change8  = first 8 hex chars of sha256(changeId)
+```
+
+The change id, in turn, is derived from the tenant and the caller's idempotency key: `chg_<entityType>_<entityId>_<sha256(tenantId + ":" + idempotencyKey)[:16]>`. Both derivations are byte-identical across the TypeScript, Python, and Go SDKs, pinned by `spec/conformance/governed-revision-id.json`.
+
+The change-scoped suffix is the part worth dwelling on. A purely content-addressed id would give a rollback the same id as the state it restored, merging two genuinely different lineage nodes into one and producing a cycle in Explain views. The fixture below walks create → enable → rollback → replay to show both halves of the invariant:
+
+<Code code={lineageOutput} lang="json" title="verified output: governed/lineage-and-revision-id" />
+
+What each part proves:
+
+- `rollbackStateDigestEqualsCreate` is `true`: the rollback really did restore byte-identical governed state, and `contentOnlyIdWouldCollide` confirms the two ids share the same `stateDigest12` component.
+- `rollbackRevisionIdDiffersFromCreate` is `true` anyway, because `changeScope8` differs (`2a5b99a0` vs `7a8fa2a9`). The two revisions stay distinct nodes while the shared digest still proves the states are identical.
+- `replayChangeIdIsStable` and `replayRevisionIdIsStable` are `true`: re-running the same change with the same tenant and idempotency key yields the same ids, so a retried outbox delivery is idempotent rather than a second lineage node.
+- `recomputedOffline.matchesDraftIds` is `true`: a host that stored only `(entityType, entityId, digest, changeId)` can call the exported `governedRevisionId` and get the same string back.
+
+## Lineage is never fabricated
+
+`revision.parents` is populated only when the caller supplied **both** a `before` row and an `expectedParentRevisionRef`:
+
+```text
+before   expectedParentRevisionRef   parents      derived_from   outbox expectedParentRevisionRef
+absent   absent                      []           no             absent
+absent   present                     []           no             absent
+present  absent                      []           no             absent
+present  present                     [parent]     yes            present
+```
+
+Earlier versions invented a `rev_<type>_<id>_previous` placeholder. That was wrong twice over: it asserted a `derived_from` edge to a revision that never existed, and it handed the host store an optimistic-concurrency token its real head could never match, so every update would either fail or force the check to be ignored. Leaving lineage open is the honest outcome.
+
+The consequence for readers: `parents: []` means *lineage was not asserted here*, not *this is the first revision*. A genuine creation and an update whose caller omitted the parent ref are indistinguishable in that field alone. Authoritative ordering has to come from the store, not from the draft.
+
+`lineagePolicy` (`'linear' | 'dag'`) sits in the entity definition and is read by nothing. No SDK and no reference store branches on it today. It records declared intent so hosts can state it without a later schema change; enforcement is host-side work tied to the host-assigned revision-ordinal design. Treat it as documentation, not as a guardrail.
+
+## What this does not prove
+
+**The revision id is derived, not an authoritative ordering key.** It contains no ordinal and no timestamp. Sorting revision id strings tells you nothing about sequence; ordering comes from the per-tenant record sequence in a conforming store. The truncated components (48 bits of state digest, 32 bits of change scope) make it a stable join and display key, not a cryptographic commitment — the full commitment is `stateCommitment.digest`. The design target remains a host-assigned ordinal suffix, which will change every revision id string when it lands, so consume `revision.ref.id` as an opaque key and never parse it in production code.
+
+**A digest match proves projection equality, not row equality.** Two rows differing only in omitted or undeclared fields commit to the same digest. That is the intended minimization, and it is also the limit of what the commitment can attest.
+
+**Drafting is not durability.** `createGovernedActionDraft` is a pure function. It reads no environment, touches no database, and proves nothing until the returned records are appended. `mutationBinding` (`same_transaction`, `not_transaction_bound`, `best_effort`) is a declared label recorded in `captureAssurance`; the SDK cannot verify that your transaction actually enclosed the append. Whether the evidence is genuinely bound to the mutation is a property of your outbox, not of the draft.
+
+Continue with [Governed actions](/docs/guides/governed-actions/) to wire a mutation boundary, [Transactional outbox](/docs/guides/transactional-outbox/) for the delivery half, or [Evidence graph](/docs/concepts/evidence-graph/) to see how these refs and edges are queried. The [hash chain](/docs/concepts/hash-chain/) covers what happens to these events once appended.

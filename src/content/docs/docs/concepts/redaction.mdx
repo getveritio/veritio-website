@@ -1,0 +1,127 @@
+---
+title: Deterministic redaction
+description: Minimize metadata, understand sensitive-key redaction, and keep the same sanitized bytes across retries and language implementations.
+audience: [developer, governance]
+kind: concept
+searchIntent: Apply deterministic Veritio metadata redaction before canonicalization and hashing.
+questions:
+  - How does Veritio redact sensitive metadata?
+  - Is redaction deterministic across TypeScript, Python, and Go?
+  - When does redaction happen relative to hashing?
+  - Why did my agent template throw instead of redacting the value?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7', 'redaction conformance fixtures at veritio@c4100ee']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/conformance/redaction.json
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/index.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/templates.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/python/src/veritio/event.py
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/go/event.go
+claimRefs: []
+---
+
+import { Code } from '@astrojs/starlight/components'
+import redactionOutput from '../../../../examples/concepts/expected/redaction.txt?raw'
+import guardOutput from '../../../../examples/templates/expected/raw-content-guard.txt?raw'
+
+Veritio redacts metadata before canonicalization and hashing. The goal is stable minimization: equivalent inputs produce equivalent sanitized structures, and sensitive values do not become permanent parts of the evidence digest.
+
+Two mechanisms do this work, and they behave differently on failure. Key-name redaction runs on every event and silently replaces matching values. The template raw-content guard runs on the agent and code templates and throws instead. Knowing which one you are relying on is the difference between a leaked value and a rejected request.
+
+## Redaction is not a step you call
+
+There is no exported `redact()` helper in `@veritio/core`. Redaction runs inside `createAuditEvent` and `createEvidenceEdge`, on the `metadata` bag, as the event object is constructed. A caller cannot invoke it early, skip it, or run it after hashing.
+
+```text
+createAuditEvent(input)
+  ├─ validate actor / action / target / scope
+  ├─ redactMetadata(input.metadata)   ← here, always
+  └─ return the event object
+                    ↓ canonicalJson (veritio-json-v1)
+                    ↓ SHA-256
+              event or record hash
+```
+
+Because redaction sits upstream of the canonical bytes, a redacted value is not merely hidden at read time. It never existed in the bytes that were hashed, so no later verification pass can recover it and no store can be asked to unredact it.
+
+## The rule is the key name, never the value
+
+One case-insensitive regular expression decides everything:
+
+```text
+(password|secret|token|api[_-]?key|authorization|email|phone|ssn)
+```
+
+It is a **substring** match on the key, so `clientSecret`, `accessToken`, `x-api-key`, `AUTHORIZATION`, and `customerEmail` all match. The value is never inspected. That is deliberate: a decision that depended on payload shape or length would vary between languages and between runs, and a hash-affecting decision cannot be allowed to vary.
+
+The verified fixture runs one metadata bag containing every family, plus recursion, arrays, digest envelopes, and safe keys, through `createAuditEvent`:
+
+<Code code={redactionOutput} lang="json" title="verified output" />
+
+Read `keyOutcomes` first. Each top-level key is classified as `preserved` (canonically identical to the input), `redacted` (replaced wholesale by the marker `[redacted]`), or `rewritten` (structurally changed, because something inside it was redacted or minimized).
+
+Four behaviors are worth naming explicitly.
+
+**Substring matching over-redacts on purpose.** `tokenizerVersion` is `redacted` because it contains `token`. Nothing about the value `"3"` is sensitive. The pattern accepts this cost rather than maintaining a per-key exception list that would have to stay identical in three SDKs. If you need such a value, rename the key.
+
+**A sensitive key replaces its whole subtree.** `secretRotation` was an object and `apiKeys` was an array; both become the bare string `[redacted]`. The redactor does not descend into a sensitive parent to preserve harmless children, so nothing can leak upward through a matching key.
+
+**Recursion finds sensitive keys at any depth.** `request` is `rewritten`: `request.headers.authorization` became `[redacted]` while `method`, `route`, and `content-type` survived. `recipients` is `rewritten` for the same reason — the array itself is not sensitive, but the `email` key inside each element is. Array elements are walked with their parent's key, so an array under a sensitive key is caught before its items are ever examined.
+
+**Object keys are sorted as part of the walk.** Compare `beforeMetadata` with `afterMetadata`: the surviving keys come back in canonical order, and object properties whose value was `undefined` are dropped. This is the same JSON-domain normalization the [hash chain](/docs/concepts/hash-chain/) depends on, which is why non-finite numbers throw rather than receive an unstable representation.
+
+Two keys in the fixture are `preserved` by contract rather than by accident. `sessionId` and `activityEpisodeId` are the un-shadowable grouping keys the provenance recorder stamps on every event in a session. They are non-PII, and they must not match the sensitive-key pattern — if they did, [activity episodes](/docs/concepts/activity-episodes/) could not be reassembled from a chain.
+
+## The digest envelope carve-out
+
+Evidence sometimes needs a stable commitment to a sensitive value without storing the value. A `customerEmail` field in a governed change is the standard case: the revision must prove the address changed without recording either address.
+
+A narrowly shaped digest envelope therefore survives a sensitive key. `digest` must be a string matching `sha256:` followed by 64 lowercase hex characters, and one of three shapes must hold:
+
+- `algorithm: "sha256"` keeps `algorithm` and `digest` only.
+- `algorithm: "hmac-sha256"` keeps `algorithm`, `digest`, and `keyVersion` — but only when `keyVersion` is a non-empty string. Without it the whole envelope is rejected.
+- `captureMode` of `content_digest`, `randomized_digest`, `reference`, `redact`, or `encrypt` keeps `captureMode` and `digest` only.
+
+Everything else in the envelope is discarded. In the fixture, `contactEmailCommitment` is classified `rewritten` rather than `preserved` precisely because a raw `value` sibling was smuggled in alongside a valid digest; `rawSiblingStripped: true` confirms it did not survive. Key material passed as `hmacKey` or `key` is dropped the same way.
+
+An envelope that fails these checks under a sensitive key is not partially cleaned. It becomes `[redacted]` in full, which is why the shared conformance fixture's `contactEmailInvalidDigest` case — a valid-looking envelope carrying `sha256:not-a-digest` — collapses to the marker.
+
+Two boundaries around this carve-out are easy to miss. First, envelope minimization also runs under **non-sensitive** keys: any object that matches one of the three shapes is reduced to its minimized form regardless of what it is called. Second, an object carrying `canonicalization`, `schemaRef`, `fieldSetRef`, or `fields` is never treated as a field commitment. Those are [evidence commit](/docs/concepts/evidence-commits/) shapes, and letting them through the carve-out would let a caller park arbitrary structure under a sensitive key.
+
+## A secret cannot move the hash
+
+The fixture's last two sections make the ordering claim falsifiable rather than rhetorical. `rawSecretInCanonicalBytes` is `false`: a substring search of the canonical JSON for the fake credential finds nothing.
+
+More usefully, three events that differ **only** in the raw value under `apiKey` — a realistic-looking key, a differently shaped key, and the literal string `[redacted]` — all hash to `7f0059c8…`. The hash depends on the key being sensitive, not on what the value was. In practice this means an accidental credential in an already-recorded event did not change the digest, and re-recording the same logical event after removing it produces the same hash.
+
+## Redaction is not secret discovery
+
+A key-name redactor cannot understand the meaning of arbitrary content. A token stored under `note`, a raw prompt under `summary`, a diff under `description`, or personal data embedded in a value all pass through untouched. So does an array of raw strings under a safe key, because the array inherits its parent's harmless name.
+
+One more gap is easy to trip over: a `Principal`'s optional `display` field is not redacted at all. It is not metadata, so the pattern never sees it. Callers must keep display labels free of PII and prefer stable ids. Evidence edges drop `display` entirely and carry only actor ids.
+
+The working rule is that the application allowlists the metadata fields needed to answer its evidence question before calling the SDK. Do not send raw prompts, source diffs, access tokens, request bodies, email addresses, or filesystem paths merely because a redactor exists. Prefer stable opaque IDs, enumerated classifications, counts, and digests.
+
+## The template raw-content guard
+
+For agent and code evidence, that advice is enforced rather than suggested. Eleven template builders — `agentSessionStartedTemplate`, `agentPromptRecordedTemplate`, `agentToolCalledTemplate`, `changeProposalCreatedTemplate`, `filesChangedTemplate`, the three `review*` builders, `ciJobCompletedTemplate`, `deploymentCreatedTemplate`, and `runtimeObservedTemplate` — declare a `block-raw-content` metadata policy. Their caller-supplied `metadata` is walked recursively **before** the event object is built, and rejected on two independent rules.
+
+<Code code={guardOutput} lang="json" title="verified raw-content guard output" />
+
+The key-name rule blocks names that normally carry raw code, paths, logs, arguments, or credentials, at any depth — `diff`, `filePath`, and a nested `result.stdout` all fail. Names ending in `hash`, `hashes`, `id`, `ids`, `count`, or `status` are exempt, which is what lets the `minimizedAlternative` through with `diffHash`, `fileCount`, and `filePathHashes`. The guard blocks raw content, not the fact that content changed.
+
+The value-shape rule catches git-patch and bearer-token shapes even under an innocuous key, which is how `summary` and `note` are rejected here.
+
+The contrast with key-name redaction is the point. Redaction replaces a value and continues; the guard raises a `TypeError` and no event exists, so nothing partial reaches the hash chain and a caught guard error converts cleanly into a request-level rejection. It is a fail-closed boundary, not a sanitizer — and it applies only to those eleven builders. The auth, organization, consent, and data templates fall back to key-name redaction alone. See [Audit templates](/docs/guides/audit-templates/) for the full builder list and the exemption rules.
+
+## Cross-language contract
+
+The TypeScript, Python, and Go SDKs compile the same pattern and share the public fixtures in `spec/conformance/redaction.json`. All three walk objects in sorted key order, replace sensitive subtrees with the same `[redacted]` marker, and apply the same digest-envelope carve-out.
+
+A change to the pattern, to recursion, to the marker, or to envelope sanitization changes canonical bytes and therefore changes hashes. It is a protocol compatibility change requiring a coordinated release across all three SDKs, not a website copy edit.
+
+## What a redacted event proves
+
+A redacted, hashed event proves that the sanitized structure you are looking at is the structure that was hashed, and that no value under a matching key was part of it. It does not prove that the host minimized the fields the pattern does not cover, that the recorded claim was true, or that a secret was never written somewhere else in the same request.
+
+Constrain metadata shape with the [event schema](/docs/reference/event-schema/), then apply the agent-specific rules in [Agent events](/docs/ai/agent-events/).
