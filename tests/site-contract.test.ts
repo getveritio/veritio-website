@@ -111,6 +111,16 @@ describe('approved public sitemap', () => {
   })
 })
 
+describe('public repository boundary', () => {
+  test('the public checkout excludes internal agent plans and local QA artifacts', () => {
+    expect(existsSync(join(root, 'docs/superpowers'))).toBeFalse()
+    expect(existsSync(join(root, 'design-qa.md'))).toBeFalse()
+    expect(existsSync(join(root, 'design-qa-comparison-desktop.png'))).toBeFalse()
+    expect(existsSync(join(root, 'design-qa-implementation-desktop.png'))).toBeFalse()
+    expect(existsSync(join(root, 'design-qa-implementation-mobile.png'))).toBeFalse()
+  })
+})
+
 describe('documentation publishing contracts', () => {
   test('every guide declares required provenance metadata', () => {
     const files = walk(docsRoot).filter((file) => /\.mdx?$/.test(file))
