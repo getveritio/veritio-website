@@ -6,6 +6,9 @@ dist
 !.env.example
 .DS_Store
 .codex/private/
+docs/superpowers/
+design-qa.md
+design-qa-*.png
 remotion/node_modules
 remotion/.remotion
 
