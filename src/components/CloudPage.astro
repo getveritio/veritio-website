@@ -1,0 +1,101 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro'
+import Nav from './Nav.astro'
+import Footer from './Footer.astro'
+import { Image } from 'astro:assets'
+import dashboardShot from '../assets/console-dashboard.png'
+import exportsShot from '../assets/console-exports.png'
+
+type Locale = 'en' | 'de' | 'ko'
+const { locale = 'en' } = Astro.props as { locale?: Locale }
+
+const copy = {
+  en: {
+    title: 'Veritio Cloud — Optional managed evidence operations',
+    description: 'The optional hosted path for projects, scoped keys, ingest, evidence views, and export requests on the public Veritio contract.',
+    eyebrow: 'Veritio Cloud · Optional managed path',
+    heading: 'Run the evidence boundary without running every service.',
+    lead: 'Veritio Cloud adds hosted projects, scoped keys, ingest, evidence views, and export requests around the same public event and verification contracts. The open-source SDKs, storage interfaces, and verifier remain useful without it.',
+    cta: 'Start with Cloud', docs: 'Read Cloud docs', oss: 'Use open source',
+    proof: 'What the managed product implements',
+    items: [
+      ['Projects', 'Separate hosted evidence boundaries with explicit project selection.'],
+      ['Scoped keys', 'Narrow credentials for the authority a server actually needs.'],
+      ['Managed ingest', 'A project-scoped server endpoint for checked Veritio records.'],
+      ['Evidence views', 'Operational surfaces for records, sessions, episodes, and governed changes.'],
+      ['Export requests', 'Request, track, and download bundles for independent verification.'],
+      ['OSS boundary', 'Protocol fields, hashing, redaction, and export format stay public.'],
+    ],
+    consoleTitle: 'The managed view stays connected to the evidence.',
+    consoleBody: 'Reference-deployment captures use demonstration data. A dashboard is a reading surface; the hash-linked records and verifier remain the integrity boundary.',
+    cautionTitle: 'Published claim boundary',
+    cautionBody: 'This page does not promise a retention duration, compute location, service level, or automatic legal outcome. Those claims require separate implementation and dated verification.',
+  },
+  de: {
+    title: 'Veritio Cloud — Optionaler Managed Service',
+    description: 'Der optionale gehostete Weg für Projekte, Scoped Keys, Ingest, Evidence-Ansichten und Export-Anfragen auf dem öffentlichen Veritio-Vertrag.',
+    eyebrow: 'Veritio Cloud · Optionaler Managed Service',
+    heading: 'Die Evidence-Grenze betreiben, ohne jeden Dienst selbst zu betreiben.',
+    lead: 'Veritio Cloud ergänzt den öffentlichen Event- und Verifikationsvertrag um gehostete Projekte, Scoped Keys, Ingest, Evidence-Ansichten und Export-Anfragen. Open-Source-SDKs, Storage-Schnittstellen und Verifier bleiben unabhängig nutzbar.',
+    cta: 'Cloud starten', docs: 'Cloud-Dokumentation', oss: 'Open Source nutzen',
+    proof: 'Was das Managed Product implementiert',
+    items: [
+      ['Projekte', 'Getrennte gehostete Evidence-Grenzen mit expliziter Projektauswahl.'],
+      ['Scoped Keys', 'Schmale Berechtigungen für die Autorität, die ein Server wirklich benötigt.'],
+      ['Managed Ingest', 'Ein projektbezogener Server-Endpunkt für geprüfte Veritio-Records.'],
+      ['Evidence-Ansichten', 'Operative Oberflächen für Records, Sessions, Episoden und governierte Änderungen.'],
+      ['Export-Anfragen', 'Bundles anfordern, verfolgen und zur unabhängigen Verifikation herunterladen.'],
+      ['OSS-Grenze', 'Protokollfelder, Hashing, Redaction und Exportformat bleiben öffentlich.'],
+    ],
+    consoleTitle: 'Die Managed-Ansicht bleibt mit der Evidence verbunden.',
+    consoleBody: 'Aufnahmen einer Referenzbereitstellung verwenden Demonstrationsdaten. Das Dashboard ist eine Leseoberfläche; die hash-verknüpften Records und der Verifier bleiben die Integritätsgrenze.',
+    cautionTitle: 'Grenze öffentlicher Aussagen',
+    cautionBody: 'Diese Seite verspricht keine Aufbewahrungsdauer, Compute-Region, Service-Level oder automatische Rechtskonformität. Dafür sind separate Implementierung und datierte Prüfung erforderlich.',
+  },
+  ko: {
+    title: 'Veritio Cloud — 선택형 관리형 증적 운영',
+    description: '공개 Veritio 계약을 기반으로 프로젝트, 범위 지정 키, 수집, 증적 보기, 내보내기 요청을 제공하는 선택형 호스팅 경로입니다.',
+    eyebrow: 'Veritio Cloud · 선택형 관리형 경로',
+    heading: '모든 서비스를 직접 운영하지 않고 증적 경계를 운영하세요.',
+    lead: 'Veritio Cloud는 동일한 공개 이벤트 및 검증 계약에 호스팅 프로젝트, 범위 지정 키, 수집, 증적 보기, 내보내기 요청을 더합니다. 오픈 소스 SDK, 스토리지 인터페이스, 검증기는 Cloud 없이도 사용할 수 있습니다.',
+    cta: 'Cloud 시작', docs: 'Cloud 문서', oss: '오픈 소스 사용',
+    proof: '관리형 제품에 구현된 기능',
+    items: [
+      ['프로젝트', '명시적인 프로젝트 선택을 사용하는 분리된 호스팅 증적 경계.'],
+      ['범위 지정 키', '서버에 실제로 필요한 권한만 부여하는 자격 증명.'],
+      ['관리형 수집', '검사된 Veritio 레코드를 위한 프로젝트 범위 서버 엔드포인트.'],
+      ['증적 보기', '레코드, 세션, 에피소드, 거버넌스 변경을 위한 운영 화면.'],
+      ['내보내기 요청', '독립 검증용 번들을 요청하고 상태를 확인하고 다운로드.'],
+      ['OSS 경계', '프로토콜 필드, 해싱, 삭제 처리, 내보내기 형식은 공개 상태 유지.'],
+    ],
+    consoleTitle: '관리형 화면도 증적과 연결됩니다.',
+    consoleBody: '참조 배포 화면은 데모 데이터를 사용합니다. 대시보드는 읽기 화면이며 해시 연결 레코드와 검증기가 무결성 경계입니다.',
+    cautionTitle: '공개 주장 경계',
+    cautionBody: '이 페이지는 보존 기간, 컴퓨트 위치, 서비스 수준 또는 자동 법률 준수를 약속하지 않습니다. 이러한 주장은 별도의 구현과 날짜가 있는 검증이 필요합니다.',
+  },
+}[locale]
+---
+
+<BaseLayout title={copy.title} description={copy.description} claimRefs={['cloud-managed-path', 'cloud-projects-keys-ingest', 'cloud-evidence-views', 'cloud-export-requests']}>
+  <Nav />
+  <main id="main-content">
+    <section class="container border-b border-line py-16 sm:py-24">
+      <span class="eyebrow">{copy.eyebrow}</span>
+      <h1 class="mt-5 max-w-[14ch] text-[clamp(48px,7vw,88px)] font-medium leading-[0.98] tracking-[-0.02em]">{copy.heading}</h1>
+      <p class="mt-8 max-w-3xl text-xl leading-relaxed text-ink-soft">{copy.lead}</p>
+      <div class="mt-9 flex flex-wrap gap-3"><a class="doc-btn doc-btn--solid" href="https://console.getveritio.com/register" target="_blank" rel="noopener noreferrer">{copy.cta} ↗</a><a class="doc-btn" href="/docs/cloud/overview/">{copy.docs}</a><a class="doc-btn" href="/open-source/">{copy.oss}</a></div>
+    </section>
+
+    <section class="container py-16 sm:py-20"><span class="eyebrow">{copy.proof}</span><div class="mt-8 grid sm:grid-cols-2 lg:grid-cols-3">
+      {copy.items.map(([title, body], index) => <article class="border border-line p-7 sm:-mt-px sm:-ml-px"><span class="font-mono text-xs text-accent">0{index + 1}</span><h2 class="mt-4 text-2xl font-medium">{title}</h2><p class="mt-3 leading-relaxed text-ink-soft">{body}</p></article>)}
+    </div></section>
+
+    <section class="border-y border-line-strong bg-surface-raised"><div class="container grid gap-10 py-16 lg:grid-cols-2 lg:items-center">
+      <div><span class="eyebrow">Reference deployment</span><h2 class="mt-4 text-4xl font-medium">{copy.consoleTitle}</h2><p class="mt-5 text-lg leading-relaxed text-ink-soft">{copy.consoleBody}</p></div>
+      <div class="grid gap-4"><Image src={dashboardShot} alt="Veritio Cloud reference operations view with a demonstration evidence stream and risk timeline." widths={[640, 1200]} sizes="(min-width: 1024px) 50vw, 100vw" class="border border-line-strong" /><Image src={exportsShot} alt="Veritio Cloud reference export request view using demonstration data." widths={[640, 1200]} sizes="(min-width: 1024px) 50vw, 100vw" class="border border-line-strong" /></div>
+    </div></section>
+
+    <section class="container py-16 sm:py-20"><div class="border-l-4 border-seal bg-surface-raised p-7"><h2 class="font-mono text-sm font-semibold uppercase tracking-wider">{copy.cautionTitle}</h2><p class="mt-3 max-w-3xl leading-relaxed text-ink-soft">{copy.cautionBody}</p></div></section>
+  </main>
+  <Footer />
+</BaseLayout>

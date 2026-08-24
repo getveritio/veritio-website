@@ -1,0 +1,263 @@
+{
+  "guardCount": 35,
+  "surfaces": [
+    "createAuditEvent",
+    "canonicalJson",
+    "MemoryAuditStore.append",
+    "MemoryAuditStore.list",
+    "mergeVeritioMetadata",
+    "createGovernedActionDraft",
+    "createEvidenceCommit",
+    "buildExportBundle",
+    "parseExportBundle",
+    "verifyExportBundle"
+  ],
+  "allFailClosed": true,
+  "guards": [
+    {
+      "surface": "createAuditEvent",
+      "case": "actor id is blank",
+      "outcome": "rejected",
+      "errorName": "TypeError",
+      "message": "actor.id is required"
+    },
+    {
+      "surface": "createAuditEvent",
+      "case": "target id is missing",
+      "outcome": "rejected",
+      "errorName": "TypeError",
+      "message": "target.id is required"
+    },
+    {
+      "surface": "createAuditEvent",
+      "case": "action is not dotted lowercase",
+      "outcome": "rejected",
+      "errorName": "TypeError",
+      "message": "action must use dotted lowercase protocol form"
+    },
+    {
+      "surface": "createAuditEvent",
+      "case": "occurredAt is not a parsable date",
+      "outcome": "rejected",
+      "errorName": "TypeError",
+      "message": "occurredAt must be a valid date"
+    },
+    {
+      "surface": "createAuditEvent",
+      "case": "metadata carries a non-finite number",
+      "outcome": "rejected",
+      "errorName": "TypeError",
+      "message": "metadata numbers must be finite"
+    },
+    {
+      "surface": "canonicalJson",
+      "case": "NaN in the hash input",
+      "outcome": "rejected",
+      "errorName": "TypeError",
+      "message": "JSON numbers must be finite"
+    },
+    {
+      "surface": "canonicalJson",
+      "case": "bigint has no canonical JSON form",
+      "outcome": "rejected",
+      "errorName": "TypeError",
+      "message": "unsupported JSON value type: bigint"
+    },
+    {
+      "surface": "canonicalJson",
+      "case": "function has no canonical JSON form",
+      "outcome": "rejected",
+      "errorName": "TypeError",
+      "message": "unsupported JSON value type: function"
+    },
+    {
+      "surface": "MemoryAuditStore.append",
+      "case": "event has no tenant scope",
+      "outcome": "rejected",
+      "errorName": "TypeError",
+      "message": "scope.tenantId is required"
+    },
+    {
+      "surface": "MemoryAuditStore.append",
+      "case": "idempotency key replayed with a different payload",
+      "outcome": "rejected",
+      "errorName": "TypeError",
+      "message": "idempotency conflict"
+    },
+    {
+      "surface": "MemoryAuditStore.append",
+      "case": "expectedPreviousHash does not match the chain tip",
+      "outcome": "rejected",
+      "errorName": "TypeError",
+      "message": "expectedPreviousHash does not match tenant chain tip"
+    },
+    {
+      "surface": "MemoryAuditStore.list",
+      "case": "negative limit",
+      "outcome": "rejected",
+      "errorName": "TypeError",
+      "message": "limit must be a non-negative integer"
+    },
+    {
+      "surface": "MemoryAuditStore.list",
+      "case": "fractional afterSequence",
+      "outcome": "rejected",
+      "errorName": "TypeError",
+      "message": "afterSequence must be a non-negative integer"
+    },
+    {
+      "surface": "mergeVeritioMetadata",
+      "case": "caller shadows a reserved context key",
+      "outcome": "rejected",
+      "errorName": "TypeError",
+      "message": "metadata.changeId is reserved by Veritio"
+    },
+    {
+      "surface": "createGovernedActionDraft",
+      "case": "keyed_digest field without a digest key",
+      "outcome": "rejected",
+      "errorName": "TypeError",
+      "message": "digestKeys.keyedDigest is required for keyed_digest fields"
+    },
+    {
+      "surface": "createGovernedActionDraft",
+      "case": "reserved capture mode randomized_digest",
+      "outcome": "rejected",
+      "errorName": "TypeError",
+      "message": "capture mode randomized_digest is not supported by the current governed-change draft helper"
+    },
+    {
+      "surface": "createGovernedActionDraft",
+      "case": "governed field value is non-finite",
+      "outcome": "rejected",
+      "errorName": "TypeError",
+      "message": "field values must be finite JSON numbers"
+    },
+    {
+      "surface": "createGovernedActionDraft",
+      "case": "governed field value is a bigint",
+      "outcome": "rejected",
+      "errorName": "TypeError",
+      "message": "unsupported field value type: bigint"
+    },
+    {
+      "surface": "createEvidenceCommit",
+      "case": "sequence is not a positive integer",
+      "outcome": "rejected",
+      "errorName": "TypeError",
+      "message": "sequence must be a positive integer"
+    },
+    {
+      "surface": "createEvidenceCommit",
+      "case": "previousCommitHash is not a sha256 digest",
+      "outcome": "rejected",
+      "errorName": "TypeError",
+      "message": "previousCommitHash must be null or sha256 digest"
+    },
+    {
+      "surface": "createEvidenceCommit",
+      "case": "member manifest is empty",
+      "outcome": "rejected",
+      "errorName": "TypeError",
+      "message": "members must not be empty"
+    },
+    {
+      "surface": "createEvidenceCommit",
+      "case": "member indices skip zero",
+      "outcome": "rejected",
+      "errorName": "TypeError",
+      "message": "member indices must be contiguous from zero"
+    },
+    {
+      "surface": "createEvidenceCommit",
+      "case": "the same record is committed twice",
+      "outcome": "rejected",
+      "errorName": "TypeError",
+      "message": "duplicate commit member"
+    },
+    {
+      "surface": "createEvidenceCommit",
+      "case": "member recordType is outside the protocol vocabulary",
+      "outcome": "rejected",
+      "errorName": "TypeError",
+      "message": "recordType must be a supported commit member record type"
+    },
+    {
+      "surface": "createEvidenceCommit",
+      "case": "member recordHash is not a sha256 digest",
+      "outcome": "rejected",
+      "errorName": "TypeError",
+      "message": "recordHash must be a sha256 digest"
+    },
+    {
+      "surface": "buildExportBundle",
+      "case": "filters declared without the filtered chain scope",
+      "outcome": "rejected",
+      "errorName": "Error",
+      "message": "export bundle: filters require chainScope 'filtered'"
+    },
+    {
+      "surface": "buildExportBundle",
+      "case": "filtered chain scope without a filters declaration",
+      "outcome": "rejected",
+      "errorName": "Error",
+      "message": "export bundle: chainScope 'filtered' requires a filters declaration"
+    },
+    {
+      "surface": "buildExportBundle",
+      "case": "commits carried by a scoped bundle",
+      "outcome": "rejected",
+      "errorName": "Error",
+      "message": "export bundle: commits are not supported in a scoped bundle"
+    },
+    {
+      "surface": "buildExportBundle",
+      "case": "annex packId is not printable ASCII",
+      "outcome": "rejected",
+      "errorName": "Error",
+      "message": "export bundle: annex packId must be printable ASCII"
+    },
+    {
+      "surface": "buildExportBundle",
+      "case": "two annex packs share one packId",
+      "outcome": "rejected",
+      "errorName": "Error",
+      "message": "export bundle: duplicate annex packId \"gdpr_core\""
+    },
+    {
+      "surface": "parseExportBundle",
+      "case": "container text is not JSON",
+      "outcome": "rejected",
+      "errorName": "Error",
+      "message": "export bundle: invalid JSON container"
+    },
+    {
+      "surface": "parseExportBundle",
+      "case": "container is a JSON string, not an object",
+      "outcome": "rejected",
+      "errorName": "Error",
+      "message": "export bundle: invalid JSON container"
+    },
+    {
+      "surface": "parseExportBundle",
+      "case": "unsupported bundleVersion",
+      "outcome": "rejected",
+      "errorName": "Error",
+      "message": "export bundle: unsupported bundleVersion \"vevb-9\""
+    },
+    {
+      "surface": "parseExportBundle",
+      "case": "container has no manifest or files",
+      "outcome": "rejected",
+      "errorName": "Error",
+      "message": "export bundle: missing manifest or files"
+    },
+    {
+      "surface": "verifyExportBundle",
+      "case": "verifier handed a non-object",
+      "outcome": "rejected",
+      "errorName": "TypeError",
+      "message": "verifyExportBundle: expected an ExportBundle object"
+    }
+  ]
+}

@@ -56,7 +56,7 @@ const entries = [
     date: '2026-07-03',
     tag: 'Site',
     title: 'Evidence-dossier redesign',
-    body: 'getveritio.com moved to the evidence-dossier design language: serif prose, mono data, hairline rules.',
+    body: 'getveritio.com moved to the evidence-dossier design language: Geist text, restrained mono data, and hairline rules.',
   },
 ]
 ---
@@ -64,10 +64,11 @@ const entries = [
 <BaseLayout
   title="Changelog — Veritio"
   description="Dated, public milestones across the Veritio open-source packages, Veritio Cloud, and getveritio.com."
+  claimRefs={['cloud-managed-path', 'cloud-projects-keys-ingest', 'cloud-export-requests', 'cloud-price-catalog']}
 >
   <Nav />
 
-  <main>
+  <main id="main-content">
     <section>
       <div class="container">
         <div class="border-b border-line py-3 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-muted">

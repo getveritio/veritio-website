@@ -1,0 +1,45 @@
+---
+const data = Astro.locals.starlightRoute.entry.data
+const audience = 'audience' in data && Array.isArray(data.audience) ? data.audience : []
+const kind = 'kind' in data && typeof data.kind === 'string' ? data.kind : undefined
+const verifiedAgainst = 'verifiedAgainst' in data && Array.isArray(data.verifiedAgainst) ? data.verifiedAgainst : []
+const section = Astro.url.pathname.split('/').filter(Boolean)[1]
+const sectionLabels: Record<string, string> = {
+  start: 'Start Here',
+  concepts: 'Core Concepts',
+  sdks: 'SDKs & Tools',
+  frameworks: 'Frameworks',
+  storage: 'Storage & Self-hosting',
+  ai: 'AI & Agents',
+  cloud: 'Veritio Cloud',
+  reference: 'Reference',
+}
+const sectionLabel = section ? sectionLabels[section] : undefined
+---
+
+{sectionLabel && (
+  <nav class="docs-breadcrumb" aria-label="Breadcrumb">
+    <a href="/docs/">{sectionLabel}</a><span aria-hidden="true">/</span><span>{data.title}</span>
+  </nav>
+)}
+<h1 id="_top" data-page-title>{data.title}</h1>
+{verifiedAgainst.length > 0 && (
+  <dl class="docs-meta" aria-label="Page verification metadata">
+    {kind && <div><dt>Kind</dt><dd>{kind}</dd></div>}
+    {audience.length > 0 && <div><dt>For</dt><dd>{audience.join(' · ')}</dd></div>}
+    <div><dt>Verified against</dt><dd>{verifiedAgainst.join(' · ')}</dd></div>
+  </dl>
+)}
+
+<style>
+  @layer starlight.core {
+    .docs-breadcrumb { display: flex; flex-wrap: wrap; gap: 0.65rem; margin-top: 0.4rem; color: var(--sl-color-gray-3); font-family: var(--sl-font-mono); font-size: 0.7rem; }
+    .docs-breadcrumb a { color: var(--sl-color-accent); text-decoration: none; }
+    .docs-breadcrumb a:hover { text-decoration: underline; }
+    h1 { margin-top: 1rem; max-width: none; color: var(--sl-color-white); font-size: var(--sl-text-h1); font-weight: 620; letter-spacing: -0.025em; line-height: 1.02; }
+    .docs-meta { display: flex; flex-wrap: wrap; gap: 0.65rem 1.2rem; border-top: 1px solid var(--sl-color-hairline); margin-top: 1.25rem; padding-top: 0.85rem; color: var(--sl-color-gray-3); font-family: var(--sl-font-mono); font-size: 0.67rem; }
+    .docs-meta div { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+    .docs-meta dt { color: var(--sl-color-gray-2); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
+    .docs-meta dd { margin: 0; }
+  }
+</style>

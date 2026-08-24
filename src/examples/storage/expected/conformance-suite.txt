@@ -1,0 +1,27 @@
+{
+  "store": "serialized-in-process-store",
+  "checkCount": 5,
+  "checks": [
+    {
+      "name": "appends tenant-scoped chains and lists records deterministically",
+      "ok": true
+    },
+    {
+      "name": "returns idempotent records and rejects conflicting idempotency keys",
+      "ok": true
+    },
+    {
+      "name": "fails closed for missing tenant scope and expected tip mismatches",
+      "ok": true
+    },
+    {
+      "name": "returns cloned records so callers cannot mutate stored evidence",
+      "ok": true
+    },
+    {
+      "name": "fails closed when stored record integrity is corrupted",
+      "ok": true
+    }
+  ],
+  "conformant": true
+}

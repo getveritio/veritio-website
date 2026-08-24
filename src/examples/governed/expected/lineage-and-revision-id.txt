@@ -1,0 +1,140 @@
+{
+  "entity": {
+    "ref": {
+      "authority": "self-hosted-example",
+      "kind": "entity",
+      "type": "release_flag",
+      "id": "flag_checkout"
+    },
+    "refKey": "self-hosted-example:entity:release_flag:flag_checkout",
+    "schemaRef": "release_flag@1",
+    "fieldSetRef": "release_flag.governed@1"
+  },
+  "lineage": [
+    {
+      "label": "v1 create",
+      "changedPaths": [
+        "/enabled",
+        "/flagId",
+        "/rolloutPercent"
+      ],
+      "parentRevisionIds": [],
+      "derivationInputs": {
+        "entityType": "release_flag",
+        "entityId": "flag_checkout",
+        "stateDigest": "sha256:e1c0e0b122f0f28071c7d23b2f50767f26849075ca2d07537a8d172b2fc84f21",
+        "changeId": "chg_release_flag_flag_checkout_9fa0702552cde9a3"
+      },
+      "committedFields": {
+        "enabled": false,
+        "flagId": "flag_checkout",
+        "rolloutPercent": 0
+      },
+      "revisionId": "rev_release_flag_flag_checkout_e1c0e0b122f0_2a5b99a0",
+      "revisionIdParts": {
+        "stateDigest12": "e1c0e0b122f0",
+        "changeScope8": "2a5b99a0"
+      }
+    },
+    {
+      "label": "v2 enable at 25%",
+      "changedPaths": [
+        "/enabled",
+        "/rolloutPercent"
+      ],
+      "parentRevisionIds": [
+        "rev_release_flag_flag_checkout_e1c0e0b122f0_2a5b99a0"
+      ],
+      "derivationInputs": {
+        "entityType": "release_flag",
+        "entityId": "flag_checkout",
+        "stateDigest": "sha256:6e562f57d9e4829b562917253bb24b9f13d78a2eda9d0c2d1f8293899fb2eb48",
+        "changeId": "chg_release_flag_flag_checkout_e5f7cf832187d1b8"
+      },
+      "committedFields": {
+        "enabled": true,
+        "flagId": "flag_checkout",
+        "rolloutPercent": 25
+      },
+      "revisionId": "rev_release_flag_flag_checkout_6e562f57d9e4_3de08e1c",
+      "revisionIdParts": {
+        "stateDigest12": "6e562f57d9e4",
+        "changeScope8": "3de08e1c"
+      }
+    },
+    {
+      "label": "v3 rollback to the v1 state",
+      "changedPaths": [
+        "/enabled",
+        "/rolloutPercent"
+      ],
+      "parentRevisionIds": [
+        "rev_release_flag_flag_checkout_6e562f57d9e4_3de08e1c"
+      ],
+      "derivationInputs": {
+        "entityType": "release_flag",
+        "entityId": "flag_checkout",
+        "stateDigest": "sha256:e1c0e0b122f0f28071c7d23b2f50767f26849075ca2d07537a8d172b2fc84f21",
+        "changeId": "chg_release_flag_flag_checkout_a44893a9f3af30c5"
+      },
+      "committedFields": {
+        "enabled": false,
+        "flagId": "flag_checkout",
+        "rolloutPercent": 0
+      },
+      "revisionId": "rev_release_flag_flag_checkout_e1c0e0b122f0_7a8fa2a9",
+      "revisionIdParts": {
+        "stateDigest12": "e1c0e0b122f0",
+        "changeScope8": "7a8fa2a9"
+      }
+    },
+    {
+      "label": "v3 replay (same change, retried)",
+      "changedPaths": [
+        "/enabled",
+        "/rolloutPercent"
+      ],
+      "parentRevisionIds": [
+        "rev_release_flag_flag_checkout_6e562f57d9e4_3de08e1c"
+      ],
+      "derivationInputs": {
+        "entityType": "release_flag",
+        "entityId": "flag_checkout",
+        "stateDigest": "sha256:e1c0e0b122f0f28071c7d23b2f50767f26849075ca2d07537a8d172b2fc84f21",
+        "changeId": "chg_release_flag_flag_checkout_a44893a9f3af30c5"
+      },
+      "committedFields": {
+        "enabled": false,
+        "flagId": "flag_checkout",
+        "rolloutPercent": 0
+      },
+      "revisionId": "rev_release_flag_flag_checkout_e1c0e0b122f0_7a8fa2a9",
+      "revisionIdParts": {
+        "stateDigest12": "e1c0e0b122f0",
+        "changeScope8": "7a8fa2a9"
+      }
+    }
+  ],
+  "invariants": {
+    "rollbackStateDigestEqualsCreate": true,
+    "contentOnlyIdWouldCollide": true,
+    "rollbackRevisionIdDiffersFromCreate": true,
+    "changeScopeSuffixDiffers": true,
+    "replayChangeIdIsStable": true,
+    "replayRevisionIdIsStable": true,
+    "lineageParents": {
+      "v1": [],
+      "v2": [
+        "rev_release_flag_flag_checkout_e1c0e0b122f0_2a5b99a0"
+      ],
+      "v3": [
+        "rev_release_flag_flag_checkout_6e562f57d9e4_3de08e1c"
+      ]
+    }
+  },
+  "recomputedOffline": {
+    "v1": "rev_release_flag_flag_checkout_e1c0e0b122f0_2a5b99a0",
+    "v3": "rev_release_flag_flag_checkout_e1c0e0b122f0_7a8fa2a9",
+    "matchesDraftIds": true
+  }
+}

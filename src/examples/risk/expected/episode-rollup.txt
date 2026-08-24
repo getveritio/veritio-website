@@ -1,0 +1,209 @@
+{
+  "policy": {
+    "policyVersion": "veritio.reference.v1",
+    "bands": {
+      "low": 0.05,
+      "medium": 0.25,
+      "high": 0.5,
+      "critical": 0.75
+    },
+    "rollup": {
+      "windowSeconds": 60,
+      "decayPerWindow": 0.5,
+      "velocityNormalizer": 3,
+      "frequencyRuleCount": 0
+    }
+  },
+  "steps": [
+    {
+      "stepId": "step_01_read_config",
+      "occurredAt": "2026-08-09T10:00:00.000Z",
+      "stepScore": 0.0393,
+      "gapSeconds": null,
+      "wholeWindows": 0,
+      "decayApplied": 1,
+      "carriedIn": 0,
+      "momentum": 0.0393,
+      "runningPeak": 0.0393,
+      "runningVelocityScore": 0.0131,
+      "runningScore": 0.0393,
+      "runningLevel": "none"
+    },
+    {
+      "stepId": "step_02_update_rows",
+      "occurredAt": "2026-08-09T10:00:30.000Z",
+      "stepScore": 0.366,
+      "gapSeconds": 30,
+      "wholeWindows": 0,
+      "decayApplied": 1,
+      "carriedIn": 0.0393,
+      "momentum": 0.4053,
+      "runningPeak": 0.366,
+      "runningVelocityScore": 0.1351,
+      "runningScore": 0.366,
+      "runningLevel": "medium"
+    },
+    {
+      "stepId": "step_03_config_change",
+      "occurredAt": "2026-08-09T10:01:00.000Z",
+      "stepScore": 0.4732,
+      "gapSeconds": 30,
+      "wholeWindows": 0,
+      "decayApplied": 1,
+      "carriedIn": 0.4053,
+      "momentum": 0.8785,
+      "runningPeak": 0.4732,
+      "runningVelocityScore": 0.2928,
+      "runningScore": 0.4732,
+      "runningLevel": "medium"
+    },
+    {
+      "stepId": "step_04_bulk_update",
+      "occurredAt": "2026-08-09T10:03:00.000Z",
+      "stepScore": 0.48,
+      "gapSeconds": 120,
+      "wholeWindows": 2,
+      "decayApplied": 0.25,
+      "carriedIn": 0.2196,
+      "momentum": 0.6996,
+      "runningPeak": 0.48,
+      "runningVelocityScore": 0.2928,
+      "runningScore": 0.48,
+      "runningLevel": "medium"
+    },
+    {
+      "stepId": "step_05_grant_admin",
+      "occurredAt": "2026-08-09T10:03:20.000Z",
+      "stepScore": 0.8016,
+      "gapSeconds": 20,
+      "wholeWindows": 0,
+      "decayApplied": 1,
+      "carriedIn": 0.6996,
+      "momentum": 1.5012,
+      "runningPeak": 0.8016,
+      "runningVelocityScore": 0.5004,
+      "runningScore": 0.8016,
+      "runningLevel": "critical"
+    },
+    {
+      "stepId": "step_06_read_audit",
+      "occurredAt": "2026-08-09T10:13:00.000Z",
+      "stepScore": 0.03,
+      "gapSeconds": 580,
+      "wholeWindows": 9,
+      "decayApplied": 0.002,
+      "carriedIn": 0.0029,
+      "momentum": 0.0329,
+      "runningPeak": 0.8016,
+      "runningVelocityScore": 0.5004,
+      "runningScore": 0.8016,
+      "runningLevel": "critical"
+    }
+  ],
+  "episode": {
+    "score": 0.8016,
+    "level": "critical",
+    "peak": 0.8016,
+    "velocityScore": 0.5004,
+    "stepCount": 6,
+    "policyVersion": "veritio.reference.v1"
+  },
+  "dominance": {
+    "peak": 0.8016,
+    "velocityScore": 0.5004,
+    "decidedBy": "peak",
+    "peakStepId": "step_05_grant_admin",
+    "momentumPeakStepId": "step_05_grant_admin",
+    "velocityFromMomentum": 0.5004
+  },
+  "orderIndependent": {
+    "note": "rollupEpisodeRisk sorts by occurredAt on a non-mutating copy, so caller array order cannot move the episode score.",
+    "reversedInputMatches": true
+  },
+  "knobEffects": [
+    {
+      "label": "windowSeconds 15 (four times as many decay windows)",
+      "changed": {
+        "windowSeconds": 15
+      },
+      "rollup": {
+        "score": 0.8016,
+        "level": "critical",
+        "peak": 0.8016,
+        "velocityScore": 0.3476,
+        "stepCount": 6,
+        "policyVersion": "docs.rollup.window15"
+      }
+    },
+    {
+      "label": "windowSeconds 600 (every gap lands inside one window)",
+      "changed": {
+        "windowSeconds": 600
+      },
+      "rollup": {
+        "score": 0.8016,
+        "level": "critical",
+        "peak": 0.8016,
+        "velocityScore": 0.73,
+        "stepCount": 6,
+        "policyVersion": "docs.rollup.window600"
+      }
+    },
+    {
+      "label": "decayPerWindow 1 (momentum never cools)",
+      "changed": {
+        "decayPerWindow": 1
+      },
+      "rollup": {
+        "score": 0.8016,
+        "level": "critical",
+        "peak": 0.8016,
+        "velocityScore": 0.73,
+        "stepCount": 6,
+        "policyVersion": "docs.rollup.decay1"
+      }
+    },
+    {
+      "label": "decayPerWindow 0 (any full window resets carry)",
+      "changed": {
+        "decayPerWindow": 0
+      },
+      "rollup": {
+        "score": 0.8016,
+        "level": "critical",
+        "peak": 0.8016,
+        "velocityScore": 0.4272,
+        "stepCount": 6,
+        "policyVersion": "docs.rollup.decay0"
+      }
+    },
+    {
+      "label": "velocityNormalizer 1.5 (burst out-ranks the peak)",
+      "changed": {
+        "velocityNormalizer": 1.5
+      },
+      "rollup": {
+        "score": 1,
+        "level": "critical",
+        "peak": 0.8016,
+        "velocityScore": 1,
+        "stepCount": 6,
+        "policyVersion": "docs.rollup.velocity1_5"
+      }
+    },
+    {
+      "label": "velocityNormalizer 6 (burst can never out-rank the peak)",
+      "changed": {
+        "velocityNormalizer": 6
+      },
+      "rollup": {
+        "score": 0.8016,
+        "level": "critical",
+        "peak": 0.8016,
+        "velocityScore": 0.2502,
+        "stepCount": 6,
+        "policyVersion": "docs.rollup.velocity6"
+      }
+    }
+  ]
+}

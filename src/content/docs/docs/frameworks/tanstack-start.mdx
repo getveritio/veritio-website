@@ -1,0 +1,201 @@
+---
+title: TanStack Start
+description: Wire the thin @veritio/tanstack-start adapter into server functions and server routes while the host keeps auth, tenant scope, storage, and governed-change semantics.
+audience: [developer]
+kind: guide
+searchIntent: Record TanStack Start server-function and server-route evidence through a host-injected Veritio recorder.
+questions:
+  - How do I record Veritio evidence from a TanStack Start server function?
+  - Why should I not record audit evidence inside a TanStack Start loader?
+  - How do I keep storage credentials out of the TanStack Start client bundle?
+  - Where do governed create, update, and delete changes belong in TanStack Start?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/adapters/tanstack-start/src/index.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/adapters/tanstack-start/src/__tests__/index.test.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/adapters/tanstack-start/package.json
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/examples/tanstack-start-better-auth/src/server/governed-entries.ts
+claimRefs: []
+---
+
+import { Code } from '@astrojs/starlight/components'
+import boundaryOutput from '../../../../examples/adapters/expected/server-boundary.txt?raw'
+
+TanStack Start blurs the line between client and server code. A server function looks like an ordinary import from a component, a server route looks like a file, and a loader runs in both places. That ambiguity is exactly where audit evidence goes wrong: recorded too early it describes an intent rather than an outcome, recorded in a loader it fires on prefetch and navigation, and constructed in the wrong module it drags a database driver into the browser bundle.
+
+`@veritio/tanstack-start` is a translator for that boundary and nothing else. It imports no TanStack Start runtime API, reads no environment variable, and holds no store handle. What it does is turn a host-resolved request context plus a described operation into one `recorder.record` call.
+
+## Install
+
+```sh
+npm install @veritio/tanstack-start@0.0.4 @veritio/core@0.4.7
+```
+
+`@tanstack/react-start` is an optional peer, so the package installs cleanly in a server-only workspace that never imports the framework.
+
+## Construct the adapter in a server-only module
+
+The recorder is built by the host, at the host's own process boundary, from configuration the host reads. The adapter receives the finished recorder.
+
+```ts
+// src/server/veritio.ts — server only
+import { createAuditRecorder, MemoryAuditStore } from '@veritio/core'
+import { createTanStackStartVeritioAdapter } from '@veritio/tanstack-start'
+
+const recorder = createAuditRecorder({ store: new MemoryAuditStore() })
+
+export const veritio = createTanStackStartVeritioAdapter({
+  recorder,
+  environment: 'production',
+  resolveContext: async ({ request }) => {
+    const session = await readSession(request) // host-owned auth
+    return {
+      tenantId: session.organizationId,
+      actor: { type: 'user', id: session.userId },
+      requestId: session.requestId,
+    }
+  },
+})
+```
+
+`MemoryAuditStore` keeps the snippet runnable. In production the same line constructs a conforming `AuditStore` — a Postgres store, a file store, or your own — from a connection string that exists only in this module. Swapping the store never changes a call site.
+
+`TanStackStartVeritioAdapterOptions` has exactly three fields:
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `recorder` | yes | A configured `AuditRecorder`. One method, `record`. |
+| `environment` | no | Fallback environment stamped into `scope` when context omits one. |
+| `resolveContext` | no | Called per record with the request input; returns tenant, actor, and optional ids. |
+
+There is no store option, no credential option, and no way to hand the adapter a connection string. That is the boundary, expressed as a type.
+
+## Context is host-owned and fails closed
+
+`TanStackStartVeritioContext` carries `tenantId`, an `actor` reference of `type` and `id`, and the optional `requestId`, `workspaceId`, and `environment`. Every call resolves it one of two ways: the call passes `context` inline, or the adapter invokes `resolveContext` with the `request`, `params`, and `context` it was given.
+
+```text
+call site supplies { request, params, context? }
+        ↓
+context ?? await resolveContext(input)
+        ↓  missing entirely  → TypeError "context or resolveContext is required"
+validateContext
+        ↓  blank tenantId    → TypeError "tenantId is required"
+        ↓  blank actor.type  → TypeError "actor.type is required"
+        ↓  blank actor.id    → TypeError "actor.id is required"
+buildAuditEvent → recorder.record
+```
+
+The validation runs before any event is constructed, so an unauthenticated or cross-tenant request raises rather than producing a scopeless record that later has to be explained. The same check applies to `target.type` and `target.id`, and to `idempotencyKey` when one is supplied. Empty strings and whitespace-only strings are rejected alongside missing values.
+
+Note what the adapter refuses to invent. It never derives `tenantId` from a header, a route param, or a request body. `requestId` reaches the event only because the host put it in the context it returned. Actor identity comes from the session your application already authenticated. The adapter's opinion about who is acting is: none.
+
+## Record after the authorization check, never in a loader
+
+The adapter exposes three methods, and the difference between them is about ordering.
+
+```ts
+// src/server/entry-actions.ts
+import { createServerFn } from '@tanstack/react-start'
+import { veritio } from './veritio'
+
+export const renameEntry = createServerFn({ method: 'POST' })
+  .inputValidator((data: { entryId: string; title: string }) => data)
+  .handler(async ({ data }) => {
+    const session = await requireSession()
+    await assertCanEdit(session, data.entryId) // authorization first
+
+    return veritio.withServerFunction(
+      {
+        action: 'entry.renamed',
+        target: { type: 'entry', id: data.entryId },
+        context: {
+          tenantId: session.organizationId,
+          actor: { type: 'user', id: session.userId },
+        },
+        idempotencyKey: `entry.renamed:${data.entryId}:${session.requestId}`,
+        metadata: { source: 'server_function' },
+      },
+      () => updateEntryTitle(data.entryId, data.title),
+    )
+  })
+```
+
+`withServerFunction` awaits the handler first and records only after it resolves. A handler that throws propagates its error and writes nothing — this is pinned by the adapter's own test, "does not record when a wrapped server function fails". The returned value is the handler's value, unchanged.
+
+`recordServerFunction` and `recordRouteHandler` are the same code path under different names, for the cases where you want the record call explicit and separate — a server route in `src/routes/api/`, or a server function whose success condition is more subtle than "did not throw".
+
+```ts
+// src/routes/api/entries.ts — server route
+await veritio.recordRouteHandler({
+  request,
+  action: 'entry.created',
+  target: { type: 'entry', id: entry.id },
+  purpose: 'service_delivery',
+  lawfulBasis: 'contract',
+  retention: 'operational_2y',
+})
+```
+
+Loaders are the wrong place for all three. A TanStack Start loader runs on the server for the initial request and again in the browser on client navigation; it also runs on prefetch, when a user has merely hovered a link. Recording there produces evidence of reads nobody performed, duplicated across navigations, with no authorization decision behind it. Record where a decision was made and a mutation committed. If you want read evidence, record it deliberately from a server route that owns the access check, not from the data-fetching layer.
+
+## What crosses the boundary, verified
+
+This fixture is executed in CI and its output byte-compared. It uses only `@veritio/core`, deliberately — the boundary every thin adapter is written against is provable without any adapter installed.
+
+<Code code={boundaryOutput} lang="json" title="verified output" />
+
+Read three things out of it. `contextKeys` is the whole surface an adapter receives: a recorder, a scope, a principal. `credentialShapedKeysCrossing` is empty under a deep key scan, so a driver name, connection string, archive key, or ingest key cannot be forwarded by an adapter that was never handed one. And `recorderMethods` is `["record"]` with `recorderExposesStore: false` — an adapter can append to a chain but cannot read another tenant's chain or reconfigure storage.
+
+The `requestContextGuard` block covers the realistic leak. An adapter that forwards request context verbatim will eventually forward an `Authorization` header. Core redaction rewrites it to `[redacted]` before canonical JSON and before hashing, so the raw token is never in the bytes that were hashed. Redaction is the backstop, not the plan: still prefer stable ids over emails, addresses, and freeform text.
+
+## Keep the client bundle clean
+
+TanStack Start's server functions are compiled into RPC calls, which means the module graph reachable from a component is the client bundle. The rules that follow are mechanical:
+
+- The module that calls `createTanStackStartVeritioAdapter` is server-only. It transitively holds the store, and the store holds credentials.
+- Never import that module from a route component or a shared utility a component imports. Import it from inside the server-function handler, or through a dynamic `await import()` in the handler, as the repo example does for its Node-only server modules.
+- `@veritio/storage` is a server-only package. Any client-side import of it is a defect regardless of whether a secret is present.
+- For browser-side risk math, import from the crypto-free `@veritio/core/risk-score` subpath. The `@veritio/core` barrel pulls `node:crypto` and will break a browser build.
+
+## Governed changes belong at the mutation boundary
+
+The adapter records audit events: an action happened to a target, in a tenant, by an actor. That is the right shape for sign-ins, exports, and read access. It is the wrong shape for a create, update, or delete of a governed business record, because a governed change also carries before/after state, changed paths, a revision lineage, a state commitment, and a tenant-scoped idempotency hash. None of that is adapter territory.
+
+Those flows call `createGovernedActionDraft` from `@veritio/core` inside the server function or server route that owns the database mutation:
+
+```ts
+const draft = createGovernedActionDraft<EntryRow>({
+  scope: { tenantId: session.organizationId, environment: 'production' },
+  entity: projectEntry,          // defineEntity(...) with per-field capture modes
+  before,                        // the row you just read, inside the transaction
+  after,                         // the row you are about to write
+  actionType: 'entry.updated',
+  initiatedBy: userRef(session.userId),
+  performedBy: userRef(session.userId),
+  producer: PRODUCER,
+  occurredAt,
+  idempotencyKey,
+  mutationBinding: 'same_transaction',
+  expectedParentRevisionRef: existing.revisionRef,
+})
+
+await outbox.transaction(async (tx) => {
+  await tx.enqueue({ id: draft.changeRef.id, tenantId, payload: draft.outboxEntry })
+})
+```
+
+The adapter's role here shrinks to supplying request and auth context — the session your route already resolved, the request id you already have. It does not derive changed paths, choose capture modes, own the outbox, or decide the idempotency hash. The repo example enqueues the draft *before* applying the local mutation, so a rejected enqueue never leaves an entity advanced to a revision no evidence describes.
+
+## Core releases do not require an adapter bump
+
+`@veritio/tanstack-start` declares `@veritio/core` as a peer at `>=0.0.0`. There is one copy of core in your app, resolved by your lockfile, and publishing a new core version never strands the adapter on an old one. The `verifiedAgainst` line on this page names the core version its examples were checked against, not a version the adapter constrains you to.
+
+The practical consequence: pin core deliberately in your own `package.json` and upgrade it on your own schedule. If an adapter README change matters to you, that does require an adapter republish — README text ships with the package.
+
+## What a green integration proves
+
+A recorded, verifying chain proves that the events your server actually emitted are internally consistent: canonical bytes, gapless tenant sequence, matching previous hashes. It does not prove that every mutation in your application reached a record. Coverage is a property of your call sites, not of the adapter, and the adapter cannot tell you about a server function you never instrumented.
+
+Continue with [governed actions](/docs/guides/governed-actions/) for the full mutation-boundary flow, [hash chain](/docs/concepts/hash-chain/) for what verification checks and in what order, and [storage overview](/docs/storage/overview/) to choose the store the recorder should be built from.

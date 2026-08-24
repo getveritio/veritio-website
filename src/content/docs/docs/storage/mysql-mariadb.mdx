@@ -1,0 +1,198 @@
+---
+title: MySQL and MariaDB
+description: Wire createMysqlAuditStore or createMariaDbAuditStore to a host-owned transaction executor, apply the shipped DDL, and prove the result with live conformance.
+audience: [developer, operator]
+kind: guide
+searchIntent: Wire a MySQL or MariaDB AuditStore through a host-injected SqlAuditExecutor and prove it with live conformance.
+questions:
+  - How do I store Veritio audit records in MySQL or MariaDB?
+  - What table schema does the MySQL AuditStore expect?
+  - Does MariaDB need a separate storage adapter?
+  - Why is there no runnable MySQL example on this page?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/storage@0.4.7', 'MySQL and MariaDB example at veritio@c4100ee']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/storage/src/index.ts
+  - https://github.com/getveritio/veritio/tree/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/examples/storage-mysql-mariadb
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/storage/integration/live-databases.test.ts
+claimRefs: []
+---
+
+Most teams that need an audit trail already run a transactional SQL estate, and a large share of that estate is MySQL or MariaDB rather than Postgres. `@veritio/storage` ships an authoritative `AuditStore` for both. It does not open a connection, read an environment variable, or run a migration; your server hands it a transaction-capable executor and owns everything underneath.
+
+## One dialect, four exported names
+
+The published package exports four factories for this engine family:
+
+```ts
+import {
+  createMysqlAuditStore,
+  createMySqlAuditStore,
+  createMariaDbAuditStore,
+  createMariaDBAuditStore,
+} from '@veritio/storage'
+```
+
+`createMysqlAuditStore` is the implementation. The other three are thin aliases that call it. `createMySqlAuditStore` exists for callers who spell MySQL with a capital S; `createMariaDbAuditStore` and `createMariaDBAuditStore` exist for the two common spellings of MariaDB.
+
+That last point is the important one. MariaDB is not a separate adapter with separate semantics. It routes through the same `mysql` SQL dialect: the same `?` placeholders, the same backtick identifier quoting, the same statements. Picking `createMariaDbAuditStore` over `createMysqlAuditStore` changes nothing at runtime; it only documents intent at the call site. Both remain distinct from `createPostgresAuditStore`, which uses `$1`-style placeholders and double-quoted identifiers.
+
+## The executor your host must supply
+
+Both factories take `SqlAuditStoreOptions`: a required `client` and an optional `tableName` that defaults to `veritio_audit_records`.
+
+```ts
+interface SqlAuditSession {
+  execute(statement: string, params: readonly unknown[]): Promise<SqlAuditQueryResult>
+}
+
+interface SqlAuditExecutor extends SqlAuditSession {
+  transaction<T>(run: (session: SqlAuditSession) => Promise<T>): Promise<T>
+}
+```
+
+There is no connection string parameter anywhere in that shape. Pool sizing, TLS, credential rotation, failover, retry policy, and schema migration all stay in your application bootstrap, where your existing operational tooling can see them. The adapter's only requirement is that `transaction(run)` opens a real database transaction and gives `run` a session bound to that same transaction.
+
+`tableName` is validated at construction. It must be a bare identifier or a schema-qualified `schema.table`, each part matching `[A-Za-z_][A-Za-z0-9_]*`, and it is backtick-quoted before it reaches SQL. Anything else throws before a statement is built.
+
+A minimal wiring against a `mysql2/promise` pool, adapted from the repository's live suite:
+
+```ts
+import mysql from 'mysql2/promise'
+import { createAuditRecorder } from '@veritio/core'
+import { createMysqlAuditStore, type SqlAuditExecutor } from '@veritio/storage'
+
+const pool = mysql.createPool(process.env.DATABASE_URL!)
+
+const executor: SqlAuditExecutor = {
+  async execute(statement, params) {
+    const [rows] = await pool.execute(statement, [...params])
+    return Array.isArray(rows) ? rows : []
+  },
+  async transaction(run) {
+    const connection = await pool.getConnection()
+    try {
+      await connection.beginTransaction()
+      const result = await run({
+        async execute(statement, params) {
+          const [rows] = await connection.execute(statement, [...params])
+          return Array.isArray(rows) ? rows : []
+        },
+      })
+      await connection.commit()
+      return result
+    } catch (error) {
+      await connection.rollback()
+      throw error
+    } finally {
+      connection.release()
+    }
+  },
+}
+
+const recorder = createAuditRecorder({ store: createMysqlAuditStore({ client: executor }) })
+```
+
+The detail that matters is that the inner `execute` closes over `connection`, not over `pool`. If the transaction callback runs any of its statements back on the pool, the tip read and the insert land on different connections and the lock protecting sequence assignment does not apply to the write. TypeScript cannot catch that mistake — only conformance under concurrency can.
+
+`SqlAuditQueryResult` accepts three shapes: a plain row array, a `{ rows }` object, or a `[rows, fields]` tuple. The tuple case exists so a driver result can be passed through unchanged; normalizing to a plain array, as above, is equally valid.
+
+## The schema
+
+`@veritio/storage` exports the DDL as `MYSQL_AUDIT_RECORDS_SCHEMA_SQL`. It is configuration you feed to your migration system — a starting point to review and own, not output this site executed.
+
+```sql
+CREATE TABLE IF NOT EXISTS `veritio_audit_records` (
+  `tenant_id` varchar(255) NOT NULL,
+  `sequence` bigint NOT NULL,
+  `idempotency_key_hash` char(64) NOT NULL,
+  `event_canonical` longtext NOT NULL,
+  `record_json` longtext NOT NULL,
+  `hash` char(64) NOT NULL,
+  `previous_hash` char(64),
+  `appended_at` varchar(40) NOT NULL,
+  PRIMARY KEY (`tenant_id`, `sequence`),
+  UNIQUE KEY `veritio_audit_records_idempotency_unique` (`tenant_id`, `idempotency_key_hash`),
+  KEY `veritio_audit_records_tenant_sequence_idx` (`tenant_id`, `sequence`)
+);
+```
+
+Three constraints carry protocol meaning and are not tuning knobs.
+
+**`PRIMARY KEY (tenant_id, sequence)`** is composite, not a surrogate auto-increment. Sequence numbers are tenant-local: two tenants both hold sequence `1`, and their chains must never be joined. A global auto-increment id would let one tenant's writes consume another tenant's numbering and would make the gapless property unverifiable per tenant.
+
+**`UNIQUE KEY (tenant_id, idempotency_key_hash)`** is what makes replay safe under concurrency. The adapter checks for an existing row before inserting, but that check and the insert are separated in time. The unique key is the database-level backstop when two identical retries race.
+
+**`KEY (tenant_id, sequence)`** supports the descending tip lookup and the ascending listing scan. It is redundant with the primary key on InnoDB and can be dropped after you measure your own workload; the two keys above cannot.
+
+The types deserve the same scrutiny:
+
+- `event_canonical` and `record_json` are `longtext`, not MySQL's native `JSON` type. `event_canonical` is compared byte-for-byte against a freshly computed `canonicalJson(event)` to detect idempotency conflicts. A `JSON` column stores a normalized binary form and drivers commonly return it already parsed, so the adapter's string check would fail closed on read rather than returning a record. Keep both columns as text.
+- `tenant_id` is `varchar(255)`, narrower than the Postgres schema's unbounded `text`. Under strict SQL mode a longer tenant id is rejected at insert; without strict mode it can be silently truncated into a *different* tenant's key space. Confirm strict mode is on, or bound tenant ids well below 255 characters.
+- The DDL pins no collation. MySQL 8 and MariaDB 11 both default to a case-insensitive, accent-insensitive `utf8mb4` collation, which means `org_acme` and `ORG_ACME` compare equal in the primary key and the unique key. If your tenant identifiers can differ only by case or accent, pin a binary or case-sensitive collation on `tenant_id` in your migration before any data exists.
+- Every identifier is backtick-quoted, including `sequence`. Keep the quoting if you adapt the statement.
+
+## What one append does inside the transaction
+
+```text
+BEGIN
+  SELECT event_canonical, record_json
+    WHERE tenant_id = ? AND idempotency_key_hash = ?   → replay check
+  SELECT record_json
+    WHERE tenant_id = ? ORDER BY sequence DESC
+    LIMIT 1 FOR UPDATE                                 → lock the tenant tip
+  compare options.expectedPreviousHash to tip.hash     → optimistic tip check
+  build record: sequence = tip.sequence + 1,
+                previousHash = tip.hash, hash = SHA-256
+  INSERT the row
+COMMIT
+```
+
+Four consequences follow from that shape:
+
+1. **The tip read uses `FOR UPDATE`.** That acquires a row lock only inside a transaction on a transactional engine. On MyISAM, or on a "transaction" that never issued `BEGIN`, the clause is accepted or ignored without granting exclusion, and two concurrent appends can compute the same next sequence. Verify the table is InnoDB.
+2. **Replay returns the original record.** A repeated `idempotencyKey` whose canonical event bytes match returns the stored record unchanged. Different bytes under the same key throw `idempotency conflict` rather than appending a second version.
+3. **`expectedPreviousHash` is checked against the locked tip**, so a caller that raced ahead is rejected instead of silently forking the chain.
+4. **Nothing is acknowledged before commit.** If your executor commits early, or returns before the driver's commit resolves, you can acknowledge evidence that was later rolled back.
+
+On the read path, `list` re-parses every stored `record_json`, validates the envelope, recomputes `hashAuditRecord`, compares it to the stored `hash`, confirms the row's tenant matches the requested scope, and asserts strictly increasing sequences. A row edited directly in the database throws rather than being returned. Detection still depends on a read happening — see [Hash chain](/docs/concepts/hash-chain/) for what that does and does not prove.
+
+One MySQL-specific implementation note: because mysql2 prepared statements do not accept a placeholder for `LIMIT`, the adapter inlines the limit value for this dialect. `list` validates `limit` as a non-negative integer before the statement is built, so the inlined value is never caller-controlled text.
+
+## Conformance is the acceptance test
+
+A store is authoritative only if it passes `@veritio/storage/conformance` against the real engine, driver, and transaction wrapper you will operate. `createAuditStoreConformanceTests` covers tenant-scoped chains and isolation, idempotent replay, conflicting replay rejection, expected-tip behavior, cloned reads, and fail-closed behavior after a stored record is deliberately corrupted.
+
+Run it against your own wiring, not against a mock. The mistakes this suite catches — a pooled statement escaping the transaction, a missing unique key, a case-folding collation — all typecheck cleanly and all pass a single-threaded smoke test.
+
+## The live-container path
+
+The repository provides disposable MySQL 8 and MariaDB 11 containers and a live suite that runs the conformance tests against both:
+
+```sh
+bun run --cwd storage db:up
+bun run --cwd storage test:live
+bun run --cwd storage db:down
+```
+
+`test:live` sets `VERITIO_MYSQL_TEST_URL` and `VERITIO_MARIADB_TEST_URL` (alongside the Postgres, Mongo, MinIO, and ClickHouse variables) at the ports the compose file publishes. Each suite is gated on its variable: if the variable is absent, the suite is skipped rather than failed. A green run that skipped MySQL is not MySQL evidence, so assert the variable is present in your own CI.
+
+Both engines are driven through `mysql2` in that suite. The example package also declares the `mariadb` driver, but no reference executor for it ships in the repository; adapting it is the same three-method exercise shown above.
+
+### Why this page carries no verified output
+
+Other storage pages on this site embed program output that the documentation build re-runs and byte-compares. This page does not, and the omission is deliberate: there is no MySQL or MariaDB server in the website's build environment. A fixture would require booting a database, and its output would carry per-run timestamps and hashes that are not byte-stable.
+
+So everything above is drawn from the published `@veritio/storage@0.4.7` sources and the pinned repository example. The SQL block is the exported schema constant, verbatim. The TypeScript is the documented factory and executor contract. Neither has been executed to produce output shown here. Treat the conformance run in your own environment as the proof, not this page.
+
+## Operational checklist
+
+- Apply the schema through your normal migration system, with a named owner and a reviewed rollback.
+- Confirm InnoDB, strict SQL mode, and an intentional `tenant_id` collation before the first write.
+- Resolve tenant scope server-side; never take it from a request body alone.
+- Give the audit role a narrow grant — `INSERT` and `SELECT` on this table is enough for the store itself.
+- Alert on unique-key conflicts that are not valid identical retries, and on `idempotency conflict` throws.
+- Re-run live conformance after any driver, pool, engine, or migration change.
+- Back up schema and data together, restore into isolation, and verify the chain there.
+
+To bind an application mutation and its evidence into one commit, `createMysqlOutboxAdapter` and `createMariaDbOutboxAdapter` follow the same host-injected pattern — see [Transactional outbox](/docs/guides/transactional-outbox/). For the full acceptance contract, read [Conformance](/docs/storage/conformance/); to place this store inside a complete server boundary, continue to [Self-hosting](/docs/storage/self-hosting/).

@@ -1,0 +1,194 @@
+---
+title: Export bundle format
+description: Build and verify the vevb-1 container, understand every manifest and file field, and distinguish full, windowed, and filtered chain claims.
+audience: [developer, operator, governance]
+kind: reference
+searchIntent: Build, serialize, parse, and verify the Veritio vevb-1 evidence export bundle format.
+questions:
+  - What files and manifest fields are inside a vevb-1 export?
+  - How is the export root hash calculated?
+  - What do full, windowed, and filtered chain scopes prove?
+  - Why must a subject-scoped DSAR bundle declare a filters object?
+  - Why can a scoped bundle not carry evidence commit records?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7', 'vevb-1 export bundle']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/export-bundle.schema.json
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/export-bundle.md
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/export-bundle.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/export-bundle-chain-modes.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/conformance/export-bundle-filtered.json
+claimRefs: []
+---
+
+import { Code } from '@astrojs/starlight/components'
+import example from '../../../../examples/exports/build-and-verify.ts?raw'
+import expectedOutput from '../../../../examples/exports/expected/build-and-verify.txt?raw'
+import subjectBundleOutput from '../../../../examples/dsar/expected/subject-bundle.txt?raw'
+
+`vevb-1` is a single canonical JSON container holding a manifest, exact string file payloads, and an optional detached Ed25519 signature. The builder is deterministic because every clock, scope, range, and producer value is supplied by the caller. Nothing in the format requires the recipient to call back to the system that produced it: a bundle is verified from its own bytes.
+
+All serialization inside a bundle is `veritio-json-v1` — recursively sorted keys, omitted `undefined` members, array holes nulled, UTF-8, no HTML escaping. All digests are SHA-256 written as bare 64-character lowercase hex. That is deliberately unlike the algorithm-qualified `sha256:<hex>` form used by evidence commit digests, so the two never get confused in a report.
+
+## Run the complete round trip
+
+<Code code={example} lang="ts" title="src/examples/exports/build-and-verify.ts" />
+
+```sh
+bun src/examples/exports/build-and-verify.ts
+```
+
+The fixture builds a full-chain bundle, serializes it, parses it, verifies it, changes a copied audit-record file, and verifies again. The build requires this output:
+
+<Code code={expectedOutput} lang="json" title="verified output" />
+
+One changed byte in `records/audit-events.jsonl` produces three issues, not one: the file's own SHA-256 no longer matches its manifest entry, the recomputed `rootHash` no longer binds the file set, and the record chain no longer re-verifies. The gates are independent on purpose, so a report names the layer that actually broke.
+
+## Container tree
+
+```text
+vevb-1 container
+├── bundleVersion: "vevb-1"
+├── manifest
+├── files
+│   ├── records/audit-events.jsonl
+│   ├── records/evidence-edges.jsonl
+│   ├── records/commits.jsonl
+│   ├── verification.json
+│   └── annex/<packId>.json       optional
+└── signature                     optional
+```
+
+`files` maps each bundle-relative path to the exact serialized string whose bytes were hashed. Its keys must match `manifest.files` one-to-one, with no duplicate paths and no unlisted payloads. The three `records/*.jsonl` files and `verification.json` are always present, even when a file holds zero records.
+
+`records/commits.jsonl` carries evidence commit records — the Merkle-rooted checkpoints that bind a range of persisted records into one published digest. It is a file like the other two, subject to the same JSONL and count rules, and it has one extra rule of its own described under chain scopes below.
+
+`verification.json` is the builder's own chain report, `canonicalJson({ audit, edges, commits })`, where each value is the `{ valid, issues? }` verdict of running the corresponding chain verifier over the raw records. A scoped bundle's report also carries a `chainScope` member matching the manifest; full bundles omit it, which keeps previously built full bundles byte-identical. The verifier re-runs the chains itself and compares, so an embedded report that flatters its own bundle is caught rather than believed.
+
+### Payload rules
+
+A `records/*.jsonl` payload is each record serialized as its own `veritio-json-v1` line, joined by `\n`, with a single trailing `\n`. The `records` count in the manifest is the number of record lines. Because the builder canonicalizes the record objects it is given, a record that was already stored canonically round-trips byte-identically.
+
+A record file with zero records serializes to the empty string, not to a lone newline, and its `records` count is `0`. Each annex file is the canonical JSON of its pack, written to `annex/<packId>.json`; packs are sorted by `packId`, a duplicate `packId` fails closed because two packs would collide on one key, and a `packId` must be printable ASCII so its position in path ordering is unambiguous across implementations.
+
+## Manifest fields
+
+| Field | Meaning |
+| --- | --- |
+| `bundleVersion` | Exactly `vevb-1` |
+| `createdAt` | Caller-supplied deterministic build timestamp |
+| `scope` | Required `tenantId` plus optional `workspaceId` and `environment` |
+| `range` | Declared `from` and `to` ISO-8601 timestamps |
+| `producer` | `authority`, `kind: "principal"`, `type: "service" \| "user"`, and `id` |
+| `files[]` | Path, lowercase SHA-256, and record count for each file |
+| `rootHash` | SHA-256 of canonical JSON for file entries sorted by path |
+| `chainScope` | Omitted for full; otherwise `windowed` or `filtered` |
+| `filters` | The declared content filter a `filtered` bundle was produced under |
+| `annex` | Optional pack ID and version summaries |
+| `signaturePublicKeyFingerprint` | Present only when signed |
+
+The root hash binds the file index; per-file hashes bind exact payload bytes. The signature, when present, authenticates the manifest digest and its public-key fingerprint.
+
+### How `rootHash` is computed
+
+```text
+entries   = manifest.files, each { path, sha256, records }
+sorted    = entries sorted ascending by path, raw code-unit comparison
+rootHash  = sha256Hex(canonicalJson(sorted))
+```
+
+Sorting is what makes the digest order-insensitive: the same set of files yields the same `rootHash` regardless of the order they were appended. The comparison is raw UTF-16 code-unit order — the ordering plain `<` gives on JavaScript strings — not locale-aware or Unicode-collation order, which is why the `packId` character set is constrained.
+
+`rootHash` binds `files` only. It does not cover `createdAt`, `scope`, `range`, `producer`, `chainScope`, or `filters`. Those are bound by the signature, which is taken over the digest of the whole manifest. A recipient reading an unsigned bundle should understand the split: `rootHash` proves the file set is the one the manifest indexes, and nothing more.
+
+## Chain-scope semantics
+
+Full-history exports grow without bound, so producers need to export a time window or a subset. Removing records from a strict hash chain necessarily weakens what verification can prove. `chainScope` makes that weakening explicit instead of letting a partial export either fail spuriously or — far worse — pass while implying more than it demonstrated. It is a claim the bundle makes about itself, written into the manifest, hashed with it, and therefore covered by any signature.
+
+- **Full** — `chainScope` absent. Every per-tenant chain must start at sequence 1 with a null `previousHash`, be gapless, and have every envelope hash recompute. This is the only scope in which "no record was removed" is proven.
+- **Windowed** — a contiguous window. Each tenant's first included record may enter mid-chain; for sequence greater than 1 its `previousHash` must be a string, and for sequence 1 it must be null. Every record after that must link strictly: sequence plus one, `previousHash` equal to the prior record's `hash`. Interior removal is still detectable. What a windowed bundle does not prove is what existed outside the declared `range`.
+- **Filtered** — a content-filtered subset. Interior gaps are inherent, so per-tenant sequences must be strictly increasing, every envelope hash must recompute, a record that follows a gap must carry a string `previousHash`, and any two records that are sequence-adjacent must still link strictly. A filtered bundle proves each included record is authentic and correctly ordered. It does not prove completeness.
+
+Per-record envelope rules are unchanged in every scope: tenant scope present, declared `hashAlgorithm` and `canonicalization`, recomputable `hash`.
+
+A scoped bundle must not carry commit records. Commit chains are defined over the full ledger, so a windowed or filtered slice of them would mean nothing. `buildExportBundle` throws `export bundle: commits are not supported in a scoped bundle` for that input, and `verifyExportBundle` fails the chains gate with `commits are not supported in a scoped bundle` for a bundle that arrived that way from somewhere else.
+
+The `valid` boolean always needs the accompanying `chainScope` to describe what was proven, which is why the verification report returns it as a sibling field rather than leaving it in the manifest.
+
+### Declaration consistency
+
+Builder and verifier enforce overlapping but not identical rules, because they sit on different sides of the trust boundary.
+
+```text
+buildExportBundle (your side, throws)
+  filters set, chainScope ≠ 'filtered'
+    → export bundle: filters require chainScope 'filtered'
+  chainScope 'filtered', filters absent
+    → export bundle: chainScope 'filtered' requires a filters declaration
+
+verifyExportBundle (recipient side, reports)
+  unknown chainScope value
+    → structure gate false, "manifest.chainScope is not a known scope"
+  filters present, chainScope ≠ 'filtered'
+    → structure gate false, "manifest.filters requires chainScope 'filtered'"
+```
+
+An unknown scope value fails closed as a structure error rather than silently verifying under `full`. Note the asymmetry: the builder refuses to produce a `filtered` bundle with no `filters`, while the verifier does not treat a missing `filters` as a structure failure. Treat the declaration as a producer obligation, not something a recipient can rely on the verifier to police.
+
+## Filtered bundles and subject-scoped exports
+
+A data-subject access request is the common case where filtering is unavoidable. Selecting one subject's records out of a tenant chain leaves interior gaps by construction, so the bundle must declare `chainScope: 'filtered'`. The DSAR fixture builds exactly that, then builds the same two records with no declaration to show the verifier refusing the overclaim:
+
+```ts
+const bundle = await buildExportBundle({
+  ...bundleInput,
+  chainScope: 'filtered',
+  filters: {},
+})
+const parsed = parseExportBundle(serializeExportBundle(bundle))
+const verification = await verifyExportBundle(parsed)
+
+const overclaimed = await buildExportBundle(bundleInput)
+const overclaimedReport = await verifyExportBundle(overclaimed)
+```
+
+```sh
+bun src/examples/dsar/subject-bundle.ts
+```
+
+<Code code={subjectBundleOutput} lang="json" title="verified output" />
+
+Two things in that output are worth reading closely.
+
+`filters` is present and empty. The vevb-1 `filters` object can express `workspaceId` and `actionPrefixes` only. "Records concerning subject `dsub_1001`" is neither, so a subject predicate is not expressible in the manifest. The fixture declares presence honestly rather than inventing a field the protocol does not have; an exporter that really does filter by action prefix should populate it. Host-side selection logic stays the host's responsibility, and `filters` describes the filter, not its correctness.
+
+`sameSubsetClaimedAsFullChain` is the same two records — sequences 1 and 3 out of a four-record chain — built with no scope declaration. It returns `valid: false`, `chains: false`, `chainScope: "full"`, and the single issue `record chain verification failed`. The gap between sequence 1 and sequence 3 is fatal under the full-chain rule, so a subject-scoped extract cannot be passed off as a complete chain. That invariant is what makes a `filtered` verdict worth anything.
+
+The workflow around this — recording the request itself as evidence, identity checks, deadlines, delivery — is covered in [DSAR fulfillment](/docs/guides/dsar-fulfillment/).
+
+## Verification gates
+
+Four independent gates run over the bytes, with no network or authority call. `valid` is true only when every applicable gate holds.
+
+1. **Structure** — `manifest` and `files` are objects, `manifest.files` is an array, paths and payload keys map one-to-one with no duplicates, the required paths are present, and the scope declaration is consistent.
+2. **Integrity** — every file's SHA-256 is recomputed from its bytes, `rootHash` is recomputed, and each record file's line count matches its declared `records` count.
+3. **Chains** — each record file is parsed back and re-run through the audit, edge, and commit verifiers appropriate to the declared scope. The fresh verdicts must all be valid and must equal the embedded `verification.json`.
+4. **Signature** — `valid` or `invalid` when a signature is present and a public key was supplied, `skipped` when present without a key, `absent` when unsigned. Only `invalid`, or an absent signature when `requireSignature` was set, drives the overall verdict false.
+
+Content problems never throw. They land in `issues` as static sanitized strings — a path or `packId` may be embedded, never raw parser text or record content. Verification throws only for programmer misuse, such as passing something that is not an object. The full issue vocabulary is catalogued in the [Verifier reference](/docs/reference/verifier/).
+
+## Signing policy
+
+`buildExportBundle` returns an unsigned bundle. `signExportBundle` returns a new bundle, never mutating the input. It derives the key fingerprint — the bare 64-hex SHA-256 of the raw exported public key bytes — writes it into a fresh manifest as `signaturePublicKeyFingerprint`, and signs the UTF-8 bytes of `sha256Hex(canonicalJson(manifest))` over that updated manifest. Signing the manifest digest keeps the payload a fixed size while still binding every manifest field, including the fingerprint it advertises. Writing the fingerprint changes the manifest but not `rootHash`, which binds only `files`. Ed25519 signing is deterministic, so the same bundle and key always produce byte-identical output.
+
+Before the Ed25519 check runs, the verifier requires that the caller's key fingerprint equals both `signature.publicKeyFingerprint` and the manifest's `signaturePublicKeyFingerprint`; a mismatch is reported rather than checked. The algorithm must be `ed25519`.
+
+Key distribution and rotation are outside the container. Pin trusted fingerprints through your own custody process and keep the verifier report with the original bytes.
+
+## What a valid bundle does and does not prove
+
+A `valid: true` report proves that the container is well-formed, that every payload matches the digest the manifest claims for it, that `rootHash` binds exactly the file set present, that the included records form an authentic chain under the declared scope, and — when a trusted key was supplied — that the manifest was signed by the holder of that key.
+
+It does not prove that the export is complete unless `chainScope` is `full`. It does not prove that the producer's selection query was correct, that the events recorded describe what actually happened in the world, or that any obligation was met. Veritio supports compliance evidence; it does not establish legal compliance. Read `chainScope` alongside `valid` in every report you retain or forward.
+
+Continue with the [Verifier reference](/docs/reference/verifier/), the [DSAR fulfillment guide](/docs/guides/dsar-fulfillment/), or the hosted [Cloud export flow](/docs/cloud/exports/).

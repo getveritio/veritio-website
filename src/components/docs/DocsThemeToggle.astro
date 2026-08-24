@@ -1,0 +1,25 @@
+<button
+  type="button"
+  class="docs-theme-toggle"
+  data-docs-theme-toggle
+  aria-label="Use dark theme"
+  onclick="window.VeritioTheme?.toggle()"
+>
+  Dark
+</button>
+<script is:inline>
+  window.StarlightThemeProvider?.updatePickers(document.documentElement.dataset.theme)
+</script>
+
+<style>
+  .docs-theme-toggle {
+    cursor: pointer;
+    border: 0;
+    background: transparent;
+    color: var(--sl-color-gray-2);
+    padding: 0.35rem 0;
+    font: inherit;
+  }
+
+  .docs-theme-toggle:hover { color: var(--sl-color-white); }
+</style>

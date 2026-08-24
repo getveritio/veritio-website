@@ -1,0 +1,87 @@
+{
+  "hostOwnedWiring": {
+    "note": "The host builds the AuditStore at its own process boundary and injects a recorder. @veritio/core never reads environment variables or framework globals.",
+    "serverOnlyConfigKeys": [
+      "archiveAccessKeyId",
+      "archiveBucket",
+      "archiveSecretAccessKey",
+      "connectionString",
+      "databasePassword",
+      "driver",
+      "ingestApiKey"
+    ],
+    "scope": {
+      "tenantId": "org_acme",
+      "environment": "production"
+    },
+    "principal": {
+      "type": "user",
+      "id": "usr_owner"
+    }
+  },
+  "adapterContract": {
+    "contextKeys": [
+      "principal",
+      "recorder",
+      "scope"
+    ],
+    "recorderMethods": [
+      "record"
+    ],
+    "recorderExposesStore": false,
+    "recorderCanListOtherChains": false,
+    "keysCrossingIntoAdapter": [
+      "environment",
+      "id",
+      "principal",
+      "record",
+      "recorder",
+      "scope",
+      "tenantId",
+      "type"
+    ],
+    "credentialShapedKeysCrossing": []
+  },
+  "adapterCall": {
+    "action": "auth.session.created",
+    "sequence": 1,
+    "previousHash": null,
+    "requestId": "req_7c2a",
+    "tenantId": "org_acme",
+    "environment": "production",
+    "actor": {
+      "type": "user",
+      "id": "usr_owner"
+    },
+    "target": {
+      "type": "session",
+      "id": "sess_4b81"
+    },
+    "retention": "security_1y",
+    "verification": {
+      "ok": true
+    }
+  },
+  "requestContextGuard": {
+    "note": "createAuditEvent redacts sensitive metadata keys before canonical JSON and hashing, so a forwarded Authorization header cannot become evidence.",
+    "metadata": {
+      "authorization": "[redacted]",
+      "method": "password"
+    },
+    "forwardedHeaderStored": "[redacted]"
+  },
+  "neverCrossesIntoBrowser": [
+    "AuditStore instances and their driver connections",
+    "database connection strings and passwords",
+    "object-archive bucket names, access key ids, and secret access keys",
+    "hosted-provider ingest API keys and export signing keys",
+    "raw Authorization headers, cookies, and bearer tokens",
+    "any @veritio/storage import (it is a server-only package)"
+  ],
+  "safeInBrowser": [
+    "action names and target types rendered in a UI",
+    "tenant-scoped ids the viewer is already authorised to see",
+    "record sequence numbers and record hashes for display",
+    "risk math imported from the crypto-free @veritio/core/risk-score subpath"
+  ]
+}

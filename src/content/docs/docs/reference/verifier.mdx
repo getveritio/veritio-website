@@ -1,0 +1,188 @@
+---
+title: Verifier reference
+description: Call every Veritio verifier, read each failure reason against the check that produced it, and know what a passing result does not prove.
+audience: [developer, operator, governance]
+kind: reference
+searchIntent: Interpret every Veritio chain and export verifier result and identify the exact failed invariant.
+questions:
+  - What does each audit-record verifier error mean?
+  - Which commit-ledger tamper produces records_root_mismatch instead of hash_mismatch?
+  - Do the Python and Go SDKs verify record chains?
+  - How do export structure, integrity, chain, and signature checks differ?
+  - What does a successful verification not prove?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7', 'vevb-1']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/index.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/export-bundle.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/python/src/veritio/event.py
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/go/event.go
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/evidence-commit-hashing.md
+claimRefs: []
+---
+
+import { Code } from '@astrojs/starlight/components'
+import chainTamperSource from '../../../../examples/tutorial/tamper.ts?raw'
+import chainFailures from '../../../../examples/tutorial/expected/tamper.txt?raw'
+import commitFailures from '../../../../examples/commits/expected/tamper.txt?raw'
+import exportReport from '../../../../examples/exports/expected/build-and-verify.txt?raw'
+import failClosedGuards from '../../../../examples/errors/expected/fail-closed-catalogue.txt?raw'
+
+Veritio verifiers return explicit data instead of logging or guessing recovery. A non-`ok` or non-`valid` result is a blocked integrity result; callers decide how to quarantine, alert, retry acquisition, or escalate.
+
+There are four verifier surfaces, and they answer four different questions.
+
+```text
+verifyAuditRecords(records)        → are these event records one intact tenant chain?
+verifyEvidenceEdgeRecords(records) → are these edge records one intact tenant chain?
+verifyEvidenceCommits(commits)     → is this commit ledger internally consistent?
+verifyExportBundle(bundle, opts)   → does this vevb-1 bundle hold together offline?
+```
+
+The first three are synchronous and return a discriminated union. The fourth is asynchronous and returns a report object. None of them make a network call.
+
+## Record-chain verification
+
+`verifyAuditRecords(records)` returns `{ ok: true }` or `{ ok: false, index, reason }`. `index` is the zero-based position in the supplied array where the first failing invariant was observed. Verification stops there.
+
+Each record is checked in a fixed order, and the order decides which reason you get when more than one invariant is broken:
+
+```text
+for each record, in the order supplied
+  1  event.scope.tenantId present?        → missing_tenant_scope
+  2  hashAlgorithm === 'sha256'?          → unsupported_hash_algorithm
+  3  canonicalization === veritio-json-v1?→ unsupported_canonicalization
+  4  sequence === tenant.sequence + 1?    → sequence_mismatch
+  5  previousHash === tenant.lastHash?    → previous_hash_mismatch
+  6  hashAuditRecord(record) === hash?    → hash_mismatch
+  then: tenant.lastHash = hash, tenant.sequence = sequence
+```
+
+Verifier state is keyed per tenant, so records from several tenants may be interleaved in one array and each chain is walked independently. Two tenants may both hold sequence `1` without conflict.
+
+| Reason | Check that failed | Typical investigation |
+| --- | --- | --- |
+| `missing_tenant_scope` | `event.scope.tenantId` absent | Tenant mapping or malformed persisted row |
+| `unsupported_hash_algorithm` | algorithm is not `sha256` | Version/format mismatch or corruption |
+| `unsupported_canonicalization` | label is not `veritio-json-v1` | Version/format mismatch or corruption |
+| `sequence_mismatch` | next per-tenant sequence is not expected | Missing, duplicate, reordered, or cross-tenant records |
+| `previous_hash_mismatch` | link does not equal prior verified hash | Wrong ordering, deletion, or substituted predecessor |
+| `hash_mismatch` | canonical record bytes no longer hash to stored digest | Mutation, corruption, or incompatible serialization |
+
+The checked tamper exercise mutates one record's metadata in place and, separately, drops the first record of the chain:
+
+<Code code={chainTamperSource} lang="ts" title="src/examples/tutorial/tamper.ts" />
+
+<Code code={chainFailures} lang="json" title="verified output" />
+
+Two different attacks produce two different reasons at two different indexes. Editing `records[1]` leaves sequence and previous-hash linkage intact, so the failure surfaces at the last check as `hash_mismatch` at index `1`. Removing the head of the chain leaves every surviving record self-consistent, so the failure surfaces at the first sequence check as `sequence_mismatch` at index `0` — the supplied array starts at sequence `2`.
+
+Do not treat the first reason as a complete forensic diagnosis. Fixing or removing one invalid record may reveal a later failure; retain the original bytes and investigate a copy.
+
+`verifyEvidenceEdgeRecords` applies the same six checks, in the same order, with the same reason vocabulary, to the independent evidence-edge chain, reading tenant scope from `edge.scope` instead of `event.scope`. A valid event chain does not imply valid edges. Verify every chain your workflow relies on.
+
+## Commit-ledger verification
+
+`verifyEvidenceCommits(commits)` walks a commit ledger per `streamId`, and returns the same `ok`/`index`/`reason` shape with a wider reason vocabulary. Its check order differs from the record verifier in one place that matters: it compares `previousCommitHash` **before** `sequence`, so a re-parented commit reports `previous_hash_mismatch` rather than a sequence error.
+
+| Reason | Check that failed |
+| --- | --- |
+| `unsupported_hash_algorithm` | `hashAlgorithm` is not `sha256` |
+| `unsupported_canonicalization` | `canonicalization` is not `veritio-json-v1` |
+| `unsupported_tree_algorithm` | `treeAlgorithm` is not `veritio-merkle-v1` |
+| `invalid_member_manifest` | `streamId` missing or empty, member list empty, indices not contiguous from zero, duplicate member, unsupported `recordType`, or a `recordHash` that is not a `sha256:` digest |
+| `previous_hash_mismatch` | `previousCommitHash` does not equal the prior verified commit hash for that stream |
+| `sequence_mismatch` | per-stream sequence is not exactly one greater |
+| `record_count_mismatch` | `recordCount` disagrees with the normalized member count |
+| `records_root_mismatch` | recomputed `veritio-merkle-v1` root differs from `recordsRoot` |
+| `hash_mismatch` | `hash` is not a string, or recomputing the commit over its canonical fields differs |
+
+The checked commit fixture applies seven independent tampers to one honest two-commit ledger and prints the reason each one produces:
+
+<Code code={commitFailures} lang="json" title="verified output" />
+
+Three results in that output are worth reading closely.
+
+`dropped_member_middle` reports `invalid_member_manifest`, not `record_count_mismatch`. Removing `members[1]` leaves indices `[0, 2]`, and member normalization rejects a non-contiguous manifest before the count is ever compared.
+
+`reordered_member_array` reports `hash_mismatch` while `reordered_member_indices` reports `records_root_mismatch`. Reversing the array without touching the `index` fields leaves the Merkle root identical — the root is computed over members sorted by `index` — but the commit hash covers the members array as stored, so it moves. Swapping the `index` fields instead changes what the sorted manifest is, so the root moves first.
+
+`broken_previous_hash_link` reports at index `1`. Commit 1 is untouched and verifies; the ledger only breaks when commit 2 claims a parent that does not exist.
+
+### What a commit result does not prove
+
+`verifyEvidenceCommits` proves the ledger's **internal** consistency: sequence linkage, previous-hash linkage, member-manifest shape, Merkle root, and commit hash. In v1 it deliberately does **not** reconcile `member.recordHash` against the records those hashes claim to describe.
+
+The fixture's `ledgerScopeCaveat` block demonstrates the consequence. A commit whose first member points at an unrelated record's digest, re-signed so its own root and hash recompute cleanly, returns `{ "ok": true }` from `verifyEvidenceCommits`. Only reconciling each member against `hashAuditRecord` of the real record exposes it — `boundToItsOwnRecord: false`.
+
+A fabricated commit chain over fabricated hashes is a valid commit chain. Compose the two layers:
+
+```text
+verifyAuditRecords(records)                     records are intact
+        +
+verifyEvidenceCommits(commits)                  ledger is intact
+        +
+member.recordHash === 'sha256:' + record.hash   ledger describes those records
+        =
+end-to-end evidence verification
+```
+
+## Language coverage
+
+Record-chain verification is TypeScript-only at this revision. `verifyAuditRecords` and `verifyEvidenceEdgeRecords` exist in `@veritio/core` and have no Python or Go counterpart.
+
+| Verifier | TypeScript | Python | Go |
+| --- | --- | --- | --- |
+| Audit-record chain | `verifyAuditRecords` | — | — |
+| Evidence-edge chain | `verifyEvidenceEdgeRecords` | — | — |
+| Commit ledger | `verifyEvidenceCommits` | `verify_evidence_commits` | `VerifyEvidenceCommits` |
+| Export bundle | `verifyExportBundle` | — | — |
+
+The three commit verifiers share one reason vocabulary and one check order, and their agreement is pinned by cross-language fixtures. That parity is real but narrow: a Python or Go service that calls only `verify_evidence_commits` has confirmed ledger-internal consistency and nothing about the underlying records. Reconcile member digests against records verified elsewhere, or run the TypeScript verifier over the record bytes. See the [parity matrix](/docs/reference/parity-matrix/) for the full capability split.
+
+## Export-bundle report
+
+`verifyExportBundle(bundle, opts)` is async and returns one fail-closed `valid` verdict plus four independent gates, a `chainScope`, and sanitized `issues`. The executable fixture's full result and its deliberate tamper are:
+
+<Code code={exportReport} lang="json" title="verified output" />
+
+Interpret the gates in order:
+
+1. `structure`: `manifest` and `files` are real objects, paths and keys map 1:1 with no duplicates, and the three `records/*.jsonl` files plus `verification.json` are present.
+2. `integrity`: every file digest recomputes, `rootHash` recomputes, and each record file's line count matches its declared count.
+3. `chains`: record files are parsed back, re-run through the chain verifiers, and their verdicts must equal the embedded `verification.json`.
+4. `signature`: `valid` or `invalid` when a signature is present and a `publicKey` was supplied, `skipped` when present without a key, `absent` when unsigned.
+
+The tampered case in the fixture changes one byte-level substring inside `records/audit-events.jsonl`. The gate that catches it is `integrity`, not `chains` — the file digest no longer matches the manifest entry, and three issues are recorded.
+
+`signature: "absent"` drives `valid` false only when `requireSignature` is set. `signature: "skipped"` means a signature exists but was not authenticated, so do not describe the producer as verified.
+
+Read `chainScope` before quoting a `valid` verdict. Only `full` claims nothing was removed; `windowed` and `filtered` verify exactly the subset the producer declared.
+
+## Content failures versus misuse
+
+Verifiers separate two categories. Content problems — a broken chain, a mutated file, a bad root — are returned as data. Programmer misuse throws. `verifyExportBundle` throws exactly one error, for a `bundle` that is not an object, and `parseExportBundle` throws before the verifier is ever reached when the container is unusable.
+
+Those strings are fixed and testable. The checked fail-closed catalogue pins all 35 of them across the SDK, including the guards that sit in front of the verifiers:
+
+<Code code={failClosedGuards} lang="json" title="verified output" />
+
+The relevant rows for this page are `verifyExportBundle: expected an ExportBundle object`, and the four `parseExportBundle` guards — `invalid JSON container`, `unsupported bundleVersion`, and `missing manifest or files`. Everything else in that catalogue is indexed on the [troubleshooting reference](/docs/reference/troubleshooting/).
+
+## Trust boundary
+
+A successful verifier proves internal consistency of the bytes and declared chain scope. It does not prove:
+
+- the original event was truthful or authorized;
+- the producer captured every real-world action;
+- an actor ID belongs to a particular human;
+- a filtered or windowed export contains omitted records;
+- a commit ledger's members describe records that exist;
+- storage, retention, or access practice satisfied a legal obligation;
+- an unsigned bundle came from a claimed producer.
+
+Verification produces compliance evidence. It is not a compliance determination, and no verifier result is legal advice.
+
+Keep the verifier version, full report, source bytes, chain scope, and trusted key identity with operational evidence. Never reduce the result to a screenshot of a green badge.
+
+Run the [chain tutorial](/docs/start/verify-a-chain/) or build the [export fixture](/docs/reference/export-format/) next.

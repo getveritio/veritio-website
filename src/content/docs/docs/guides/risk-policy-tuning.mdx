@@ -1,0 +1,182 @@
+---
+title: Tuning risk policy
+description: Derive a risk policy with the temperature knob and frequency rules instead of editing DEFAULT_RISK_POLICY, so every published score stays recomputable.
+audience: [developer, operator]
+kind: guide
+searchIntent: Tune Veritio risk thresholds and burst rules by deriving a policy instead of editing DEFAULT_RISK_POLICY.
+questions:
+  - How do I make Veritio risk scoring stricter without forking the SDK?
+  - What does riskPolicy({ temperature }) change and what does it leave alone?
+  - How do I detect a burst of failed logins in one episode?
+  - Why does overriding a risk policy require an explicit policyVersion?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/risk-policy.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/risk-score.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/risk-scoring.md
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/conformance/risk-episode-frequency.json
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/conformance/risk-policy-temperature.json
+claimRefs: []
+---
+
+import { Code } from '@astrojs/starlight/components'
+import rollupOutput from '../../../../examples/risk/expected/episode-rollup.txt?raw'
+import frequencyOutput from '../../../../examples/risk/expected/frequency-rules.txt?raw'
+
+A risk score is only evidence if the constants behind it can be recovered months later. Veritio stamps a `policyVersion` into every conclusion, so the score and the rules that produced it travel together. Tuning therefore means deriving a new, differently named policy — never editing the reference constants in place.
+
+## Why the reference constants are frozen
+
+`DEFAULT_RISK_POLICY` carries `policyVersion: "veritio.reference.v1"`. Those numbers are a cross-language contract: the TypeScript, Python, and Go SDKs each hold a copy, and `spec/conformance/risk-*.json` pins all three to the same digits.
+
+Mutating that object at runtime — `DEFAULT_RISK_POLICY.bands.high = 0.4`, or a patched `node_modules` — does not produce a stricter deployment. It produces two different scoring functions that both label their output `veritio.reference.v1`. A conclusion recorded before the edit and one recorded after become indistinguishable, an independent verifier recomputing the score from the published constants gets a different number, and the Python and Go SDKs no longer agree with the TypeScript one. Nothing throws. The damage is silent and unrecoverable, because the only field that could have told you the constants changed did not change.
+
+`riskPolicy()` exists so the mutation is never necessary. It always builds a fresh object from the reference constants and never writes back into them; the frequency fixture below asserts `defaultPolicyStillRuleFree` after deriving two hand-tuned policies. With no arguments at all, `riskPolicy()` returns a copy equal to `DEFAULT_RISK_POLICY`.
+
+## Temperature moves nine fields at once
+
+`riskPolicy({ temperature })` takes one number in `[0, 1]` and rescales exactly nine fields. Each has three pinned endpoints — lenient at `t = 0`, the reference value at `t = 0.5`, strict at `t = 1` — and interpolation is two-segment linear:
+
+```text
+lerp(L, R, S, t) = t <= 0.5 ? round4(L + (R - L) * (t / 0.5))
+                            : round4(R + (S - R) * ((t - 0.5) / 0.5))
+```
+
+| Field | Lenient `t=0` | Reference `t=0.5` | Strict `t=1` |
+| --- | --- | --- | --- |
+| `bands.low` | 0.10 | 0.05 | 0.02 |
+| `bands.medium` | 0.35 | 0.25 | 0.18 |
+| `bands.high` | 0.60 | 0.50 | 0.40 |
+| `bands.critical` | 0.85 | 0.75 | 0.65 |
+| `rollup.decayPerWindow` | 0.30 | 0.50 | 0.70 |
+| `rollup.velocityNormalizer` | 4.00 | 3.00 | 2.00 |
+| `magnitude.maxBoost` | 0.25 | 0.40 | 0.60 |
+| `reversibilityFactor.irreversible` | 1.15 | 1.30 | 1.60 |
+| `envCriticalityFactor.production` | 0.90 | 1.00 | 1.20 |
+
+Everything else keeps its reference value: the eight `operationBase` seeds, the other reversibility and environment factors, the magnitude `weights` and `k`, and `rollup.windowSeconds`. Temperature never adds or removes frequency rules.
+
+Read the table as one coordinated move rather than nine independent ones. Raising temperature attacks a score from both directions at once. The band cut points come down, so the same number lands in a higher level. The multipliers and the boost ceiling go up, so the number itself is larger. An irreversible production operation is hit three times: `maxBoost`, `irreversibleFactor`, and `productionFactor` all rise while `bands.critical` falls. Scoring the reference episode's worst step — an irreversible `permission` change in production with `fanOut: 4` — under four temperatures makes the compounding visible:
+
+```text
+t = 0    score 0.6317  level high      bands.critical 0.85
+t = 0.5  score 0.8016  level critical  bands.critical 0.75
+t = 0.7  score 0.9507  level critical  bands.critical 0.71
+t = 1    score 1.0000  level critical  bands.critical 0.65
+```
+
+The rollup half moves with it. Higher `decayPerWindow` means momentum survives longer gaps, and a lower `velocityNormalizer` converts that momentum into a bigger `velocityScore`, so a strict policy is both quicker to accumulate a burst and quicker to call it critical.
+
+Temperature validates fail-closed. It must be finite, inside `[0, 1]`, and a multiple of `0.01`; `riskPolicy({ temperature: 0.333 })` throws `temperature must be a multiple of 0.01`. That restriction is not fussiness — the derived version string is built from integer hundredths only, never from float formatting, so `0.7` becomes `veritio.reference.v1+temp0.70` identically in TypeScript, Python, and Go.
+
+One nuance worth internalising: `t = 0.5` reproduces every reference constant byte-for-byte but still stamps `veritio.reference.v1+temp0.50`. The constants are identical; the label is not. Use plain `riskPolicy()` when you mean the reference policy, and reserve the suffixed version for deployments that deliberately chose a temperature.
+
+## Overrides always need a policyVersion
+
+`overrides` deep-merge after temperature derivation, one level into `operationBase`, `reversibilityFactor`, `envCriticalityFactor`, `bands`, and `rollup`, two levels into `magnitude.weights` and `magnitude.k`. Unknown keys are ignored rather than merged, so a typo cannot smuggle a field into the policy shape.
+
+The moment any override is supplied, `overrides.policyVersion` becomes mandatory:
+
+```text
+riskPolicy({ overrides: { bands: { low: 0.1 } } })
+  → TypeError: overrides.policyVersion is required when overriding policy
+    fields so a hand-tuned policy is never misrepresented by a temperature
+    version
+```
+
+This is the same invariant as the frozen constants, enforced at the API. An auto-derived `+temp0.70` suffix describes exactly one thing — the nine interpolated fields — and would be a lie the moment a caller also moved `operationBase.delete`. Rather than let a hand-tuned policy inherit a name that no longer describes it, the builder refuses. Name your policy after your organisation and revision (`acme.burst-detection.v1`), and bump it whenever a constant moves.
+
+A final structural check runs after the merge: every numeric leaf finite, bands strictly ascending, multiplier factors and `windowSeconds` / `velocityNormalizer` positive, `policyVersion` non-empty. `riskPolicy({ overrides: { policyVersion: 'x', bands: { low: 0.9 } } })` throws `policy bands must be strictly ascending` instead of returning a policy whose banding math cannot be honoured.
+
+## What the rollup knobs actually control
+
+An episode score is never a sum and never an average. It is `max(peak, velocityScore)` — the worst single step, or the worst decayed momentum burst, whichever is higher — so padding an episode with quiet steps cannot dilute one dangerous one.
+
+```text
+windows(gap) = floor(max(0, gapSeconds) / windowSeconds)   // whole windows only
+decay(gap)   = decayPerWindow multiplied windows(gap) times
+momentum[i]  = round4(score[i] + momentum[i-1] * decay(gap))
+velocityScore = clamp01(round4(maxMomentum / velocityNormalizer))
+```
+
+The fixture below scores six pinned steps, re-derives the momentum series locally from the policy constants, and asserts the local derivation reproduces the library's `velocityScore` exactly. It then re-rolls the same steps under six single-knob overrides. Its output is byte-compared in CI.
+
+<Code code={rollupOutput} lang="json" title="verified episode rollup output" />
+
+Three things in that output are worth reading closely.
+
+`windowSeconds` decides how many whole windows a gap contains, and the floor is unforgiving: the 30-second gaps in this episode carry momentum in full under the 60-second reference window, while dropping to `windowSeconds: 15` turns them into two decay windows each and pulls `velocityScore` from `0.5004` to `0.3476`. Raising it to `600` puts every gap inside one window and lifts `velocityScore` to `0.73`.
+
+`decayPerWindow` decides how much survives each whole window. At `1` momentum never cools (`velocityScore` `0.73`); at `0` any full window resets the carry (`0.4272`). The reference `0.5` sits between them, which is why the 580-second tail arrives with `decayApplied: 0.002`.
+
+`velocityNormalizer` is the only thing converting raw momentum into a `0..1` score, so it alone decides whether a burst can out-rank the worst step. At `1.5` the burst saturates and the episode scores `1`; at `6` `velocityScore` falls to `0.2502` and the peak wins outright. In every one of these variants `peak` stays `0.8016` — the steps never changed.
+
+Note also `orderIndependent.reversedInputMatches: true`. The rollup sorts by `occurredAt` on a non-mutating copy, so the order a caller happens to hold the steps in cannot move the published score.
+
+## Adding a frequency rule
+
+Peak and velocity both react to how *severe* steps are. Neither reacts to a pattern of individually harmless steps — four failed logins in two minutes score low individually and, spread across a couple of minutes, barely move momentum. `rollup.frequencyRules` is the knob for that shape.
+
+Each rule is `{ actions, windowSeconds, threshold, boost }` and is evaluated over the time-sorted steps:
+
+```text
+1. qualify   step.action exact-matches one of rule.actions
+             (a step with no `action` never qualifies)
+2. window    slide an inclusive window over the qualifying timestamps;
+             advance start while endMs - startMs > windowSeconds * 1000
+             count = max window size observed
+3. fire      count >= threshold, at most once per episode, contributing boost
+
+frequencyScore = clamp01(round4(sum of fired boosts))
+score          = clamp01(round4(max(peak, velocityScore, frequencyScore)))
+```
+
+The fixture configures two rules on a hand-named policy — a failed-login burst that fires, and an export-burst rule left deliberately unmet — and rolls the same six steps with and without them.
+
+<Code code={frequencyOutput} lang="json" title="verified frequency-rule output" />
+
+The burst rule moves the episode from `0.2` / `low` to `0.55` / `high`, while `peakUnchanged` and `velocityUnchanged` are both `true`. That is the shape of the invariant: `frequencyScore` joins a `max()`, so a rule can only ever raise an episode score. There is no rule that lowers one, and no configuration in which adding a rule makes an episode look safer.
+
+Three boundaries are easy to get wrong.
+
+**Fires once, not once per occurrence.** The login rule reports `count: 4` and contributes its `boost` exactly once. Ten failed logins and four failed logins produce the same `0.55`, because `boost` is a fixed contribution, not a per-event increment. Escalation past the threshold is a job for a second rule with a higher threshold and a higher boost, not for repetition.
+
+**Co-occurrence, not total count.** The window is inclusive and slides over qualifying timestamps only. The conformance case *five failures spread past the window never co-occur* configures `threshold: 5` over a 300-second window and feeds five failures two minutes apart; the maximum window count is `3`, the rule does not fire, and the episode stays at `0.1` / `low`. A rule counts steps that happened *together*, and lengthening an attack defeats it — which is exactly the trade you are choosing when you pick `windowSeconds`.
+
+**A step without an `action` is invisible.** The fixture's un-actioned step is still scored for `peak` and `velocity` but can never qualify for any rule. `action` is optional in `EpisodeRiskStep` precisely so pre-frequency callers keep working, and the conformance suite pins *steps without an action never match a rule*. If your read model builds episode steps without carrying the event action through, every rule you configure will silently report `count: 0`.
+
+Unfired rules are reported, not dropped. `frequencyMatches` carries one entry per configured rule with its observed `count`, so "the export rule saw one qualifying step against a threshold of three" is recorded evidence rather than silence — which is what lets you tell a rule that did not fire apart from a rule that was never deployed.
+
+### Rule-free rollups stay byte-identical
+
+When a policy configures zero rules, `rollupEpisodeRisk` takes literally the pre-frequency code path and emits no `frequencyScore` and no `frequencyMatches` members at all. The fixture reports this as `emitsFrequencyFields: false` for the reference policy and `true` for the tuned one; the conformance case *empty rule set matches the plain rollup byte-for-byte* pins it upstream.
+
+This matters because rollups feed canonical JSON and hashes. Adding two always-present fields — even `0` and `[]` — would have changed the bytes of every existing reference rollup and broken every anchored digest. Optionality is the compatibility mechanism, so treat `frequencyScore` and `frequencyMatches` as genuinely absent in consumers rather than defaulting them.
+
+### Rules replace wholesale
+
+`overrides.rollup.frequencyRules` is the one field that never merges. Supplying a list replaces the base list entirely; omitting the key keeps whatever the base carried. The fixture proves both: `v2` supplies one rule and ends with exactly `v2RuleCount: 1` (a merge would have left two), and a policy overriding only `windowSeconds` keeps `omittedKeyKeepsBaseRules: 0`.
+
+Wholesale replacement is deliberate. Rules that accumulated across derivations would mean a policy's behaviour depended on the order its ancestors were built in, and no reviewer reading `acme.burst-detection.v2` could tell which rules were actually live. A tuned policy contains exactly the rules its author wrote.
+
+## Rule actions and factor values are policy tokens
+
+One privacy boundary is easy to miss when tuning. `redactMetadata` is key-name based — it matches key names like `password`, `token`, `email` — so it inspects names, never values. `RiskFactor.value` sits under the key `value` and is never rewritten no matter what it holds.
+
+The assertion path skips redaction entirely. `createSecurityRiskAssertion` copies `factors` through verbatim, and `hashAssertionRecord` hashes the canonical JSON of the record directly. There is no minimization step between a factor value and a permanent digest.
+
+So both of the strings a tuner controls must be stable policy tokens:
+
+- `RiskFactor.value` may only be a signal enum (`permission`, `irreversible`, `production`) or a normalized number. Never a file path, a prompt fragment, a user identifier, a message, or a description of what happened.
+- A frequency rule's `actions` entries must be event action names from your own vocabulary (`auth.login.failed`, `data.export.completed`). They are matched by exact string equality, they are echoed back in `frequencyMatches`, and anything embedded in them travels into read models and hashed conclusions.
+
+Neither is a place for anything user-derived. A tenant identifier or an email address glued into an action string is unredactable, permanently hashed, and — because rule matching is exact — usually broken as a rule too.
+
+## What a tuned score proves
+
+A conclusion under `acme.burst-detection.v1` proves that these steps, under those named constants, produce that number, and that anyone holding the policy can recompute it. It does not prove the policy is well calibrated for your risk, that the burst was hostile rather than a broken retry loop, or that the host recorded every step of the episode. Risk scores are triage evidence: they order a queue and support a compliance record, and they do not by themselves establish that any legal or regulatory obligation was met.
+
+Keep `policyVersion` moving whenever a constant moves. It is the only thing separating a deliberate retune from a silent one.
+
+Continue with [Risk scoring](/docs/concepts/risk-scoring/) for the per-step formula behind these numbers, [Risk policy reference](/docs/reference/risk-policy/) for the full constant tables, or [Security risk assertions](/docs/guides/security-risk-assertions/) to record a conclusion as hashed evidence.

@@ -1,0 +1,153 @@
+---
+title: Agent events
+description: Record and verify an agent session and tool call with minimized hashes, stable identities, explicit graph edges, and no raw prompt storage.
+audience: [developer, governance]
+kind: tutorial
+searchIntent: Record a minimized, verifiable agent session and tool call with the TypeScript provenance recorder.
+questions:
+  - How do I record AI agent activity with Veritio?
+  - Which exact action strings does the provenance recorder emit?
+  - Which agent data should be hashed or omitted?
+  - How are sessions, tool calls, files, reviews, and deployments connected?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7', 'provenance APIs at veritio@c4100ee']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/provenance.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/templates.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/event.schema.json
+claimRefs: []
+---
+
+import { Aside, Code } from '@astrojs/starlight/components'
+import example from '../../../../examples/agents/session-and-tool.ts?raw'
+import expectedOutput from '../../../../examples/agents/expected/session-and-tool.txt?raw'
+import graphOutput from '../../../../examples/agents/expected/provenance-graph.txt?raw'
+
+Agent evidence should answer who initiated a session, what class of action occurred, which artifacts it affected, and which review or deployment followed—without turning prompts, tool arguments, diffs, or secrets into a second sensitive log.
+
+## Run one complete session
+
+```sh
+bun add @veritio/core@0.4.7 @veritio/storage@0.4.7
+```
+
+The checked fixture persists one session and one tool call into the durable file store. It supplies only stable identifiers and one-way hashes.
+
+<Code code={example} lang="ts" title="src/examples/agents/session-and-tool.ts" />
+
+```sh
+bun src/examples/agents/session-and-tool.ts
+```
+
+The build executes that command and compares stdout byte-for-byte:
+
+<Code code={expectedOutput} lang="json" title="verified output" />
+
+The session event is linked to the enforcing human with `caused_by`. The session creation and tool read produce graph edges separately from event metadata. `rawPromptStored` remains false because the recorder never receives prompt text.
+
+## The exact actions a session emits
+
+Action strings are literal. They are not glob families, and no wildcard is expanded anywhere in the SDK — a reader that filters on the wrong string finds nothing rather than failing loudly. These are the strings the shipped recorder writes.
+
+| Call | Action emitted | Target entity type |
+| --- | --- | --- |
+| `startSession` | `agent.session.started` | `agent_session` |
+| `recordPrompt` | `agent.prompt.recorded` | `agent_session` |
+| `recordToolCall` | `agent.tool.called` | `tool_call` |
+| `recordChangeProposal` | `change.proposal.created` | `change_proposal` |
+| `recordFileChange` | `change.files.changed` | `source_tree` |
+| `recordReview` | `review.approval.recorded`, `review.finding.created`, or `review.waiver.recorded` | `pull_request` |
+| `recordCiRun` | `ci.job.completed` | `ci_run` |
+| `recordDeployment` | `deploy.deployed` | `deployment` |
+| `recordRuntimeEvent` | caller-supplied `action` | `runtime_event` |
+
+Three details in that table are easy to get wrong.
+
+**`change.files.changed` is plural.** The event targets a source tree at one resulting version and carries a `files` array, so the noun is plural even when a single file moved.
+
+**`recordReview` branches on `decision`.** One call site emits three different actions: `approved` (or an omitted decision) produces `review.approval.recorded` with an `approved_by` edge, `changes_requested` produces `review.finding.created` with a `reviewed_by` edge, and `waived` produces `review.waiver.recorded` with a `waived_by` edge. The relation never asserts approval of work that was not approved.
+
+**`recordRuntimeEvent` does not own an action string.** The host passes `action`; the recorder writes it verbatim onto a `runtime_event` target. The canonical string for that shape is `audit.runtime.observed`, and it lives in `auditTemplates.code.runtimeObserved` rather than in the recorder. If you want the catalogued value, pass it explicitly.
+
+One further action belongs to this family but is never emitted by a session: `activity.episode.started`, built by `episodeStartedTemplate`. It opens the episode described in [activity episodes](/docs/concepts/activity-episodes/); the recorder joins an existing episode rather than opening one.
+
+The full per-method edge list, deterministic id formulas, and idempotency-key collisions are in the [provenance recorder reference](/docs/ai/provenance-recorder/).
+
+## One session, one group key
+
+The events above land on unrelated targets. A `source_tree`, a `pull_request`, a `ci_run`, and a `deployment` are shared entities that many sessions touch, so the edge graph alone cannot tell you which session produced a given file change. The recorder solves this with two metadata stamps rather than new schema fields:
+
+```text
+agent.session.started      → target agent_session
+agent.prompt.recorded      → target agent_session
+agent.tool.called          → target tool_call
+change.files.changed       → target source_tree     (shared)
+review.approval.recorded   → target pull_request    (shared)
+ci.job.completed           → target ci_run          (shared)
+deploy.deployed            → target deployment      (shared)
+
+every one of them carries
+  metadata.sessionId          = <sessionId>
+  metadata.activityEpisodeId  = <activityEpisodeId>
+```
+
+Both keys are applied *after* the caller's metadata is spread in, so a caller cannot shadow either one. Both land before `createAuditEvent` canonicalizes and hashes the record, so the attribution sits inside the hash chain rather than beside it. Neither key matches the redaction key pattern, and both are non-PII stable ids by construction, so redaction leaves them intact.
+
+The second checked fixture drives a full seven-event session and deliberately passes forged `sessionId` and `activityEpisodeId` values into `startSession` and `recordPrompt`:
+
+<Code code={graphOutput} lang="json" title="verified output" />
+
+Read that output as four separate claims. `eventActions` prints the literal strings from the table above, in recording order. `attribution` shows all seven events resolving to exactly one session id and one episode id — the `distinct*` arrays are single-element, which is the assertion a group-by read model depends on. `callerCannotShadow` shows the forged ids absent from the persisted event and edge chains entirely, while unrelated caller metadata (`turnBudget`) survives untouched. `verification.ok` covers the event chain, the edge chain, and the commit ledger after all writes.
+
+<Aside type="note" title="What this output does not prove">
+  It proves the recorder's stamping and the store's chain invariants. It does not prove that the ids fed to the recorder were true — a host that reuses one session id for two real sessions produces a chain that verifies and a read model that lies. Derive session and episode ids at the capture boundary, not from agent-supplied payload.
+</Aside>
+
+## Minimize before the sink
+
+Keep:
+
+- stable session, turn, tool-call, artifact, review, and deployment IDs;
+- content, path, configuration, policy, and bundle hashes;
+- bounded status, outcome, latency, and approval labels;
+- tenant, workspace, and environment scope resolved by the host.
+
+Omit:
+
+- raw prompts and model responses;
+- tool arguments, command output, file contents, and diffs;
+- access tokens, cookies, connection strings, and arbitrary local paths;
+- names or email addresses when a stable non-PII actor ID is sufficient.
+
+<Aside type="caution" title="Key-name redaction is not value classification">
+  Core redaction removes known sensitive keys deterministically. It cannot recognize every secret hidden inside an innocently named string. Construct an allowlisted evidence object before calling the recorder.
+</Aside>
+
+The recorder does not enforce this. `Principal.display` is not redacted at all, and metadata values are never inspected — only key names are. Minimization is the host's job, upstream of the first call.
+
+## Transaction boundary
+
+Each recorder method writes its event first and then its connecting edges, sequentially. The recorder does not create a cross-sink transaction and performs no compensation, so an edge-sink failure can leave a committed event with missing edges. If an event and its edges must commit atomically, inject sinks backed by the same host transaction or persist a batch/commit through a store that implements that boundary.
+
+`recordPrompt` is the one call that emits no edges at all: the prompt is already attributed to its session by target and by `metadata.sessionId`, so no edge would add information.
+
+## Failure modes worth rehearsing
+
+Re-recording the same logical event yields the same deterministic id, which is what makes replay safe — and also what makes two genuinely different occurrences collide. Two file changes to the same `sourceTreeId` at the same `resultVersion` derive one id and the second write is rejected on the idempotency key. Pass distinct result versions, or override `id`.
+
+Prompt ids fold in `occurredAt` when supplied, precisely because the same prompt text submitted twice in one session would otherwise collide. Omit `occurredAt` and identical prompts become one record.
+
+## Verification gates
+
+Before enabling live capture, assert against fixtures that:
+
+1. prohibited raw fields never reach either sink;
+2. repeated delivery creates the same record and edge IDs;
+3. an edge write failure is visible and recoverable;
+4. tenant scope cannot be supplied by the agent payload;
+5. every session-produced event carries the expected `sessionId` and `activityEpisodeId`;
+6. event, edge, and commit chains all verify after restart.
+
+A green result here is evidence about your capture path, not a statement about your legal position. Veritio supports compliance evidence; it does not determine whether an obligation was met.
+
+Use the packaged [Claude Code](/docs/ai/claude-code/) hooks or the experimental source-backed [Codex](/docs/ai/codex/) notify adapter next.

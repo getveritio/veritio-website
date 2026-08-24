@@ -1,0 +1,10 @@
+{
+  "sequences": [
+    1,
+    2
+  ],
+  "previousHashLinked": true,
+  "verification": {
+    "ok": true
+  }
+}

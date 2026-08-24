@@ -8,3 +8,7 @@ dist
 .codex/private/
 remotion/node_modules
 remotion/.remotion
+
+# Python bytecode from the executable documentation fixtures
+__pycache__/
+*.pyc

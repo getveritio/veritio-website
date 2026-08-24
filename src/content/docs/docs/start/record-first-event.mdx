@@ -1,0 +1,68 @@
+---
+title: Record your first audit event
+description: Create, append, read, and verify a tenant-scoped audit event with the stable TypeScript SDK in one small runnable program.
+audience: [newcomer, developer]
+kind: tutorial
+searchIntent: Record, read, and verify a first tenant-scoped audit event with the TypeScript SDK.
+questions:
+  - How do I record my first Veritio audit event?
+  - What does an appended audit record contain?
+  - How do I verify the stored record immediately?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/index.ts
+claimRefs: []
+sidebar:
+  order: 3
+---
+
+import { Aside, Code } from '@astrojs/starlight/components'
+import example from '../../../../examples/tutorial/record-and-verify.ts?raw'
+import expectedOutput from '../../../../examples/tutorial/expected/record-and-verify.txt?raw'
+
+This tutorial records an invitation followed by the resulting membership. The two actions share one tenant scope, so the store orders them in one chain and the second record points to the first record's hash.
+
+## Before you run it
+
+- Complete [Installation](/docs/start/installation/) for TypeScript.
+- Run this in a server-side module where the tenant and actor have already been authenticated.
+- Use the in-memory store only for this local exercise.
+
+<Aside type="caution" title="Tutorial storage only">
+  `MemoryAuditStore` exercises append, ordering, and verification behavior but loses everything when the process exits. Select an [authoritative durable store](/docs/storage/overview/) before production.
+</Aside>
+
+## Two records, one tenant-local chain
+
+<Code code={example} lang="ts" title="src/examples/tutorial/record-and-verify.ts" />
+
+Run it with:
+
+```sh
+bun src/examples/tutorial/record-and-verify.ts
+```
+
+The checked fixture prints this exact output:
+
+<Code code={expectedOutput} lang="json" title="verified output" />
+
+`sequences` confirms gapless tenant-local ordering. `previousHashLinked` confirms that record two stores record one's hash. `verification.ok` confirms that the current canonical bytes, sequence values, and links agree.
+
+## What your application supplies
+
+The host supplies the event identity, timestamp, actor, action, target, scope, governance labels, and minimized metadata. Resolve `tenantId` and actor identity from trusted server context; do not copy either from an untrusted request body without authorization.
+
+The two idempotency keys identify the logical invitation and membership operations. A retry should reuse the same key and the same event bytes. A different operation needs a different key.
+
+## What the store adds
+
+`append` creates the `AuditRecord` envelope: tenant-local `sequence`, `previousHash`, `hash`, `appendedAt`, the canonicalization label, and a hashed idempotency key. `list` requires tenant scope again before returning the ordered records.
+
+That separation matters: the application describes what happened; the authoritative store owns ordering and conflict checks.
+
+## Checkpoint: Verification passed
+
+Before continuing, confirm all three output properties match the checked output above. A successful chain proves that the recorded bytes remain internally consistent. It does not prove the original application claim was truthful or authorized.
+
+Next, [tamper with the copied records and inspect the exact failures](/docs/start/verify-a-chain/).

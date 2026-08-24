@@ -1,0 +1,205 @@
+---
+title: AI gateway
+description: How the unpublished @veritio/gateway fronts Anthropic and OpenAI with virtual keys, enforced allowlists, micro-USD metering, and hash-chained request evidence.
+audience: [developer, operator, governance]
+kind: guide
+searchIntent: Understand Veritio gateway virtual keys, allowlist enforcement, micro-USD metering, and hash-chained AI request evidence.
+questions:
+  - Can I install the Veritio AI gateway from npm today?
+  - How does the gateway enforce a model allowlist before a request leaves my network?
+  - What does a gateway audit event contain, and what does it never contain?
+  - What does an ai.gateway.evidence.gap marker mean for chain completeness?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/ai-gateway-capture.md
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/gateway/src/index.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/gateway/src/policy.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/gateway/src/keys.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/gateway/src/pricing.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/gateway/src/evidence.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/gateway/src/health.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/gateway/README.md
+claimRefs: []
+---
+
+An organization's AI traffic normally leaves no durable record: a shared provider key, no enforced model boundary, and a vendor dashboard as the only account of what happened. `@veritio/gateway` is a transparent proxy in front of Anthropic and OpenAI that turns that traffic into governed traffic — scoped virtual keys, allowlists decided before any byte leaves the network, and exactly one hash-chained audit event per request outcome.
+
+## Availability, stated plainly
+
+There is no published package. `@veritio/gateway` is at version `0.0.2` in the OSS workspace and is not on the npm registry; `npm view @veritio/gateway` returns a 404. It is also not installed on this documentation site, so **this page carries no CI-verified fixture and no runnable example**. Everything below is read from the pinned source and from the normative capture spec.
+
+The package is TypeScript-only and is not part of the cross-language SDK parity surface. The *event vocabulary* it emits is language-neutral and normative — a future Python or Go gateway must reproduce the actions, field mapping, and metadata keys in `spec/ai-gateway-capture.md` exactly — but the server implementation itself is TypeScript.
+
+If you want to run it today, build it from the verified revision rather than installing it:
+
+```sh
+git clone https://github.com/getveritio/veritio.git
+git -C veritio checkout c4100ee7b678d0c6b227c67ae6ea1d8a1f373967
+cd veritio
+bun install --frozen-lockfile
+bun run --cwd gateway build
+bun run --cwd gateway test
+```
+
+## The request pipeline
+
+Every request walks the same ordered gate sequence. Order is load-bearing: it decides which refusal reason lands in evidence.
+
+```text
+POST /v1/messages | /v1/chat/completions
+        ↓  route map (anything else → 404, no upstream contact)
+        ↓  health gate (block mode: 503 while evidence is unwritable)
+        ↓  virtual-key resolution (unknown / revoked → 401)
+        ↓  body buffer + model parse + optional sha256 of request bytes
+        ↓  decide() allowlist (deny → 403)
+        ↓  forward to the pinned provider base URL with the real key
+        ↓  observed passthrough of the response, metering in line
+        ↓  exactly one ai.request.* event
+```
+
+Only two provider surfaces are routable: `POST /v1/messages` (Anthropic, endpoint `messages`) and `POST /v1/chat/completions` (OpenAI, endpoint `chat-completions`). Anything else is refused locally with no upstream connection at all.
+
+## Two integration levels
+
+`startGateway` is the batteries-included process boundary. It is the only module that reads files, environment variables, or process signals: it loads and validates the config, opens a `FileEvidenceStore` rooted at `evidenceDir`, creates the health state, wires `createGatewayHandler`, runs the pending-evidence retry loop, and reloads config on `SIGHUP` without dropping in-flight traffic. Its declared surface:
+
+```ts
+function startGateway(options?: StartGatewayOptions): Promise<StartedGateway>
+
+interface StartedGateway {
+  port: number
+  reload(): Promise<void>  // on parse failure the previous config stays active
+  stop(): void
+}
+```
+
+Config comes from `VERITIO_GATEWAY_CONFIG` (default `./veritio-gateway.json`) and the port from `VERITIO_GATEWAY_PORT` (default `8790`).
+
+`createGatewayHandler` is the embedding level. It returns a plain `(req: Request) => Promise<Response>` and takes its dependencies by injection, so a host with its own HTTP server and its own conforming evidence store keeps the same pipeline without the single-container assumptions:
+
+```ts
+function createGatewayHandler(deps: ProxyDeps): (req: Request) => Promise<Response>
+
+interface ProxyDeps {
+  config: GatewayConfig
+  catalog: PricingCatalog
+  evidence: GatewayEvidence   // built over any GatewayEvidenceSink
+  health: GatewayHealth
+  fetchImpl?: typeof fetch
+  now?: () => number
+  requestIdFactory?: () => string
+  waitUntil?: (work: Promise<void>) => void
+}
+```
+
+The sink contract is deliberately one method — `recordEvent(input: AuditEventInput): Promise<AuditRecord>`. A `FileEvidenceStore` satisfies it directly; an `AuditRecorder` over any conforming Postgres or MySQL `AuditStore` adapts trivially. The gateway never constructs storage from credentials itself, which is what keeps the embedded path free of the container's file-store assumption.
+
+## Virtual keys
+
+Real provider credentials live in exactly one place: the `providers.<name>.apiKey` field of the gateway config, on your infrastructure. Callers never hold them. Each team gets a virtual key instead, and the config stores only its digest.
+
+`hashPresentedKey` is the whole storage scheme — sha256 hex of the exact presented UTF-8 string. Config authors generate it with `echo -n "vk_…" | shasum -a 256`, and config parsing rejects any `keyHash` that is not 64 lowercase hex characters. Presented key values are never persisted, never logged, and never reach an event.
+
+`extractPresentedKey` reads `x-api-key` first (Anthropic SDK convention) and falls back to `Authorization: Bearer <key>` (OpenAI SDK convention). A missing header, or an `Authorization` header with any other scheme, yields `null`, which callers must treat as an unauthenticated deny.
+
+`resolveVirtualKey` compares the digest against configured keys and returns a typed result:
+
+```ts
+type VirtualKeyResolution =
+  | { ok: true; key: VirtualKeyConfig }
+  | { ok: false; reason: "unknown_key" | "revoked_key" }
+```
+
+Revocation is checked *after* the hash match, deliberately. A revoked key reports as `revoked_key` — a distinct, auditable signal that a decommissioned workload is still calling — instead of blending into unknown-key noise. Both refusals are recorded as evidence and returned as a sanitized 401. Rotation and revocation take effect on `SIGHUP`, with no restart.
+
+Operator labels on a key (`team`, `app`, `environment`) are config hygiene only. They are not emitted into events; the `keyId` is the non-PII identity that flows through as the actor.
+
+## Enforced policy
+
+`decide` is the single enforcement point, and it runs before any byte is forwarded. It is a pure function over a small context so future inputs (budget state, time windows) become new fields rather than a redesign.
+
+```ts
+function decide(ctx: PolicyContext, policy: PolicyConfig | undefined): PolicyDecision
+
+type PolicyDenyReason =
+  | "missing_policy"
+  | "provider_not_allowed"
+  | "model_not_allowed"
+  | "endpoint_not_allowed"
+  | "unparseable_body"
+```
+
+Evaluation order, first failure wins: missing policy → endpoint → provider → unparseable model → model allowlist → allow. The order exists for evidence quality. A request to an unmapped endpoint is reported as `endpoint_not_allowed` even when its model would also have failed, so the record names the first real reason rather than an incidental one.
+
+Every branch fails closed. An absent policy is a deny, not a default allow. A request body that will not parse into an object yields a `null` model, which denies as `unparseable_body` — the gateway will not forward a request whose model it could not read.
+
+Model patterns are matched by `matchesModel`: an exact id, a trailing-`*` prefix such as `claude-sonnet-*`, or the single wildcard `"*"`. A `*` anywhere else in a pattern is treated as a literal character, so a config typo cannot silently widen an allowlist.
+
+## Metering in integer micro-USD
+
+The gateway meters exclusively from what the provider reports in its own response — `costBasis` is the literal `"provider_reported"` — and never runs a tokenizer. Anthropic JSON usage comes from `usage.input_tokens` / `usage.output_tokens`; OpenAI JSON from `usage.prompt_tokens` / `usage.completion_tokens`; streaming usage accumulates from SSE frames. Absent or malformed usage yields `null`, and the event simply omits tokens and cost rather than guessing a number that later feeds a chargeback report.
+
+Money is integer micro-USD end to end. A `PricingCatalog` is a `version` string plus per-model `inputMicroUsdPerMTok` / `outputMicroUsdPerMTok`, both integer micro-USD per one million tokens. `parsePricingCatalog` rejects non-integer or negative prices outright, because float prices would break deterministic cost math. The `version` bumps on every edit so a recorded cost is traceable to a specific price set.
+
+```text
+cost = round(inputTokens  × inputMicroUsdPerMTok  ÷ 1e6)
+     + round(outputTokens × outputMicroUsdPerMTok ÷ 1e6)
+```
+
+Each direction rounds half-up independently, then the two sum. That rule is normative, not an implementation detail: a port must implement explicit half-up rounding, because language-default rounding — Python's banker's rounding, for one — diverges at exact `.5` boundaries. A model absent from the catalog returns `null`; tokens are still recorded, cost is omitted.
+
+## What one request outcome records
+
+`buildOutcomeEvent` maps a sanitized `RequestOutcome` to a plain audit event. This module is the privacy chokepoint: the `RequestOutcome` type structurally cannot carry raw keys, headers, or bodies, so nothing sensitive can reach a sink through it.
+
+```text
+action     ai.request.completed | ai.request.denied | ai.request.failed
+actor      { type: "service",  id: <keyId>  }   ("unknown" when no key resolved)
+target     { type: "model",    id: "<provider>:<model>" }
+           { type: "provider", id: "<provider>" }   when the model is unknown
+requestId  gateway-generated, unique per request
+scope      { tenantId }        one tenant per deployment
+metadata   gatewayId, provider, stream, status, latencyMs, policyDecision,
+           endpoint?, model?, denyReason?, usage?, costBasis?, costMicroUsd?,
+           requestBodyHash?, responseBodyHash?, mutatedRequest?
+```
+
+Content appears only as sha256 hashes of the exact request and response bytes, and only when `captureContentHashes` is enabled. Prompts, completions, presented keys, provider keys, and raw header values appear nowhere, in any field, ever.
+
+Two details are easy to misread. First, absence is not zero: an omitted `usage` means the provider did not report, and canonical JSON drops undefined fields rather than substituting a count. Second, token counts nest as `usage.input` / `usage.output` rather than `inputTokens` / `outputTokens` — core's deterministic [redaction](/docs/concepts/redaction/) replaces any metadata key matching `/token/i` with `"[redacted]"`, so the flat naming would destroy the number. That naming constraint is normative for any port.
+
+The one permitted request mutation is `stream_options.include_usage`, injected into OpenAI streaming requests when absent so usage is reported at all. It is config-gated by `injectStreamUsage` and disclosed in evidence as `mutatedRequest: "inject_stream_usage"`. Everything else passes through untouched, streaming included.
+
+Streaming responses are metered by observed passthrough rather than a `tee()`: chunks are hashed and read as the client pulls them, so client backpressure propagates upstream and nothing buffers beyond one chunk. Whichever of close, error, or cancel wins, exactly one outcome is recorded. A client that disconnects mid-stream produces a `failed` outcome with status `"aborted"` — not a silent hole.
+
+## Gap markers and chain completeness
+
+`evidenceFailureMode` decides what happens when the local sink fails.
+
+In `"block"` — the default — the first failed write flips health false, `/healthz` returns 503, and the gateway refuses new requests until a retry drains every pending outcome. Traffic never runs unevidenced. In `"degrade"`, traffic keeps flowing and failed outcomes queue for retry. That queue is bounded (1000 outcomes by default); overflow drops the *oldest* outcome and counts it, so memory stays bounded through a long outage.
+
+Once the sink recovers, `buildGapMarkerEvent` records the loss as its own event:
+
+```text
+action    ai.gateway.evidence.gap
+actor     { type: "system",  id: <gatewayId> }
+target    { type: "gateway", id: <gatewayId> }
+metadata  { gatewayId, droppedOutcomes: <integer > 0> }
+```
+
+A gap marker is a positive statement that the chain is incomplete over some interval, and how many outcomes are missing. It does not recover the lost outcomes and it does not identify them. Its value is that an auditor sees a declared outage instead of an unexplained silence — a chain that verifies cleanly and contains a gap marker is telling you something true that a chain without one would have hidden. The dropped count is consumed only after a marker actually records, so a marker that could not be emitted does not silently zero the counter.
+
+This composes with, and does not replace, the [hash chain](/docs/concepts/hash-chain/). Chain verification proves the records present are internally consistent; the gap marker is the gateway's own admission about records that never arrived.
+
+## Residency routing is not a residency guarantee
+
+`providers.<name>.baseUrl` pins where requests go — an EU endpoint, a regional gateway, your own reverse proxy. That pinning is how residency *routing* is expressed, and it is enforced: the proxy only ever builds upstream URLs from the pinned base.
+
+It does not by itself guarantee residency compliance. Where the provider actually processes and stores the request, what its sub-processors do, what your contract with it says, and where your own evidence volume lives are all outside what a base URL can assert. Treat the pinned base URL as one enforced control among the several a residency position needs, and keep the legal analysis separate. Veritio produces compliance evidence; it does not make you compliant, and this is not legal advice.
+
+## Scope and limits
+
+The gateway is a transparent proxy, not a translation layer: it does not convert between the Anthropic and OpenAI wire formats, and it does not inject `anthropic-version`, so clients keep setting provider-required headers themselves. Hard budget cut-offs, rollup dashboards, and hosted control-plane features are out of scope for the package. Optional ship-out to a Veritio ingest endpoint exists in config, but the local evidence store stays authoritative and the gateway is fully usable with no account at all.
+
+Continue with [Agent events](/docs/ai/agent-events/) for the provenance-recorder side of AI capture, [Hash chain](/docs/concepts/hash-chain/) for what chain verification does and does not prove, or [Storage overview](/docs/storage/overview/) to choose the store that would back an embedded `GatewayEvidenceSink`.

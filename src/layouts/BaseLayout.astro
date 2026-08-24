@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css'
+import geistNormalUrl from '@fontsource-variable/geist/files/geist-latin-wght-normal.woff2?url'
 
 /**
  * Site-wide head/SEO boundary: every page renders through this layout, so
@@ -22,6 +23,8 @@ import {
 } from '../i18n'
 import { UMAMI_SCRIPT_URL, UMAMI_WEBSITE_ID } from '../config/analytics'
 import CookieBanner from '../components/CookieBanner.astro'
+import ConsentScript from '../components/ConsentScript.astro'
+import publicClaims from '../data/public-claims.json'
 
 const {
   title = 'Veritio',
@@ -31,20 +34,32 @@ const {
   // e.g. /og/langfuse.png). Falls back to the sitewide og.png.
   ogImage: ogImagePath = '/og.png',
   ogImageAlt = 'Veritio — evidence graph for audit trails and governance',
+  claimRefs = [],
 } = Astro.props
+
+const approvedClaims = publicClaims.claims as Record<string, { status: string }>
+for (const claimRef of claimRefs as string[]) {
+  if (approvedClaims[claimRef]?.status !== 'approved') {
+    throw new Error(`Unapproved public claim reference: ${claimRef}`)
+  }
+}
 
 const locale = localeFromPathname(Astro.url.pathname)
 const pageBase = basePath(Astro.url.pathname)
 // hreflang alternates only for pages that actually have all locales.
+const canonicalizePath = (path: string) => path === '/' ? '/' : `${path.replace(/\/$/, '')}/`
 const alternates = translatedPaths.includes(pageBase)
   ? locales.map((l) => ({
       lang: l,
-      href: new URL(localizePath(pageBase, l), Astro.site).href,
+      href: new URL(canonicalizePath(localizePath(pageBase, l)), Astro.site).href,
     }))
   : []
 
-const canonical = new URL(Astro.url.pathname, Astro.site).href
+const canonicalPath = canonicalizePath(Astro.url.pathname)
+const canonical = new URL(canonicalPath, Astro.site).href
+const markdownPath = canonicalPath === '/' ? '/index.md' : `${canonicalPath.replace(/\/$/, '')}.md`
 const ogImage = new URL(ogImagePath, Astro.site).href
+const includeInSearch = canonicalPath === '/examples/' || canonicalPath === '/changelog/'
 
 const siteJsonLd = [
   {
@@ -70,20 +85,33 @@ const siteJsonLd = [
 ---
 
 <!doctype html>
-<html lang={locale}>
+<html lang={locale} data-theme="light">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
+    {claimRefs.length > 0 && <meta name="veritio-claim-refs" content={claimRefs.join(',')} />}
     <link rel="canonical" href={canonical} />
+    <link rel="alternate" type="text/markdown" href={new URL(markdownPath, Astro.site).href} title={`${title} as Markdown`} />
+    <link rel="alternate" type="text/plain" href={new URL('/llms.txt', Astro.site).href} title="Veritio agent overview" />
+    <link rel="alternate" type="application/json" href={new URL('/agent-index.json', Astro.site).href} title="Veritio documentation index" />
     {alternates.map((a) => <link rel="alternate" hreflang={a.lang} href={a.href} />)}
     {alternates.length > 0 && (
-      <link rel="alternate" hreflang="x-default" href={new URL(pageBase, Astro.site).href} />
+      <link rel="alternate" hreflang="x-default" href={new URL(canonicalizePath(pageBase), Astro.site).href} />
     )}
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preload" href={geistNormalUrl} as="font" type="font/woff2" crossorigin="anonymous" />
     <link rel="sitemap" href="/sitemap-index.xml" />
     <meta name="theme-color" content="#f8faf7" />
     <meta name="generator" content={Astro.generator} />
+    <script is:inline>
+      try {
+        const savedTheme = localStorage.getItem('starlight-theme')
+        document.documentElement.dataset.theme = savedTheme === 'dark' ? 'dark' : 'light'
+      } catch {
+        document.documentElement.dataset.theme = 'light'
+      }
+    </script>
 
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Veritio" />
@@ -103,16 +131,23 @@ const siteJsonLd = [
     <meta name="twitter:image" content={ogImage} />
     <meta name="twitter:image:alt" content={ogImageAlt} />
 
-    <script type="application/ld+json" set:html={JSON.stringify(siteJsonLd)} />
+    <script is:inline type="application/ld+json" set:html={JSON.stringify(siteJsonLd)} />
 
     <!-- Umami: cookieless, aggregate-only analytics — not consent-gated by
          design (see the analytics spec). GA4 lives behind CookieBanner. -->
+    <ConsentScript />
     <script is:inline defer src={UMAMI_SCRIPT_URL} data-website-id={UMAMI_WEBSITE_ID}></script>
 
     <title>{title}</title>
   </head>
-  <body>
+  <body data-pagefind-body={includeInSearch ? true : undefined} data-pagefind-ignore={includeInSearch ? undefined : true}>
+    <a class="site-skip-link" href="#main-content">Skip to content</a>
     <slot />
     <CookieBanner />
   </body>
 </html>
+
+<style>
+  .site-skip-link { position: fixed; z-index: 200; inset: 0 auto auto 0; transform: translateY(-120%); background: var(--color-surface); color: var(--color-ink); padding: 0.75rem 1rem; }
+  .site-skip-link:focus { transform: translateY(0); }
+</style>

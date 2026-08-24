@@ -1,0 +1,26 @@
+<button type="button" class="theme-toggle" data-theme-toggle aria-label="Use dark theme">Dark</button>
+
+<script>
+  /** Synchronizes every theme button and persists an explicit light/dark choice. */
+  function syncThemeButtons() {
+    const dark = document.documentElement.dataset.theme === 'dark'
+    for (const button of document.querySelectorAll<HTMLButtonElement>('[data-theme-toggle]')) {
+      button.textContent = dark ? 'Light' : 'Dark'
+      button.setAttribute('aria-label', dark ? 'Use light theme' : 'Use dark theme')
+    }
+  }
+
+  for (const button of document.querySelectorAll<HTMLButtonElement>('[data-theme-toggle]')) {
+    button.addEventListener('click', () => {
+      const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+      document.documentElement.dataset.theme = next
+      localStorage.setItem('starlight-theme', next)
+      syncThemeButtons()
+    })
+  }
+  syncThemeButtons()
+</script>
+
+<style>
+  .theme-toggle { border: 0; background: transparent; color: var(--color-ink-soft); font-family: var(--font-mono); font-size: 0.72rem; text-decoration: underline; text-underline-offset: 0.2rem; cursor: pointer; }
+</style>

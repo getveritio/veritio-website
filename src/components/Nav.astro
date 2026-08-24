@@ -1,13 +1,8 @@
 ---
 /**
- * Site masthead (Aug 2026 redesign, per approved concept):
- * - Desktop: floating rounded pill bar — serif sentence-case links with a
- *   raised-tile + underline active state, EN dropdown (details/summary, no
- *   JS), Sign in, outlined GitHub button, solid "Start free" CTA.
- * - Mobile: evergreen open-source banner on top, logo + hamburger row, and a
- *   full-screen evergreen menu overlay (small inline script toggles it;
- *   the rest of the nav stays build-time only).
- * Active state is computed at build time from the pathname.
+ * Shared public-site masthead. It mirrors the documentation shell: a ruled,
+ * paper-like bar with an OSS-first route order, persistent theme selection,
+ * and a visually separate optional Cloud action.
  */
 import {
   localeFromPathname,
@@ -17,6 +12,7 @@ import {
   navStrings,
   type Locale,
 } from '../i18n'
+import ThemeToggle from './ThemeToggle.astro'
 
 const { pathname } = Astro.url
 const locale = localeFromPathname(pathname)
@@ -24,316 +20,96 @@ const pageBase = basePath(pathname)
 const t = navStrings[locale]
 
 const links = [
-  { href: localizePath('/', locale), base: '/', label: t.overview },
-  { href: localizePath('/cloud', locale), base: '/cloud', label: t.cloud },
-  { href: localizePath('/pricing', locale), base: '/pricing', label: t.pricing },
-  { href: '/docs', base: '/docs', label: t.docs },
-  { href: '/examples', base: '/examples', label: t.examples },
+  { href: '/product/', base: '/product', label: t.product },
+  { href: '/open-source/', base: '/open-source', label: t.openSource },
+  { href: '/docs/', base: '/docs', label: t.docs },
+  { href: '/examples/', base: '/examples', label: t.examples },
+  { href: localizePath('/cloud', locale) + '/', base: '/cloud', label: t.cloud },
+  { href: localizePath('/pricing', locale) + '/', base: '/pricing', label: t.pricing },
 ]
-const isActive = (base: string) =>
-  base === '/' ? pageBase === '/' : pageBase.startsWith(base)
-
-// Language switcher: link to this page's translation when it exists, else
-// to the locale's home page.
-const switchTarget = (l: Locale) =>
-  translatedPaths.includes(pageBase) ? localizePath(pageBase, l) : localizePath('/', l)
+const isActive = (base: string) => pageBase.startsWith(base)
+const switchTarget = (nextLocale: Locale) => {
+  const target = translatedPaths.includes(pageBase) ? localizePath(pageBase, nextLocale) : localizePath('/', nextLocale)
+  return target === '/' ? '/' : `${target}/`
+}
 const langs: Locale[] = ['en', 'de', 'ko']
-// Round flags from public/flags (circle-flags, MIT — see README there).
 const flagOf: Record<Locale, string> = { en: '/flags/gb.svg', de: '/flags/de.svg', ko: '/flags/kr.svg' }
-
-const ossRepo = 'https://github.com/getveritio/veritio'
-const consoleUrl = 'https://console.getveritio.com/login'
-const barShadow = 'lg:shadow-[0_1px_2px_rgba(16,35,27,0.05),0_16px_40px_-16px_rgba(16,35,27,0.14)]'
 ---
 
-<!-- Mobile-only open-source banner -->
-<div class="flex items-center justify-between gap-4 bg-surface-invert px-4 py-2.5 lg:hidden">
-  <p class="flex min-w-0 items-center gap-2 text-[12.5px] leading-snug text-surface/90">
-    <svg class="shrink-0 text-surface/80" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5 19 6v5.2c0 4.3-2.9 7.2-7 8.8-4.1-1.6-7-4.5-7-8.8V6l7-2.5z"/></svg>
-    <span class="truncate">{t.banner}</span>
-  </p>
-  <a
-    href={ossRepo}
-    target="_blank"
-    rel="noopener noreferrer"
-    class="shrink-0 text-[12.5px] font-medium text-surface no-underline"
-  >{t.viewOnGitHub} ↗</a>
-</div>
+<header class="site-header">
+  <div class="site-header__inner">
+    <a href={localizePath('/', locale) === '/' ? '/' : `${localizePath('/', locale)}/`} class="site-brand" aria-label="Veritio home">
+      <img src="/favicon.svg" alt="" width="32" height="32" />
+      <span>Veritio</span>
+      <small>Evidence layer</small>
+    </a>
 
-<header class="sticky top-0 z-50">
-  <div class="lg:mx-auto lg:max-w-[1180px] lg:px-gutter lg:pt-4">
-    <nav
-      class:list={[
-        'border-b border-line-strong bg-surface lg:rounded-2xl lg:border lg:border-line lg:bg-surface-raised',
-        barShadow,
-      ]}
-    >
-      <div class="flex items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-5 lg:py-3">
-        <a href={localizePath('/', locale)} class="flex items-center gap-2.5 no-underline" aria-label="Veritio home">
-          <span class="grid h-8 w-8 place-items-center rounded-md bg-evergreen text-surface" aria-hidden="true">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <circle cx="3.5" cy="3.5" r="2" fill="currentColor" />
-              <circle cx="12.5" cy="3.5" r="2" fill="currentColor" />
-              <circle cx="8" cy="12.5" r="2" fill="currentColor" />
-              <path d="M3.5 3.5 8 12.5 12.5 3.5" stroke="currentColor" stroke-width="1.2" />
-            </svg>
-          </span>
-          <strong class="text-[21px] font-semibold tracking-tight text-ink">Veritio</strong>
-        </a>
-
-        <!-- Desktop links; the sliding underline is one indicator element,
-             moved by the nav script (hover follows, mouseleave returns to
-             the active link). -->
-        <div class="relative hidden items-center gap-1 lg:flex" data-nav-links>
-          {
-            links.map((link) => (
-              <a
-                href={link.href}
-                class:list={[
-                  'rounded-lg px-3.5 py-2 text-[15px] no-underline transition-colors',
-                  isActive(link.base)
-                    ? 'font-medium text-ink'
-                    : 'text-ink-soft hover:bg-surface-sunken/50 hover:text-ink',
-                ]}
-                aria-current={isActive(link.base) ? 'page' : undefined}
-              >
-                {link.label}
-              </a>
-            ))
-          }
-          <span
-            data-nav-indicator
-            class="absolute -bottom-[13px] left-0 h-[2px] w-0 bg-ink opacity-0 transition-[transform,width,opacity] duration-300 ease-out motion-reduce:transition-none"
-            aria-hidden="true"
-          ></span>
-        </div>
-
-        <!-- Desktop right cluster -->
-        <div class="hidden items-center gap-4 lg:flex">
-          <span class="h-5 w-px bg-line" aria-hidden="true"></span>
-
-          <details class="relative">
-            <summary class="flex cursor-pointer list-none items-center gap-2 rounded-lg px-2 py-1.5 text-[14px] font-medium text-ink-soft transition-colors hover:text-ink [&::-webkit-details-marker]:hidden">
-              <img src={flagOf[locale]} alt="" width="17" height="17" class="rounded-full" />
-              {locale.toUpperCase()}
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
-            </summary>
-            <div class:list={['absolute right-0 top-full z-10 mt-2 w-32 rounded-lg border border-line bg-surface-raised p-1', barShadow]}>
-              {
-                langs.map((l) => (
-                  <a
-                    href={switchTarget(l)}
-                    hreflang={l}
-                    class:list={[
-                      'flex items-center gap-2.5 rounded-md px-3 py-2 text-[13.5px] no-underline transition-colors',
-                      l === locale ? 'bg-surface-sunken font-medium text-ink' : 'text-ink-soft hover:bg-surface-sunken/60 hover:text-ink',
-                    ]}
-                  >
-                    <img src={flagOf[l]} alt="" width="17" height="17" class="rounded-full" />
-                    {l.toUpperCase()}
-                  </a>
-                ))
-              }
-            </div>
-          </details>
-
-          <span class="h-5 w-px bg-line" aria-hidden="true"></span>
-
-          <a
-            href={consoleUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            class="text-[15px] text-ink-soft no-underline transition-colors hover:text-ink"
-          >{t.signIn}</a>
-
-          <a
-            href={ossRepo}
-            target="_blank"
-            rel="noopener noreferrer"
-            class="flex items-center gap-2 rounded-lg border border-line-strong px-3.5 py-2 text-[14px] font-medium text-ink no-underline transition-colors hover:border-ink"
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
-            GitHub
-          </a>
-
-          <a
-            href={consoleUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            class="flex items-center gap-2 rounded-lg bg-evergreen px-4 py-2 text-[14px] font-medium text-surface no-underline transition-colors hover:bg-accent-strong"
-          >
-            {t.startFree}
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
-          </a>
-        </div>
-
-        <!-- Mobile hamburger -->
-        <button
-          type="button"
-          data-nav-open
-          aria-expanded="false"
-          aria-controls="mobile-menu"
-          aria-label={t.openMenu}
-          class="grid h-10 w-10 place-items-center rounded-lg border border-line-strong bg-surface text-ink lg:hidden"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
-        </button>
-      </div>
+    <nav class="site-links" aria-label="Primary navigation">
+      {links.map((link) => (
+        <a href={link.href} aria-current={isActive(link.base) ? 'page' : undefined}>{link.label}</a>
+      ))}
     </nav>
+
+    <div class="site-actions">
+      <details class="language-menu">
+        <summary><img src={flagOf[locale]} alt="" width="16" height="16" />{locale.toUpperCase()}</summary>
+        <div>
+          {langs.map((lang) => <a href={switchTarget(lang)} hreflang={lang}>{lang.toUpperCase()}</a>)}
+        </div>
+      </details>
+      <ThemeToggle />
+      <a class="site-github" href="https://github.com/getveritio/veritio" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+      <a class="site-cloud" href="https://console.getveritio.com/register" target="_blank" rel="noopener noreferrer">Start with Cloud ↗</a>
+    </div>
+
+    <details class="mobile-nav">
+      <summary>{t.menu}</summary>
+      <div class="mobile-nav__panel">
+        <nav aria-label="Mobile navigation">
+          {links.map((link) => <a href={link.href} aria-current={isActive(link.base) ? 'page' : undefined}>{link.label}</a>)}
+        </nav>
+        <div class="mobile-nav__utilities">
+          <ThemeToggle />
+          {langs.map((lang) => <a href={switchTarget(lang)} hreflang={lang}>{lang.toUpperCase()}</a>)}
+        </div>
+        <a class="site-cloud" href="https://console.getveritio.com/register" target="_blank" rel="noopener noreferrer">Start with Cloud ↗</a>
+      </div>
+    </details>
   </div>
 </header>
 
-<!-- Mobile full-screen menu -->
-<div id="mobile-menu" data-nav-menu class="fixed inset-0 z-[70] hidden overflow-y-auto bg-surface-invert lg:hidden" role="dialog" aria-modal="true" aria-label={t.menu}>
-  <div class="flex min-h-full flex-col px-5 pb-10 pt-4">
-    <div class="flex items-center justify-between">
-      <a href={localizePath('/', locale)} class="flex items-center gap-2.5 no-underline" aria-label="Veritio home">
-        <span class="grid h-8 w-8 place-items-center rounded-md bg-surface text-evergreen" aria-hidden="true">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <circle cx="3.5" cy="3.5" r="2" fill="currentColor" />
-            <circle cx="12.5" cy="3.5" r="2" fill="currentColor" />
-            <circle cx="8" cy="12.5" r="2" fill="currentColor" />
-            <path d="M3.5 3.5 8 12.5 12.5 3.5" stroke="currentColor" stroke-width="1.2" />
-          </svg>
-        </span>
-        <strong class="text-[21px] font-semibold tracking-tight text-surface">Veritio</strong>
-      </a>
-      <button
-        type="button"
-        data-nav-close
-        aria-label={t.closeMenu}
-        class="grid h-10 w-10 place-items-center rounded-lg border border-surface/25 text-surface"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
-      </button>
-    </div>
+<style>
+  .site-header { position: sticky; inset-block-start: 0; z-index: 50; border-block: 1px solid var(--color-line); background: color-mix(in srgb, var(--color-surface) 95%, transparent); backdrop-filter: blur(14px); }
+  .site-header__inner { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 2rem; max-width: 1440px; min-height: 70px; margin-inline: auto; padding-inline: var(--spacing-gutter); }
+  .site-brand { display: inline-flex; align-items: center; gap: 0.65rem; color: var(--color-ink); text-decoration: none; }
+  .site-brand img { width: 2rem; height: 2rem; }
+  .site-brand span { font-size: 1.25rem; font-weight: 650; }
+  .site-brand small { border-inline-start: 1px solid var(--color-line-strong); padding-inline-start: 0.7rem; color: var(--color-ink-muted); font-family: var(--font-mono); font-size: 0.63rem; letter-spacing: 0.12em; text-transform: uppercase; white-space: nowrap; }
+  .site-links { display: flex; align-items: center; justify-content: center; gap: 1.2rem; }
+  .site-links a, .site-actions a, .language-menu summary { color: var(--color-ink-soft); font-family: var(--font-mono); font-size: 0.72rem; text-decoration: none; }
+  .site-links a { padding-block: 1.55rem; border-block-end: 2px solid transparent; }
+  .site-links a:hover, .site-links a[aria-current='page'] { color: var(--color-ink); border-block-end-color: var(--color-accent); }
+  .site-actions { display: flex; align-items: center; justify-content: flex-end; gap: 0.85rem; }
+  .language-menu { position: relative; }
+  .language-menu summary { display: flex; cursor: pointer; list-style: none; align-items: center; gap: 0.4rem; }
+  .language-menu summary::-webkit-details-marker { display: none; }
+  .language-menu > div { position: absolute; inset-block-start: 2rem; inset-inline-end: 0; display: grid; min-width: 6rem; border: 1px solid var(--color-line); background: var(--color-surface-raised); padding: 0.35rem; box-shadow: 0 12px 28px rgb(18 35 27 / 0.12); }
+  .language-menu > div a { padding: 0.5rem 0.65rem; }
+  .site-actions .site-github { border-inline-start: 1px solid var(--color-line); padding-inline-start: 0.85rem; }
+  .site-actions .site-cloud, .mobile-nav__panel .site-cloud { border: 1px solid var(--color-evergreen); background: var(--color-evergreen); color: var(--color-surface); padding: 0.72rem 0.9rem; }
+  .mobile-nav { display: none; position: relative; }
+  .mobile-nav > summary { cursor: pointer; border: 1px solid var(--color-line-strong); padding: 0.55rem 0.75rem; font-family: var(--font-mono); font-size: 0.72rem; list-style: none; }
+  .mobile-nav > summary::-webkit-details-marker { display: none; }
+  .mobile-nav__panel { position: fixed; inset: 70px 0 auto; display: grid; gap: 1.25rem; border-block-end: 1px solid var(--color-line-strong); background: var(--color-surface); padding: 1.25rem var(--spacing-gutter) 1.5rem; box-shadow: 0 18px 40px rgb(18 35 27 / 0.14); }
+  .mobile-nav__panel nav { display: grid; }
+  .mobile-nav__panel nav a { border-block-end: 1px solid var(--color-line); padding: 0.85rem 0; color: var(--color-ink); text-decoration: none; }
+  .mobile-nav__utilities { display: flex; align-items: center; gap: 1rem; font-family: var(--font-mono); font-size: 0.72rem; }
+  .mobile-nav__utilities a { color: var(--color-ink-soft); text-decoration: none; }
 
-    <span class="mt-8 inline-block w-fit rounded-md bg-surface/10 px-2.5 py-1 font-mono text-[10.5px] font-semibold uppercase tracking-[0.16em] text-surface/70">{t.menu}</span>
-
-    <nav class="mt-2 flex flex-col">
-      {
-        links.map((link) => (
-          <a
-            href={link.href}
-            class:list={[
-              // border-y + -mt-px collapse neighboring rules into one line;
-              // the active row's brighter borders paint on top via z-10.
-              'relative -mt-px flex items-center justify-between border-y py-4 text-[19px] no-underline first:mt-0',
-              isActive(link.base)
-                ? 'z-10 border-surface/45 font-medium text-white'
-                : 'border-surface/10 text-surface/60',
-            ]}
-            aria-current={isActive(link.base) ? 'page' : undefined}
-          >
-            {link.label}
-            <svg class="text-surface/50" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
-          </a>
-        ))
-      }
-    </nav>
-
-    <div class="mt-6 flex flex-col">
-      <a href={consoleUrl} target="_blank" rel="noopener noreferrer" class="flex items-center justify-between border-b border-surface/10 py-4 text-[17px] text-surface no-underline">
-        <span class="flex items-center gap-3">
-          <svg class="text-surface/70" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c.8-3.2 3.6-5 7-5s6.2 1.8 7 5"/></svg>
-          {t.signIn}
-        </span>
-        <svg class="text-surface/50" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
-      </a>
-      <div class="flex items-center justify-between border-b border-surface/10 py-4 text-[17px] text-surface">
-        <span class="flex items-center gap-3">
-          <svg class="text-surface/70" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.7 3.8 9S14.5 18.4 12 21c-2.5-2.6-3.8-5.7-3.8-9S9.5 5.6 12 3z"/></svg>
-          <span class="flex items-center gap-4">
-            {
-              langs.map((l) => (
-                <a
-                  href={switchTarget(l)}
-                  hreflang={l}
-                  class:list={[
-                    'flex items-center gap-1.5 no-underline',
-                    l === locale ? 'font-semibold text-[#a9d5be]' : 'text-surface/70',
-                  ]}
-                >
-                  <img src={flagOf[l]} alt="" width="16" height="16" class="rounded-full" />
-                  {l.toUpperCase()}
-                </a>
-              ))
-            }
-          </span>
-        </span>
-      </div>
-    </div>
-
-    <a
-      href={ossRepo}
-      target="_blank"
-      rel="noopener noreferrer"
-      class="mt-8 flex items-center justify-between rounded-xl border border-surface/25 px-5 py-4 text-[16px] font-medium text-surface no-underline"
-    >
-      <span class="flex items-center gap-3">
-        <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
-        {t.viewOnGitHub}
-      </span>
-      <span aria-hidden="true">↗</span>
-    </a>
-  </div>
-</div>
-
-<script>
-  // Mobile menu toggle — the only client JS in the nav. Locks body scroll
-  // while open; Escape closes.
-  const openBtn = document.querySelector<HTMLButtonElement>('[data-nav-open]')
-  const closeBtn = document.querySelector<HTMLButtonElement>('[data-nav-close]')
-  const menu = document.querySelector<HTMLElement>('[data-nav-menu]')
-
-  function setOpen(open: boolean) {
-    if (!menu || !openBtn) return
-    menu.classList.toggle('hidden', !open)
-    openBtn.setAttribute('aria-expanded', String(open))
-    document.body.style.overflow = open ? 'hidden' : ''
-    if (open) closeBtn?.focus()
-    else openBtn.focus()
+  @media (max-width: 1180px) {
+    .site-header__inner { grid-template-columns: auto 1fr auto; }
+    .site-links, .site-actions { display: none; }
+    .mobile-nav { display: block; justify-self: end; }
   }
-
-  openBtn?.addEventListener('click', () => setOpen(true))
-  closeBtn?.addEventListener('click', () => setOpen(false))
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && menu && !menu.classList.contains('hidden')) setOpen(false)
-  })
-
-  // Desktop sliding underline: follows the hovered link, returns to the
-  // active one (or fades out on pages with no active link) on mouseleave.
-  const linksWrap = document.querySelector<HTMLElement>('[data-nav-links]')
-  const indicator = document.querySelector<HTMLElement>('[data-nav-indicator]')
-  const activeLink = linksWrap?.querySelector<HTMLElement>('a[aria-current="page"]') ?? null
-
-  // The visual line is inset 14px (px-3.5) from the link edges.
-  function moveTo(link: HTMLElement | null) {
-    if (!indicator) return
-    if (!link) {
-      indicator.style.opacity = '0'
-      return
-    }
-    indicator.style.transform = `translateX(${link.offsetLeft + 14}px)`
-    indicator.style.width = `${link.offsetWidth - 28}px`
-    indicator.style.opacity = '1'
-  }
-
-  if (linksWrap && indicator) {
-    // Skip the enter animation on initial placement (and after reflows).
-    const settle = () => {
-      indicator.style.transition = 'none'
-      moveTo(activeLink)
-      void indicator.offsetWidth
-      indicator.style.transition = ''
-    }
-    settle()
-    document.fonts?.ready.then(settle)
-    window.addEventListener('resize', settle)
-
-    linksWrap.querySelectorAll<HTMLElement>('a').forEach((link) => {
-      link.addEventListener('mouseenter', () => moveTo(link))
-    })
-    linksWrap.addEventListener('mouseleave', () => moveTo(activeLink))
-  }
-</script>
+  @media (max-width: 480px) { .site-brand small { display: none; } }
+</style>

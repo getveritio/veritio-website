@@ -1,0 +1,162 @@
+---
+title: DSAR fulfillment
+description: Record a data-subject request, extract that subject's records into a filtered vevb-1 bundle, and record the delivery as evidence on the same chain.
+audience: [developer, operator, governance]
+kind: guide
+searchIntent: Record a data-subject request, build a subject-scoped filtered export bundle, and record its delivery as evidence.
+questions:
+  - How do I build a DSAR export bundle for one data subject?
+  - Why does a filtered export bundle need a filters declaration?
+  - What does a filtered bundle's verification report prove about completeness?
+  - Can a subject-scoped export bundle carry evidence commits?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/export-bundle.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/export-bundle-chain-modes.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/templates.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/export-bundle.md
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/conformance/export-bundle-filtered.json
+claimRefs: []
+---
+
+import { Code } from '@astrojs/starlight/components'
+import subjectBundleSource from '../../../../examples/dsar/subject-bundle.ts?raw'
+import subjectBundleOutput from '../../../../examples/dsar/expected/subject-bundle.txt?raw'
+
+A data-subject access request asks you to hand one person the records that concern them. A tenant hash chain is not organized that way: it interleaves every subject, so pulling one subject's records out leaves interior gaps and the extract can no longer satisfy the strict chain rule. Veritio's answer is not to relax the rule but to make the extract declare what it is, so a recipient reads a `valid` verdict for exactly what it proves.
+
+This page is evidence tooling. It does not decide whether a request is valid, who the subject is, or what you are legally obliged to disclose. Nothing here is legal advice.
+
+## The three records of one fulfillment
+
+A fulfillment produces evidence at three moments, and all three are ordinary events on the same tenant chain.
+
+```text
+1. intake      data.subject.request.created   ← the request arrived
+2. extraction  (host selects the subject's records)
+3. delivery    export.bundle.created          ← this bundle was handed over
+```
+
+Steps 1 and 3 are templated by `@veritio/core`. Step 2 is host logic — only the application knows which records concern a subject. What the SDK owns is the honesty of the container that carries them.
+
+## Recording the request
+
+`dataSubjectRequestCreatedTemplate` fixes the fields that make an intake event comparable across tenants and across time:
+
+| Field | Value |
+|---|---|
+| `action` | `data.subject.request.created` |
+| `target` | `{ type: 'subject_request', id: <subjectRequestId> }` |
+| `purpose` | `data_subject_workflow` |
+| `lawfulBasis` | `legal_obligation` |
+| `retention` | `subject_request_3y` |
+| `metadata` | `{ requestType, subjectId }`, with absent members omitted |
+
+The last three are defaults, not locks: a caller may pass `purpose`, `lawfulBasis`, or `retention` and override them. The action and target shape are the template's own and are not overridable through the input type. `retention: 'subject_request_3y'` is a named policy label carried on the record, not an instruction to any store to delete anything — see [Retention](/docs/concepts/retention/).
+
+Note what does not go in. `metadata` carries `subjectId`, a stable identifier, and `requestType` — not the requester's email, name, address, or the free text of their message. Metadata is redacted deterministically by `createAuditEvent` before canonicalization and hashing, so anything sensitive you pass is redacted in the bytes that get hashed and can never be recovered from the record. Keep personal data out of the event and reference it by id.
+
+## Why the extract needs a scope declaration
+
+Once the request event is appended, the tenant chain holds it interleaved with every other subject's records. In the worked example below, four records are appended in one tenant and only two of them concern the requesting subject:
+
+```text
+tenant chain   seq 1   seq 2   seq 3   seq 4
+               dsub_1001  dsub_2002  dsub_1001  dsub_2002
+
+subject extract  seq 1 ──────────── seq 3
+                        ▲
+                  interior gap: seq 2 was deliberately excluded
+```
+
+Fed to the strict full-chain verifier, that extract fails: sequence 3 does not follow sequence 1, and its `previousHash` points at a record the bundle does not contain. That failure is correct. The extract genuinely is not a complete chain.
+
+`chainScope` resolves this without weakening anything. It is a claim the bundle makes about itself, written into `manifest.chainScope`, hashed with the rest of the manifest and therefore covered by any signature:
+
+- **`full`** (the field absent) — every per-tenant chain starts at sequence 1 with a null `previousHash` and is gapless. Only this scope proves nothing was removed.
+- **`windowed`** — a contiguous time window. The first record per tenant may enter mid-chain; every record after it must link strictly. Interior removal is still detectable.
+- **`filtered`** — a content-filtered subset. Interior gaps are inherent, so the verifier proves per-record integrity and strictly increasing per-tenant sequences, and still enforces strict linkage wherever two records happen to be sequence-adjacent.
+
+A DSAR extract is `filtered`.
+
+## Three fail-closed rules in the builder
+
+`buildExportBundle` refuses three inconsistent inputs before it serializes anything:
+
+```text
+filters set, chainScope ≠ 'filtered'
+  → "export bundle: filters require chainScope 'filtered'"
+
+chainScope 'filtered', filters absent
+  → "export bundle: chainScope 'filtered' requires a filters declaration"
+
+chainScope ≠ 'full', commits present
+  → "export bundle: commits are not supported in a scoped bundle"
+```
+
+The first stops the worst failure mode: a bundle that quietly removed content while still advertising the strict claim. The second is the mirror image — the `filtered` claim is only meaningful when the manifest says what was filtered on, so the declaration is mandatory whenever the scope is. The third exists because commit chains are defined over the full ledger; a subset of them is not a defined object in v1, and `verifyCommitChain` always runs under the strict rule regardless of scope.
+
+`verifyExportBundle` re-checks all three from the bytes alone, because a bundle can arrive from anywhere and may never have been through this builder. An unknown `chainScope` value, or `filters` present under a non-`filtered` scope, fails the **structure** gate rather than silently falling back to `full`. Commit records inside a scoped bundle fail the **chains** gate with `commits are not supported in a scoped bundle`.
+
+## The verified example
+
+The example builds the four-record tenant chain above, extracts the two records for `dsub_1001`, builds the bundle twice — once correctly as `filtered`, once claiming the same subset is a full chain — and verifies both.
+
+<Code code={subjectBundleSource} lang="ts" title="src/examples/dsar/subject-bundle.ts" />
+
+Its checked output:
+
+<Code code={subjectBundleOutput} lang="json" title="verified output" />
+
+Reading it field by field:
+
+- **`requestEvent`** shows the template's fixed `action`, `target`, `purpose`, `lawfulBasis`, and `retention` on a real event, with metadata reduced to two identifiers.
+- **`chain.sequences` `[1,2,3,4]` versus `chain.subjectSequences` `[1,3]`** is the gap, stated numerically. The bundle carries two records whose sequences are not adjacent.
+- **`manifest.chainScope: "filtered"` with `manifest.filters: {}`** is the declaration. The filters object is present and empty on purpose: vevb-1 `filters` can express `workspaceId` and `actionPrefixes` only, and "records concerning one subject" is not either of those. The example declares presence honestly rather than inventing a field the protocol does not have. A production exporter that filters by action prefix should say so there.
+- **`manifest.files`** always lists all four required paths — the two empty record files included, with `records: 0` — because vevb-1 requires them present whether or not they hold anything.
+- **`containerRoundTrip: true`** proves serialize-then-parse preserved the manifest's binding digest, so the bundle survives being written to disk or a response body.
+- **`verification.checks`** shows the four independent gates. `signature: "absent"` is a satisfied state, not a failure: an unsigned bundle only fails when the caller passed `requireSignature`. `buildExportBundle` never signs — signing is a separate `signExportBundle` step.
+- **`verification.chainScope: "filtered"`** is the field a consumer must read before trusting `valid: true`. It travels with the verdict precisely so `valid` cannot be quoted without its claim.
+- **`sameSubsetClaimedAsFullChain`** is the same two records built with no scope declaration. `valid: false`, `chains: false`, `chainScope: "full"`, `issues: ["record chain verification failed"]`. The overclaim is caught by the verifier, not by convention.
+
+## What the filtered rule still enforces
+
+Filtered is a narrower claim, not an unchecked one. Every record in the bundle is held to the full per-record envelope rules: tenant scope present, `hashAlgorithm` `sha256`, `canonicalization` `veritio-json-v1`, and an envelope hash that recomputes byte-for-byte. Beyond that, per tenant:
+
+```text
+first record seen      seq 1 → previousHash MUST be null
+                       seq > 1 → previousHash MUST be a string
+
+sequence-adjacent      previousHash MUST equal the prior record's hash
+                       (strict linkage, same as full)
+
+across a gap           sequence MUST strictly increase
+                       previousHash MUST be a string
+```
+
+So a filtered bundle still detects an edited record, a reordered pair, a duplicated sequence, and a broken link between two records that *were* adjacent. Malformed records are caught too: the scoped walkers wrap hash recomputation and return `malformed_record` rather than throwing.
+
+## Recording the delivery
+
+The bundle leaving your system is itself a governed action, so record it. `exportBundleCreatedTemplate` fixes `action: 'export.bundle.created'`, `target: { type: 'export_bundle', id: <exportBundleId> }`, `purpose: 'data_subject_workflow'`, `lawfulBasis: 'legal_obligation'`, and `retention: 'export_1y'`, with `metadata: { format }`.
+
+Its metadata surface is deliberately one field. Bundle contents belong in the bundle, referenced from the event by stable id — and, usefully, by the manifest's `rootHash`, which binds the file set into a single digest. Passing that hash as metadata lets you later prove *which* bundle was delivered without copying subject data into the audit record.
+
+Because the delivery event is appended to the same tenant chain, the fulfillment is self-documenting: the intake event and the delivery event sit in the chain with a verifiable order between them.
+
+## What this does not prove
+
+A `valid: true` report on a filtered bundle proves that each included record is authentic, internally consistent, and in ascending order for its tenant, and that the manifest binds exactly the files present. It does not prove completeness. It cannot: the verifier has no way to know what your host-side selection predicate excluded, and `filters` describes the filter, not its correctness. If your query missed a record, verification stays green.
+
+It also does not prove the extract matches the request. Whether `dsub_1001` is the person who asked, whether their identity was checked, whether the response met a statutory deadline, and whether the disclosure was complete under any particular regime are host and organizational concerns. Veritio records that a request was created and that a bundle was produced; it does not adjudicate either.
+
+Finally, an unsigned bundle proves nothing about who produced it. `manifest.producer` is a self-declared string. Pass `requireSignature` and a public key to `verifyExportBundle` when producer authenticity matters.
+
+## Language coverage
+
+`dataSubjectRequestCreatedTemplate` and `exportBundleCreatedTemplate` exist in all three SDKs — `data_subject_request_created_template` / `export_bundle_created_template` in Python, `DataSubjectRequestCreatedTemplate` / `ExportBundleCreatedTemplate` in Go — with identical actions, targets, purposes, lawful bases, and retention labels.
+
+`buildExportBundle`, `verifyExportBundle`, `signExportBundle`, and the chain-scope verifiers are **TypeScript only**. There is no export-bundle module in the Python or Go SDKs at this revision. A DSAR flow in those languages can record both events natively, but assembling or verifying a vevb-1 bundle needs the TypeScript SDK or an independent implementation built from `spec/export-bundle.md`, which is normative, pinned by conformance fixtures, and linked from this page's `sourceRefs`.
+
+Continue with the [export format reference](/docs/reference/export-format/) for the full manifest and container contract, [Consent history](/docs/guides/consent-history/) for the records a subject request usually reaches for, and the [verifier reference](/docs/reference/verifier/) to interpret each gate and issue string. The underlying invariants are in [Hash chain](/docs/concepts/hash-chain/).

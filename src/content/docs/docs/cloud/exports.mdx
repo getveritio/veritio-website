@@ -1,0 +1,72 @@
+---
+title: Cloud exports
+description: Request and download a hosted export, inspect its declared scope, and verify the portable vevb-1 bundle independently before retention.
+audience: [operator, governance]
+kind: tutorial
+searchIntent: Request, download, and independently verify a Veritio Cloud evidence export bundle.
+questions:
+  - How do I request and download a Veritio Cloud export?
+  - What does full, windowed, or filtered chain scope prove?
+  - How do I verify a downloaded bundle offline?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['Veritio Cloud public claims · 2026-08-09', '@veritio/core@0.4.7', 'vevb-1']
+sourceRefs:
+  - https://getveritio.com/claims.json
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/export-bundle.ts
+claimRefs: [cloud-export-requests]
+---
+
+import { Code } from '@astrojs/starlight/components'
+import expectedOutput from '../../../../examples/exports/expected/build-and-verify.txt?raw'
+
+A completed Cloud job means the download surface is ready; it is not an integrity verdict. The downloaded bundle uses the public `vevb-1` format, so verify it with OSS code outside the producing service.
+
+## Request the right scope
+
+In the Cloud console, open Exports, select the intended project and available filters, and submit the request. Record the export ID, requester, project, selected filters, and request time in your operational ticket.
+
+The bundle's manifest—not the ticket or filename—is authoritative for what the file claims:
+
+- `full`: chain starts at sequence 1 and is gapless for its declared scope;
+- `windowed`: a contiguous partial window with boundary semantics;
+- `filtered`: content was intentionally excluded and filters are declared.
+
+Do not describe a valid filtered export as proof that no omitted event exists.
+
+## Wait for a terminal job state
+
+Refresh or follow the console status until it reaches a terminal success or failure. A failed job should remain an explicit failure; do not substitute an older bundle without recording that decision.
+
+Download the completed bundle to a restricted directory. Preserve the original bytes and compute an external file digest if your evidence-handling procedure requires custody tracking.
+
+## Verify outside Cloud
+
+The repository fixture builds, serializes, parses, verifies, and tampers with the same public format. Its checked result is:
+
+<Code code={expectedOutput} lang="json" title="offline verifier output" />
+
+Use `parseExportBundle(downloadedText)` followed by `verifyExportBundle(bundle, options)`. Read the whole report:
+
+| Gate | Required meaning |
+| --- | --- |
+| `structure` | Manifest and file set map exactly; required files exist |
+| `integrity` | Per-file digests, counts, and root hash recompute |
+| `chains` | Event, edge, and commit chains match their declared scope |
+| `signature` | Valid, absent, or explicitly skipped according to your policy |
+| `chainScope` | Full, windowed, or filtered proof boundary |
+
+An unsigned bundle can be structurally and cryptographically valid with `signature: "absent"`. If your policy requires producer authentication, call the verifier with `requireSignature: true` and the trusted public key; otherwise absence must not be described as a valid signature.
+
+## Retain the evidence package
+
+Store together:
+
+1. the original downloaded container;
+2. its external custody digest if used;
+3. the complete verifier report;
+4. the export request scope and requester record;
+5. the verifier package version and trusted signing-key identity, when applicable.
+
+Any `valid: false` result blocks use of the bundle as verified evidence. Retain the failure report and request a new export only after diagnosing whether the issue is download corruption, scope mismatch, a chain failure, or signature policy.
+
+Read the complete [export format](/docs/reference/export-format/) and [verifier reference](/docs/reference/verifier/) for programmatic use.

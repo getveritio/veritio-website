@@ -1,0 +1,17 @@
+{
+  "verifiedAt": "2026-08-09",
+  "upstreamRevision": "787470d77821731228dea01ba1a2044d63145130",
+  "examples": [
+    {
+      "id": "quickstart-typescript-invalid-output",
+      "language": "typescript",
+      "path": "src/examples/quickstart/typescript.ts",
+      "upstreamPath": "sdks/typescript/src/index.ts",
+      "sha256": "5ca3728003862054f0200d9bb2366b9a8676ed89fd947455767a77b0d2de633a",
+      "command": ["bun", "src/examples/quickstart/typescript.ts"],
+      "expectedOutputPath": "tests/fixtures/invalid-example-output.txt",
+      "semanticsId": "audit-event@1",
+      "routes": ["/docs/"]
+    }
+  ]
+}

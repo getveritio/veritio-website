@@ -1,0 +1,91 @@
+---
+title: Hash chain
+description: Learn how canonical JSON, per-tenant sequence numbers, previous hashes, and record hashes make changed or missing evidence detectable.
+audience: [developer, operator, governance]
+kind: concept
+searchIntent: Understand how Veritio canonical JSON and tenant-local record hashes expose tampering and gaps.
+questions:
+  - How does the Veritio hash chain work?
+  - Why are canonical JSON bytes part of verification?
+  - What can hash-chain verification prove and not prove?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7', 'veritio-json-v1']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/conformance/canonical-json.json
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/audit-record.schema.json
+claimRefs: []
+---
+
+import { Code } from '@astrojs/starlight/components'
+import tamperOutput from '../../../../examples/tutorial/expected/tamper.txt?raw'
+
+A Veritio record chain makes a later change, deletion, or reordering detectable. It does this with three separate invariants: deterministic bytes, gapless tenant-local sequence numbers, and a link to the preceding record hash.
+
+## From an object to canonical bytes
+
+Normal JSON serialization can vary when object keys were inserted in different orders. `veritio-json-v1` first normalizes the supported JSON domain and sorts object keys recursively, then serializes the result without insignificant whitespace.
+
+```text
+Host objects with different key insertion order
+                    ↓ normalizeForJson
+The same sorted JSON-compatible value
+                    ↓ JSON.stringify
+The same UTF-8 canonical byte sequence
+                    ↓ SHA-256
+The same digest
+```
+
+Undefined object properties are omitted, array holes become `null`, dates become ISO strings where SDK input permits them, and non-finite numbers fail instead of receiving an unstable representation.
+
+## What the record hash covers
+
+`hashAuditRecord` removes only the stored `hash` field and hashes the canonical JSON of everything else in the record envelope. That includes the normalized event, sequence, previous hash, algorithm labels, append time, and idempotency-key hash.
+
+For the first two records in one tenant:
+
+```text
+record 1
+  sequence: 1
+  previousHash: null
+  hash: SHA-256(canonical record 1 without its hash field)
+
+record 2
+  sequence: 2
+  previousHash: record 1.hash
+  hash: SHA-256(canonical record 2 without its hash field)
+```
+
+Each tenant has independent verifier state. Two tenants may both have sequence `1`; their records must never be joined into one tenant chain.
+
+## How verification walks the chain
+
+For each record in supplied order, `verifyAuditRecords` checks:
+
+1. `event.scope.tenantId` exists.
+2. `hashAlgorithm` is `sha256`.
+3. `canonicalization` is `veritio-json-v1`.
+4. `sequence` is exactly one greater than the last record for that tenant.
+5. `previousHash` matches the last verified hash for that tenant.
+6. The recomputed record hash matches the stored `hash`.
+
+It stops at the first failure and reports the array index plus a stable reason.
+
+## Mutation and deletion produce different evidence
+
+The executable [verification tutorial](/docs/start/verify-a-chain/) changes the second record and separately removes the first. Its checked output is:
+
+<Code code={tamperOutput} lang="json" title="verified tamper output" />
+
+Changing bytes without recomputing the envelope produces `hash_mismatch`. Starting with sequence `2` produces `sequence_mismatch`. Reordering or deleting a middle record can produce a sequence or previous-hash mismatch at the first surviving inconsistent record.
+
+## Detection is not prevention
+
+The chain does not stop someone with write access from corrupting bytes. It makes the corruption detectable when verification runs. The append boundary still needs authorization, tenant isolation, expected-tip checks, idempotency conflict rejection, backups, and operational response.
+
+A locally consistent chain can also be replaced in its entirety by an attacker controlling the whole store. Evidence commits, independently held exports, signatures where implemented, or external commitments can strengthen the ability to detect whole-history replacement.
+
+## What a valid result proves
+
+`{ "ok": true }` means the supplied records are internally consistent under the declared protocol algorithms. It does not prove that the host recorded every relevant event or that an event's original claim was truthful.
+
+Continue with [Storage overview](/docs/storage/overview/) to understand which adapters can own authoritative ordering, or use the [verifier reference](/docs/reference/verifier/) to interpret each failure.

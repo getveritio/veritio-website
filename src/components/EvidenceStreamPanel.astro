@@ -1,18 +1,14 @@
 ---
 /**
- * Pre-rendered dark evidence-stream loop for §01.
- * Remotion stays offline (remotion/); this ships static media only.
+ * Static evidence-stream reference for §01. The poster preserves the product
+ * proof without shipping media-control or viewport-observer JavaScript.
  */
 interface Props {
   caption?: string
-  pauseLabel?: string
-  playLabel?: string
 }
 
 const {
   caption = 'Evidence stream · demonstration data',
-  pauseLabel = 'Pause animation',
-  playLabel = 'Play animation',
 } = Astro.props
 ---
 
@@ -20,143 +16,16 @@ const {
   <div
     class="relative overflow-hidden rounded-[12px] border border-line-strong bg-[#09090b] shadow-[0_24px_60px_rgba(0,0,0,0.12)]"
   >
-    <!-- Poster-only on small screens / reduced motion: avoids downloading the loop. -->
     <img
       src="/media/evidence-stream-poster.jpg"
       width="720"
       height="496"
       alt=""
       decoding="async"
-      class="block h-auto w-full lg:hidden"
-      data-evidence-stream-poster
+      class="block h-auto w-full"
     />
-    <video
-      class="hidden h-auto w-full lg:block"
-      width="720"
-      height="496"
-      muted
-      playsinline
-      loop
-      preload="none"
-      poster="/media/evidence-stream-poster.jpg"
-      aria-hidden="true"
-      data-evidence-stream
-    >
-      <source src="/media/evidence-stream.mp4" type="video/mp4" />
-    </video>
-    <button
-      type="button"
-      class="absolute bottom-3 right-3 hidden items-center gap-1.5 rounded-md border border-white/15 bg-black/55 px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.08em] text-white/90 backdrop-blur-sm transition-colors hover:bg-black/70 lg:inline-flex"
-      data-evidence-stream-toggle
-      data-pause-label={pauseLabel}
-      data-play-label={playLabel}
-      hidden
-    >
-      {pauseLabel}
-    </button>
   </div>
   <figcaption class="mt-3 font-mono text-[11.5px] leading-relaxed tracking-[0.02em] text-ink-muted">
     {caption}
   </figcaption>
 </figure>
-
-<script>
-  const lg = window.matchMedia('(min-width: 1024px)')
-  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)')
-  const video = document.querySelector<HTMLVideoElement>('[data-evidence-stream]')
-  const poster = document.querySelector<HTMLImageElement>('[data-evidence-stream-poster]')
-  const toggle = document.querySelector<HTMLButtonElement>('[data-evidence-stream-toggle]')
-  let observer: IntersectionObserver | undefined
-  let userPaused = false
-
-  function setToggleLabel(playing: boolean) {
-    if (!toggle) return
-    const pauseLabel = toggle.dataset.pauseLabel ?? 'Pause animation'
-    const playLabel = toggle.dataset.playLabel ?? 'Play animation'
-    toggle.textContent = playing ? pauseLabel : playLabel
-    toggle.setAttribute('aria-pressed', playing ? 'true' : 'false')
-  }
-
-  function showPosterOnly() {
-    if (!video || !poster || !toggle) return
-    video.classList.add('hidden')
-    video.classList.remove('lg:block')
-    video.pause()
-    poster.classList.remove('lg:hidden')
-    toggle.hidden = true
-    toggle.classList.add('hidden')
-    toggle.classList.remove('lg:inline-flex')
-  }
-
-  function showVideoChrome() {
-    if (!video || !poster || !toggle) return
-    video.classList.remove('hidden')
-    video.classList.add('lg:block')
-    poster.classList.add('lg:hidden')
-    toggle.hidden = false
-    toggle.classList.remove('hidden')
-    toggle.classList.add('lg:inline-flex')
-  }
-
-  function disconnect() {
-    observer?.disconnect()
-    observer = undefined
-    video?.pause()
-  }
-
-  function armLazyPlay() {
-    disconnect()
-    if (!video || !toggle) return
-
-    if (reduce.matches || !lg.matches) {
-      showPosterOnly()
-      return
-    }
-
-    showVideoChrome()
-    setToggleLabel(false)
-
-    observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (!entry.isIntersecting) {
-            video.pause()
-            setToggleLabel(false)
-            continue
-          }
-          if (userPaused) continue
-          if (video.readyState < 2) {
-            video.load()
-          }
-          void video.play().then(() => setToggleLabel(true)).catch(() => {
-            setToggleLabel(false)
-          })
-        }
-      },
-      { threshold: 0.4 },
-    )
-    observer.observe(video)
-  }
-
-  toggle?.addEventListener('click', () => {
-    if (!video || reduce.matches || !lg.matches) return
-    if (video.paused) {
-      userPaused = false
-      void video.play().then(() => setToggleLabel(true)).catch(() => setToggleLabel(false))
-    } else {
-      userPaused = true
-      video.pause()
-      setToggleLabel(false)
-    }
-  })
-
-  armLazyPlay()
-  lg.addEventListener('change', () => {
-    userPaused = false
-    armLazyPlay()
-  })
-  reduce.addEventListener('change', () => {
-    userPaused = false
-    armLazyPlay()
-  })
-</script>

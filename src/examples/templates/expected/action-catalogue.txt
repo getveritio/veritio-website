@@ -1,0 +1,374 @@
+{
+  "auditTemplateSets": {
+    "auth": [
+      "auth.user.created",
+      "auth.session.created",
+      "auth.session.revoked",
+      "auth.password.reset.requested"
+    ],
+    "organization": [
+      "org.created",
+      "org.member.invited",
+      "org.member.joined",
+      "org.member.removed",
+      "org.member.role.changed"
+    ],
+    "data": [
+      "consent.granted",
+      "consent.revoked",
+      "data.subject.request.created",
+      "export.bundle.created",
+      "retention.policy.applied"
+    ],
+    "agent": [
+      "agent.session.started",
+      "agent.prompt.recorded",
+      "agent.tool.called"
+    ],
+    "code": [
+      "change.proposal.created",
+      "change.files.changed",
+      "review.approval.recorded",
+      "review.finding.created",
+      "review.waiver.recorded",
+      "ci.job.completed",
+      "deploy.deployed",
+      "audit.runtime.observed"
+    ]
+  },
+  "catalogue": [
+    {
+      "set": "auth",
+      "declaredActions": [
+        "auth.user.created",
+        "auth.session.created",
+        "auth.session.revoked",
+        "auth.password.reset.requested"
+      ],
+      "builders": [
+        {
+          "builder": "auditTemplates.auth.userCreated",
+          "action": "auth.user.created",
+          "actorType": "user",
+          "targetType": "user",
+          "purpose": "access_management",
+          "lawfulBasis": "contract",
+          "retention": "security_1y"
+        },
+        {
+          "builder": "auditTemplates.auth.signedIn",
+          "action": "auth.session.created",
+          "actorType": "user",
+          "targetType": "session",
+          "purpose": "access_management",
+          "lawfulBasis": "contract",
+          "retention": "security_1y"
+        },
+        {
+          "builder": "auditTemplates.auth.signedOut",
+          "action": "auth.session.revoked",
+          "actorType": "user",
+          "targetType": "session",
+          "purpose": "access_management",
+          "lawfulBasis": "contract",
+          "retention": "security_1y"
+        },
+        {
+          "builder": "auditTemplates.auth.passwordResetRequested",
+          "action": "auth.password.reset.requested",
+          "actorType": "user",
+          "targetType": "password_reset_request",
+          "purpose": "access_management",
+          "lawfulBasis": "contract",
+          "retention": "security_1y"
+        }
+      ],
+      "coverage": {
+        "declaredCount": 4,
+        "builderCount": 4,
+        "emittedMatchesDeclared": true,
+        "duplicateActions": false
+      }
+    },
+    {
+      "set": "organization",
+      "declaredActions": [
+        "org.created",
+        "org.member.invited",
+        "org.member.joined",
+        "org.member.removed",
+        "org.member.role.changed"
+      ],
+      "builders": [
+        {
+          "builder": "auditTemplates.organization.created",
+          "action": "org.created",
+          "actorType": "user",
+          "targetType": "organization",
+          "purpose": "access_management",
+          "lawfulBasis": "contract",
+          "retention": "security_1y"
+        },
+        {
+          "builder": "auditTemplates.organization.memberInvited",
+          "action": "org.member.invited",
+          "actorType": "user",
+          "targetType": "organization_invitation",
+          "purpose": "access_management",
+          "lawfulBasis": "contract",
+          "retention": "security_1y"
+        },
+        {
+          "builder": "auditTemplates.organization.memberJoined",
+          "action": "org.member.joined",
+          "actorType": "user",
+          "targetType": "organization_member",
+          "purpose": "access_management",
+          "lawfulBasis": "contract",
+          "retention": "security_1y"
+        },
+        {
+          "builder": "auditTemplates.organization.memberRemoved",
+          "action": "org.member.removed",
+          "actorType": "user",
+          "targetType": "organization_member",
+          "purpose": "access_management",
+          "lawfulBasis": "contract",
+          "retention": "security_1y"
+        },
+        {
+          "builder": "auditTemplates.organization.memberRoleChanged",
+          "action": "org.member.role.changed",
+          "actorType": "user",
+          "targetType": "organization_member",
+          "purpose": "access_management",
+          "lawfulBasis": "contract",
+          "retention": "security_1y"
+        }
+      ],
+      "coverage": {
+        "declaredCount": 5,
+        "builderCount": 5,
+        "emittedMatchesDeclared": true,
+        "duplicateActions": false
+      }
+    },
+    {
+      "set": "data",
+      "declaredActions": [
+        "consent.granted",
+        "consent.revoked",
+        "data.subject.request.created",
+        "export.bundle.created",
+        "retention.policy.applied"
+      ],
+      "builders": [
+        {
+          "builder": "auditTemplates.data.consentGranted",
+          "action": "consent.granted",
+          "actorType": "user",
+          "targetType": "consent",
+          "purpose": "consent_management",
+          "lawfulBasis": "consent",
+          "retention": "consent_7y"
+        },
+        {
+          "builder": "auditTemplates.data.consentRevoked",
+          "action": "consent.revoked",
+          "actorType": "user",
+          "targetType": "consent",
+          "purpose": "consent_management",
+          "lawfulBasis": "consent",
+          "retention": "consent_7y"
+        },
+        {
+          "builder": "auditTemplates.data.subjectRequestCreated",
+          "action": "data.subject.request.created",
+          "actorType": "user",
+          "targetType": "subject_request",
+          "purpose": "data_subject_workflow",
+          "lawfulBasis": "legal_obligation",
+          "retention": "subject_request_3y"
+        },
+        {
+          "builder": "auditTemplates.data.exportBundleCreated",
+          "action": "export.bundle.created",
+          "actorType": "user",
+          "targetType": "export_bundle",
+          "purpose": "data_subject_workflow",
+          "lawfulBasis": "legal_obligation",
+          "retention": "export_1y"
+        },
+        {
+          "builder": "auditTemplates.data.retentionPolicyApplied",
+          "action": "retention.policy.applied",
+          "actorType": "service",
+          "targetType": "policy",
+          "purpose": "retention_management",
+          "lawfulBasis": "legal_obligation",
+          "retention": "retention_audit_7y"
+        }
+      ],
+      "coverage": {
+        "declaredCount": 5,
+        "builderCount": 5,
+        "emittedMatchesDeclared": true,
+        "duplicateActions": false
+      }
+    },
+    {
+      "set": "agent",
+      "declaredActions": [
+        "agent.session.started",
+        "agent.prompt.recorded",
+        "agent.tool.called"
+      ],
+      "builders": [
+        {
+          "builder": "auditTemplates.agent.sessionStarted",
+          "action": "agent.session.started",
+          "actorType": "ai_agent",
+          "targetType": "agent_session",
+          "purpose": "change_provenance",
+          "lawfulBasis": null,
+          "retention": "security_1y"
+        },
+        {
+          "builder": "auditTemplates.agent.promptRecorded",
+          "action": "agent.prompt.recorded",
+          "actorType": "ai_agent",
+          "targetType": "agent_session",
+          "purpose": "change_provenance",
+          "lawfulBasis": null,
+          "retention": "security_1y"
+        },
+        {
+          "builder": "auditTemplates.agent.toolCalled",
+          "action": "agent.tool.called",
+          "actorType": "ai_agent",
+          "targetType": "tool_call",
+          "purpose": "change_provenance",
+          "lawfulBasis": null,
+          "retention": "security_1y"
+        }
+      ],
+      "coverage": {
+        "declaredCount": 3,
+        "builderCount": 3,
+        "emittedMatchesDeclared": true,
+        "duplicateActions": false
+      }
+    },
+    {
+      "set": "code",
+      "declaredActions": [
+        "change.proposal.created",
+        "change.files.changed",
+        "review.approval.recorded",
+        "review.finding.created",
+        "review.waiver.recorded",
+        "ci.job.completed",
+        "deploy.deployed",
+        "audit.runtime.observed"
+      ],
+      "builders": [
+        {
+          "builder": "auditTemplates.code.changeProposalCreated",
+          "action": "change.proposal.created",
+          "actorType": "ai_agent",
+          "targetType": "change_proposal",
+          "purpose": "change_provenance",
+          "lawfulBasis": null,
+          "retention": "security_1y"
+        },
+        {
+          "builder": "auditTemplates.code.filesChanged",
+          "action": "change.files.changed",
+          "actorType": "ai_agent",
+          "targetType": "source_tree",
+          "purpose": "change_provenance",
+          "lawfulBasis": null,
+          "retention": "security_1y"
+        },
+        {
+          "builder": "auditTemplates.code.reviewApprovalRecorded",
+          "action": "review.approval.recorded",
+          "actorType": "user",
+          "targetType": "pull_request",
+          "purpose": "change_provenance",
+          "lawfulBasis": null,
+          "retention": "security_1y"
+        },
+        {
+          "builder": "auditTemplates.code.reviewFindingCreated",
+          "action": "review.finding.created",
+          "actorType": "user",
+          "targetType": "pull_request",
+          "purpose": "change_provenance",
+          "lawfulBasis": null,
+          "retention": "security_1y"
+        },
+        {
+          "builder": "auditTemplates.code.reviewWaiverRecorded",
+          "action": "review.waiver.recorded",
+          "actorType": "user",
+          "targetType": "pull_request",
+          "purpose": "change_provenance",
+          "lawfulBasis": null,
+          "retention": "security_1y"
+        },
+        {
+          "builder": "auditTemplates.code.ciJobCompleted",
+          "action": "ci.job.completed",
+          "actorType": "service",
+          "targetType": "ci_run",
+          "purpose": "change_provenance",
+          "lawfulBasis": null,
+          "retention": "security_1y"
+        },
+        {
+          "builder": "auditTemplates.code.deploymentCreated",
+          "action": "deploy.deployed",
+          "actorType": "service",
+          "targetType": "deployment",
+          "purpose": "change_provenance",
+          "lawfulBasis": null,
+          "retention": "security_1y"
+        },
+        {
+          "builder": "auditTemplates.code.runtimeObserved",
+          "action": "audit.runtime.observed",
+          "actorType": "service",
+          "targetType": "runtime_event",
+          "purpose": "runtime_observation",
+          "lawfulBasis": null,
+          "retention": "security_1y"
+        }
+      ],
+      "coverage": {
+        "declaredCount": 8,
+        "builderCount": 8,
+        "emittedMatchesDeclared": true,
+        "duplicateActions": false
+      }
+    }
+  ],
+  "unregisteredBuilders": [
+    {
+      "builder": "episodeStartedTemplate",
+      "action": "activity.episode.started",
+      "actorType": "user",
+      "targetType": "activity_episode",
+      "purpose": "change_provenance",
+      "lawfulBasis": null,
+      "retention": "security_1y"
+    }
+  ],
+  "totals": {
+    "sets": 5,
+    "declaredActions": 25,
+    "registeredBuilders": 25,
+    "unregisteredBuilders": 1,
+    "everySetFullyCovered": true
+  }
+}

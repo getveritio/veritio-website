@@ -1,0 +1,56 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro'
+import Nav from '../components/Nav.astro'
+import Footer from '../components/Footer.astro'
+import CodeBlock from '../components/CodeBlock.astro'
+
+const record = `event input
+  actor · action · target · tenant
+        ↓ normalize + redact
+audit record
+  sequence · previousHash · hash
+        ↓ connect
+evidence graph
+  session → change → review → deploy
+        ↓ export
+portable bundle + verification report`
+
+const layers = [
+  ['01', 'Record', 'Turn a completed application action into a portable event with a stable actor, action, target, and tenant boundary.'],
+  ['02', 'Order', 'Append through an authoritative store that owns tenant sequence, idempotency conflicts, and chain-tip checks.'],
+  ['03', 'Connect', 'Link sessions, files, changes, reviews, builds, deployments, policies, and exports with public graph vocabulary.'],
+  ['04', 'Verify', 'Recompute canonical bytes, record hashes, chain links, bundle files, and optional signatures outside the producing app.'],
+]
+---
+
+<BaseLayout title="Veritio product — From application action to verifiable evidence" description="See how Veritio turns application actions into ordered records, evidence graphs, and independently verifiable export bundles." claimRefs={['cloud-managed-path']}>
+  <Nav />
+  <main id="main-content">
+    <section class="container border-b border-line py-16 sm:py-24">
+      <span class="eyebrow">Product · Open protocol</span>
+      <h1 class="mt-5 max-w-[13ch] text-[clamp(48px,7vw,92px)] font-medium leading-[0.98] tracking-[-0.02em]">A durable answer to “what happened?”</h1>
+      <div class="mt-10 grid gap-10 lg:grid-cols-[1fr_0.8fr] lg:items-end">
+        <p class="max-w-2xl text-xl leading-relaxed text-ink-soft">Veritio records the application events that matter, locks them into tenant-scoped order, connects them to the work around them, and gives reviewers a verifier that does not depend on a dashboard screenshot.</p>
+        <div class="flex flex-wrap gap-3"><a class="doc-btn doc-btn--solid" href="/docs/start/record-first-event/">Record an event</a><a class="doc-btn" href="/open-source/">Inspect the OSS stack</a></div>
+      </div>
+    </section>
+
+    <section class="container grid gap-10 py-16 lg:grid-cols-[0.75fr_1fr] lg:items-start">
+      <div><span class="eyebrow">The evidence path</span><h2 class="mt-4 text-[clamp(34px,5vw,58px)] font-medium leading-tight">One contract from event to export.</h2></div>
+      <CodeBlock code={record} lang="text" title="Evidence lifecycle" />
+    </section>
+
+    <section class="border-y border-line-strong bg-surface-raised"><div class="container grid sm:grid-cols-2">
+      {layers.map(([number, title, body]) => <article class="border-b border-line p-8 sm:odd:border-r lg:p-10"><span class="font-mono text-xs text-accent">{number}</span><h2 class="mt-5 text-3xl font-medium">{title}</h2><p class="mt-4 text-base leading-relaxed text-ink-soft">{body}</p></article>)}
+    </div></section>
+
+    <section class="container py-16 sm:py-24">
+      <div class="grid gap-12 lg:grid-cols-3">
+        <div><span class="eyebrow">Designed boundaries</span><h2 class="mt-4 text-4xl font-medium">Useful without lock-in.</h2></div>
+        <div><h3 class="font-mono text-sm font-semibold uppercase tracking-wider">Your application owns truth</h3><p class="mt-4 leading-relaxed text-ink-soft">Authentication, authorization, tenant resolution, and the business mutation stay in your host. Veritio records the evidence you deliberately provide.</p></div>
+        <div><h3 class="font-mono text-sm font-semibold uppercase tracking-wider">Cloud stays optional</h3><p class="mt-4 leading-relaxed text-ink-soft">Run the OSS protocol, SDKs, storage, and verifier yourself, or choose Cloud for a managed operating boundary. The event contract stays public.</p></div>
+      </div>
+    </section>
+  </main>
+  <Footer />
+</BaseLayout>

@@ -1,0 +1,157 @@
+---
+title: Cross-language parity matrix
+description: Which Veritio capabilities exist in TypeScript, Python, and Go, which are pinned by conformance fixtures, and where the three SDKs genuinely diverge.
+audience: [developer, governance]
+kind: reference
+searchIntent: Check whether a Veritio capability exists in the Python or Go SDK before porting a TypeScript workflow.
+questions:
+  - Which Veritio SDK features are TypeScript-only?
+  - Does Python or Go have verifyAuditRecords?
+  - Which cross-language behaviors are pinned by conformance fixtures?
+  - Why does the Go SDK require an explicit risk policy argument?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/index.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/python/src/veritio/__init__.py
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/go/event.go
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/go/risk.go
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/python/src/veritio/risk.py
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/provenance.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/export-bundle.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/adapters/claude-code/src/map.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/conformance/governed-action-draft.json
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/.claude/rules/02-sdk-parity.md
+claimRefs: []
+---
+
+import { Code } from '@astrojs/starlight/components'
+import riskParityPython from '../../../../examples/risk/expected/parity-python.txt?raw'
+import riskParityGo from '../../../../examples/risk/expected/parity-go.txt?raw'
+import governedDraftPython from '../../../../examples/governed/expected/action-draft-python.txt?raw'
+import governedDraftGo from '../../../../examples/governed/expected/action-draft-go.txt?raw'
+
+The Veritio event protocol is language-neutral, but the three SDKs that implement it are not equally complete. Some capabilities exist in all three and are pinned byte-for-byte by shared fixtures; some exist in one language only; and a few are present everywhere under different names or different call signatures. This page states exactly which is which at the pinned revision, so you can decide whether a workflow you prototyped in TypeScript can be ported without writing protocol code yourself.
+
+## How to read the matrix
+
+Three separate questions get conflated when people ask "is this supported in Go?". Keep them apart.
+
+```text
+1. Does the symbol exist?          → the capability matrix below
+2. Is its output byte-identical?   → the conformance-fixture table
+3. Does it have the same shape?    → the API-shape section
+```
+
+A capability can exist in all three languages and still be unpinned, which means nothing in CI would notice if one implementation drifted. It can also be pinned and still differ in call signature, return convention, or exported name — those differences are visible to your code but invisible to the hash.
+
+## Capability matrix
+
+| Capability | TypeScript | Python | Go | Pinned by fixture |
+| --- | --- | --- | --- | --- |
+| Event creation | `createAuditEvent` | `create_audit_event` | `CreateAuditEvent` | yes |
+| Canonical JSON | `canonicalJson` | `canonical_json` | `CanonicalJSON` | yes |
+| Event and record hashing | `hashAuditEvent`, `hashAuditRecord` | `hash_audit_event`, `hash_audit_record` | `HashAuditEvent`, `HashAuditRecord` | yes |
+| Idempotency-key hashing | `hashIdempotencyKey` | `hash_idempotency_key` | `HashIdempotencyKey` | yes |
+| Metadata redaction | applied inside creation | applied inside creation | applied inside creation | yes |
+| Audit templates | `templates.ts` builders | `templates.py` builders | `templates.go` builders | **no** |
+| Governed change and action drafts | `createGovernedActionDraft` | `create_governed_action_draft` | `CreateGovernedActionDraft` | yes |
+| Revision-id derivation | `governedRevisionId` | `governed_revision_id` | `GovernedRevisionID` | yes |
+| Risk scoring | `scoreRiskSignals` | `score_risk_signals` | `ScoreRiskSignals` | yes |
+| Episode rollup | `rollupEpisodeRisk` | `rollup_episode_risk` | `RollupEpisodeRisk` | yes |
+| Risk policy derivation | `riskPolicy` | `risk_policy` | `RiskPolicy` | yes |
+| `security.risk` assertions | `createSecurityRiskAssertion` | `create_security_risk_assertion` | `CreateSecurityRiskAssertion` | yes |
+| Assertion hashing | `hashAssertionRecord` | `hash_assertion_record` | `HashAssertionRecord` | yes |
+| Evidence edges | `createEvidenceEdge` | `create_evidence_edge` | `CreateEvidenceEdge` | yes |
+| Evidence commits | `createEvidenceCommit` | `create_evidence_commit` | `CreateEvidenceCommit` | yes |
+| Commit verifier | `verifyEvidenceCommits` | `verify_evidence_commits` | `VerifyEvidenceCommits` | yes |
+| Audit-record verifier | `verifyAuditRecords` | none | none | TypeScript only |
+| Edge-record verifier | `verifyEvidenceEdgeRecords` | none | none | TypeScript only |
+| Provenance recorder | `createProvenanceRecorder` | none | none | TypeScript only |
+| Export bundles (`vevb-1`) | `buildExportBundle`, `verifyExportBundle` | none | none | TypeScript only |
+| Store implementations | `MemoryAuditStore`, `@veritio/storage` | none | none | TypeScript only |
+| AI gateway | `@veritio/gateway` | none | none | TypeScript only |
+
+Everything in the last six rows is a TypeScript package boundary, not a protocol gap. A Python or Go service can still participate in a Veritio deployment by producing events and records and shipping them to a store that a TypeScript process owns — what it cannot do today is verify a chain, assemble an export bundle, or own authoritative ordering in-process.
+
+## The verifier asymmetry
+
+This is the divergence most likely to bite. Veritio has three independent chains — audit records, evidence-edge records, and evidence commits — and only one of the three verifiers exists in all three languages.
+
+```text
+audit record chain   →  verifyAuditRecords          TS only
+edge record chain    →  verifyEvidenceEdgeRecords   TS only
+commit ledger        →  verifyEvidenceCommits       TS + Python + Go
+```
+
+`verifyEvidenceCommits` is deliberately the narrowest of the three. It proves the commit ledger's internal consistency: per-stream sequence continuity, previous-hash linkage, member manifest normalization, the `veritio-merkle-v1` records root, and the commit hash. It does **not** reconcile member record hashes against independently verified records. A fabricated commit chain built over fabricated record hashes verifies clean in isolation.
+
+The Go doc comment on `VerifyEvidenceCommits` tells you to compose it with `VerifyAuditRecords` and `VerifyEvidenceEdgeRecords` for end-to-end verification. Those functions do not exist in the Go module. The advice describes the correct protocol composition, not an available Go API. Until a Go or Python record verifier ships, end-to-end verification has to run in a TypeScript process, or in your own independent implementation of the record-chain rules described in [Hash chain](/docs/concepts/hash-chain/).
+
+Treat a Go-side or Python-side `VerifyEvidenceCommits` pass as a statement about the ledger only. It is not evidence that the underlying records were unchanged.
+
+## API-shape asymmetries
+
+These do not change any hashed byte. They change the code you write.
+
+```text
+TypeScript  scoreRiskSignals(signals, policy = DEFAULT_RISK_POLICY): RiskAssessment
+Python      score_risk_signals(signals, policy=DEFAULT_RISK_POLICY) -> dict
+Go          ScoreRiskSignals(signals, policy) (RiskAssessment, error)
+```
+
+**Go requires the policy argument and returns an error.** There are no default parameters in Go, so `ScoreRiskSignals`, `RollupEpisodeRisk`, and `RiskPolicy` all take an explicit policy or options value, and all return `(value, error)` where TypeScript and Python throw or raise. Fail-closed behavior is identical; the control flow is not. A Go caller that ignores the error and prints the zero-valued assessment will document `score=0` for a signal set the SDK actually rejected — the opposite of the contract.
+
+**Go exports only `BandOf` among the scoring primitives.** `clamp01`, `round4`, and `sat` are unexported in the Go package. If you need to reproduce a per-component contribution outside `ScoreRiskSignals`, you have to reimplement those three functions in your own code.
+
+**Python's `_sat` is private.** `clamp01` and `round4` are public module-level functions in `veritio.risk`, but `_sat` is underscore-prefixed and not part of the supported surface.
+
+**Python does not re-export `clamp01` or `round4` from the package root.** They are absent from the `veritio` package's `__all__`, so `from veritio import round4` fails while `from veritio.risk import round4` works. `band_of` is re-exported from the root.
+
+**One template is named differently.** TypeScript exports `episodeStartedTemplate` and Go exports `EpisodeStartedTemplate`, but Python exports `activity_episode_started_template`. The emitted event is the same; a mechanical name translation will miss it.
+
+**Go supplies a pointer helper for optional overrides.** `Float64` exists in the Go risk-policy module purely to build the optional-float fields that TypeScript and Python express with an absent key.
+
+## What conformance fixtures pin
+
+`spec/conformance` holds the shared JSON fixtures each SDK's test suite loads and byte-compares against. At the pinned revision, eighteen fixtures are exercised by all three SDKs, covering canonical JSON, event and edge creation, redaction, every hashing surface, evidence commits, governed action drafts, revision-id derivation, risk normalization, default-policy scoring, episode rollup, frequency rules, policy temperature, and `security.risk` assertions.
+
+Two fixture families are loaded by the TypeScript suite alone, because the behavior they pin exists only there: `provenance-ids.json` and the four `export-bundle-*.json` bundles.
+
+The gap worth naming explicitly is **templates**. There is no template conformance fixture in any language. The builders exist in all three SDKs and their tests are written per-language, so nothing byte-compares the action strings, metadata defaults, or classifier stamping across TypeScript, Python, and Go. Templates are the most likely place for silent drift. If your deployment mixes languages and depends on templates producing identical events, pin the emitted events yourself in your own test suite. See [Template catalogue](/docs/reference/template-catalogue/) for the per-language builder list.
+
+## Verified scoring parity
+
+The risk parity fixtures score the same three pinned signal sets under `veritio.reference.v1` in Python and in Go, rendering every number through each language's canonical-JSON writer so the printed digits are the digits a hash would see. Both outputs are byte-identical to each other and to the TypeScript twin.
+
+<Code code={riskParityPython} lang="text" title="Python — verified output" />
+
+<Code code={riskParityGo} lang="text" title="Go — verified output" />
+
+The sparse first scenario matters: `{"operationType":"read"}` supplies none of the optional signals, so the printed `normalized` line shows the fail-closed defaults each language applies — `recoverable`, `production`, magnitude `0`. If one SDK's defaults drifted, the score on that line would move and the two files would stop agreeing.
+
+## Verified governed-draft parity
+
+`create_governed_action_draft` and `CreateGovernedActionDraft` derive the same change id, activity id, revision id, tenant-scoped idempotency seed, changed paths, state commitment, event actions, and edge relations.
+
+<Code code={governedDraftPython} lang="json" title="Python — verified output" />
+
+<Code code={governedDraftGo} lang="json" title="Go — verified output" />
+
+Every derived value matches. The only difference between the two files is the prose inside `draftIsInputOnly.note`, which names each language's own call and field spelling. That note also carries the invariant both languages share: a draft is evidence **input**, not persisted evidence. Nothing in it carries a store-assigned sequence or a record hash until you append `outboxEntry` through a conforming store inside the same transaction, as described in [Governed changes](/docs/concepts/governed-changes/).
+
+## Documented parity TODOs
+
+Two recorder-level behaviors are normative contract but currently implemented in TypeScript only. They are recorded as parity obligations in the repo's SDK parity rules, not as accidental gaps.
+
+**The capture risk-signal classifier.** `bashRiskSignals`, `fileChangeRiskSignals`, and `envCriticalityOf` in the Claude Code adapter stamp `metadata.riskSignals` *before* hashing, which makes the command-to-class mapping hash-affecting capture contract rather than an implementation detail. A Python or Go capture adapter must reproduce the patterns, the precedence order, and the unmatched-means-no-signal rule byte-identically. See [Risk signals](/docs/ai/risk-signals/).
+
+**The `sessionId` and `activityEpisodeId` stamps.** Every event a provenance session emits carries `metadata.sessionId` and `metadata.activityEpisodeId`, applied *after* caller-supplied metadata so a caller cannot shadow them. Read models depend on those keys to attribute downstream change, review, CI, deploy, and runtime events back to one session and one episode. Both keys are non-PII and must not match the redaction key pattern. Any future Python or Go provenance recorder has to apply the same post-merge stamping order.
+
+## What this matrix does and does not prove
+
+A row marked pinned means the three SDKs produced identical bytes for the fixture cases in CI at the pinned revision. It does not mean the implementations agree on inputs the fixtures do not cover, and it does not mean a capability behaves identically under error conditions — Go's error returns are a separate surface from TypeScript's thrown exceptions.
+
+A row marked "TypeScript only" is a statement about `@veritio/core@0.4.7` and its sibling packages at this revision, not a permanent protocol boundary. Check the SDK reference for your language before assuming a gap still exists.
+
+Continue with the [Python SDK reference](/docs/sdks/python/) or the [Go SDK reference](/docs/sdks/go/) for the per-language surface, or the [Verifier reference](/docs/reference/verifier/) to interpret each verification result you can actually obtain in your language.

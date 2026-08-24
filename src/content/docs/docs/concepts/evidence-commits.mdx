@@ -1,0 +1,179 @@
+---
+title: Evidence commits
+description: Bind an ordered manifest of already-persisted records into a Merkle-rooted commit, chained per stream, so batch membership becomes independently checkable.
+audience: [developer, operator, governance]
+kind: concept
+searchIntent: Bind persisted Veritio records into a Merkle-rooted evidence commit and verify the per-stream commit ledger.
+questions:
+  - What is a Veritio evidence commit?
+  - How is the veritio-merkle-v1 recordsRoot computed?
+  - What does verifyEvidenceCommits prove and what does it not prove?
+  - Which Veritio stores actually emit evidence commits?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/evidence-commit-hashing.md
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/evidence-commit.schema.json
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/conformance/evidence-commit.json
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/index.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/storage/src/file-store.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/export-bundle.ts
+claimRefs: []
+---
+
+import { Code } from '@astrojs/starlight/components'
+import merkleRootOutput from '../../../../examples/commits/expected/merkle-root.txt?raw'
+import commitTamperOutput from '../../../../examples/commits/expected/tamper.txt?raw'
+
+A record chain proves that each record is intact and that one tenant's records are gapless. It says nothing about which records were written as one unit. An evidence commit closes that gap: it is a separate record that binds an ordered manifest of already-persisted records under one Merkle root, and links to the previous commit on the same stream.
+
+## A commit references records, it never contains them
+
+A commit member is a reference, not a copy. Each member carries exactly four fields, and `createEvidenceCommit` strips anything else before hashing.
+
+```text
+member
+  index       0-based position in this commit's manifest
+  recordType  one of six physical record types
+  recordId    the record's own id (event id, edge id, …)
+  recordHash  "sha256:" + the record's stored envelope hash
+```
+
+The supported `recordType` vocabulary is fixed in v1: `audit.record`, `evidence.edge.record`, `entity.revision.record`, `activity.record`, `assertion.record`, and `change.record`. Any other value fails construction rather than being carried through as an opaque label.
+
+Two consequences follow. A commit never rewrites or re-signs the records it names — existing audit and edge envelope hashes are untouched. And a commit is only meaningful over records that already exist; the manifest is a claim about persisted bytes, not a container for them.
+
+Commit digests are algorithm-qualified strings of the form `sha256:<64 lowercase hex>`. This deliberately differs from v1 audit and edge envelope hashes, which are stored as bare 64-hex. A member's `recordHash` therefore has to be the qualified form even when the record it points at stores the bare form, which is why every projection helper writes `` `sha256:${record.hash}` ``.
+
+## From members to a commit hash
+
+```text
+audit.record   evidence.edge.record   entity.revision.record   …
+      │                 │                        │
+      └────────── already persisted and hashed ──┘
+                          │
+                          ▼
+      member {index, recordType, recordId, recordHash}
+                          │  veritio-record-leaf-v1
+                          ▼
+                     leaf hash
+                          │  veritio-merkle-v1
+                          ▼
+                     recordsRoot
+                          │  veritio-commit-v1
+                          ▼
+                     commit hash
+```
+
+Every level uses its own domain separator, so a leaf digest can never collide with a node digest or a commit digest even if the underlying bytes coincide. Canonicalization is `veritio-json-v1` throughout, the same recursively key-sorted serialization the [hash chain](/docs/concepts/hash-chain/) uses.
+
+Normalization happens before any hashing. Members are sorted by ascending `index`; after sorting, the indices must be contiguous from zero. A duplicate physical identity — the same `recordType` plus `recordId` twice — fails outright and is never silently de-duplicated. An empty manifest fails.
+
+The Merkle construction folds the ordered leaves pairwise, left to right. When a level has an odd number of hashes, the final hash is duplicated as its own right sibling — at every level, not only the leaf level.
+
+```text
+level 0    L0        L1        L2
+             \      /            \
+              \    /              \  (right sibling = itself)
+            N(L0, L1)          N(L2, L2)
+                    \          /
+                     \        /
+                    recordsRoot
+```
+
+A one-member commit's `recordsRoot` is its leaf hash unchanged. The commit hash then covers every commit field except `hash` itself — including `recordsRoot`, `recordCount`, `streamId`, `sequence`, `previousCommitHash`, the normalized members, and `committedAt`.
+
+## Streams chain independently of tenant record chains
+
+Commits chain per `streamId`. A valid stream starts at `sequence: 1` with `previousCommitHash: null`; each later commit increments the sequence by one and carries the previous commit's `hash`. Verifying one stream never reads another stream's state.
+
+```text
+stream "org_acme:production"          tenant "org_acme" record chain
+  commit 1                              record 1
+    sequence: 1                           sequence: 1
+    previousCommitHash: null              previousHash: null
+    hash: C1                              hash: R1
+  commit 2                              record 2
+    sequence: 2                           sequence: 2
+    previousCommitHash: C1                previousHash: R1
+    hash: C2                              hash: R2
+```
+
+These are two unrelated counters over the same evidence. A record's `sequence` never appears inside a commit, and a commit's `sequence` never appears inside a record. One commit may bind three records and the next commit one; the tenant chain keeps counting by one regardless.
+
+Building a commit is a projection of records the store just appended:
+
+```ts
+const commit = createEvidenceCommit({
+  commitId: 'cmt_membership_01',
+  streamId: 'org_acme:production',
+  sequence: 1,
+  previousCommitHash: null,
+  members: [...],
+  committedAt: '2026-08-09T10:05:00.000Z',
+})
+```
+
+## Member order is protocol-canonical, not caller-dependent
+
+The executable fixture hands the same three members to `createEvidenceCommit` twice, in two different array orders, and compares the results.
+
+<Code code={merkleRootOutput} lang="json" title="verified commit construction" />
+
+Read it field by field. `recordChainVerification` proves the three audit records are a real, conforming tenant chain first — the commit is built over genuine envelope hashes, not placeholder bytes. `suppliedOrder` shows the caller's shuffled array. `canonicalMemberOrder` shows what the protocol stored: sorted by `index`, contiguous from zero. `recordCount` is derived from the normalized manifest rather than trusted from input, so it cannot disagree with `members`. `orderIndependent` is the point of the fixture: a second caller passing the reversed array produced the identical `recordsRoot` and identical commit hash. `hashSelfConsistent` shows `hashEvidenceCommit` recomputing the stored hash from the canonical fields alone.
+
+## What tampering looks like
+
+The second fixture builds an honest two-commit ledger for one stream, then clones it once per tamper so no mutation leaks into the next case.
+
+<Code code={commitTamperOutput} lang="json" title="verified commit tamper output" />
+
+Each reason names a distinct structural defect:
+
+- `records_root_mismatch` — the manifest still normalizes, but the root recomputed from it no longer matches the stored `recordsRoot`. Swapping two members' `recordHash` values, exchanging their `index` fields, or overwriting the root itself all land here.
+- `record_count_mismatch` — members were dropped from the tail while `recordCount` still claims the original number.
+- `invalid_member_manifest` — normalization itself failed. Dropping a middle member leaves indices `[0, 2]`, which is not contiguous from zero. A missing or empty `streamId` fails the same way, because a commit arriving from untrusted JSON may not honor the compile-time type.
+- `hash_mismatch` — the stored hash no longer matches the recomputed one. Reversing the members array without touching the `index` fields lands here: normalization restores the canonical order, so the root still matches, but the commit as supplied hashes differently.
+- `previous_hash_mismatch` — commit 2 was re-parented onto a fabricated `previousCommitHash`. Note the reported `index` is `1`: the verifier walks in supplied order and reports the array position of the first failing commit.
+
+Verification also fails closed on `unsupported_hash_algorithm`, `unsupported_canonicalization`, and `unsupported_tree_algorithm` before any structural work, and on `sequence_mismatch` when a stream's sequence does not increment by exactly one.
+
+Construction fails earlier and harder. `createEvidenceCommit` throws on an empty `commitId` or `streamId`, a non-positive `sequence`, a `previousCommitHash` that is neither `null` nor a qualified digest, an empty manifest, a non-integer or negative `index`, an unknown `recordType`, a `recordHash` that is not a qualified digest, non-contiguous indices, and duplicate identities. None of those produce a commit with a plausible-looking hash.
+
+## What a commit does not prove
+
+The last block of the fixture is the honest limit. `verifyEvidenceCommits` proves the commit **ledger's** internal consistency: envelope algorithms, per-stream sequence and previous-hash linkage, manifest shape, Merkle root, and commit hash. It deliberately does not reconcile `member.recordHash` against the records those hashes claim to describe.
+
+So substituting one member's `recordHash` for a different record's hash and then re-committing produces `resignedSubstitution: { ok: true }` — a self-consistent ledger over a wrong manifest. Only reconciliation catches it, which is what `reconciledAgainstRecords` does: recomputing `hashAuditRecord` for each named record shows `boundToItsOwnRecord: false` on the substituted member. A fabricated commit chain over entirely fabricated record hashes verifies `ok` in isolation too.
+
+End-to-end evidence verification therefore composes the two verifiers. `FileEvidenceStore.verify()` is the reference shape:
+
+```text
+verify()
+  audit   = verifyAuditRecords(events.jsonl)
+  edges   = verifyEvidenceEdgeRecords(edges.jsonl)
+  commits = verifyEvidenceCommits(commits.jsonl)
+  ok      = audit.ok && edges.ok && commits.ok
+```
+
+Commits scope their claim to ledger atomicity — *these records were appended together, in this order, under this manifest*. They do not claim record authenticity, and they do not claim the recorded events were truthful. Atomicity here is also the store's claim about its own batch, not a host database transaction: the reference in-memory server store notes explicitly that it does not claim host transaction binding.
+
+## Streams are not tenant-scoped
+
+An `EvidenceCommit` has no scope object and no `tenantId`. The verifier partitions state by `streamId` alone. Nothing in the protocol stops one stream from binding records belonging to several tenants — and nothing in the protocol will flag it.
+
+That is a disclosure decision, not a correctness one. A commit ledger is a list of record ids that were written together. A stream spanning tenants exposes batch-membership structure across tenant boundaries: anyone permitted to read that stream learns which of tenant A's records were appended alongside tenant B's, and how the batches were shaped over time, without reading a single event payload. Keep one stream per tenant and environment. The fixtures use `org_acme:production` for exactly this reason, and a `FileEvidenceStore` directory is documented as holding exactly one tenant's chains.
+
+## Not every store has a commit path
+
+Commits are emitted by `FileEvidenceStore.recordBatch` and by the reference Node server's local store. Both take a `commitId` and `streamId`, append the batch's records, then append one commit binding them — under a lock, with replay of an existing `commitId` returning the stored commit and a conflicting manifest for the same id failing as a `commit id conflict`.
+
+The `AuditStore` interface itself has only `append` and `list`. The Postgres, Neon, MySQL, MariaDB, and Mongo stores implement that interface and nothing more: they own gapless tenant sequence and idempotency, but they have no commit table, no `recordBatch`, and no `listCommits`. A conforming `AuditStore` does not imply a commit ledger exists. See [Storage overview](/docs/storage/overview/) for which tiers are authoritative at all.
+
+## Commits are illegal in a scoped export bundle
+
+`buildExportBundle` rejects commits unless `chainScope` is `full`, throwing `export bundle: commits are not supported in a scoped bundle`. The bundle parser repeats the check so a hand-edited bundle cannot smuggle them past it.
+
+The reasoning is that a commit always verifies under the strict rule — its manifest is fixed at construction — while a scoped or filtered bundle by definition omits records. A filtered bundle carrying commits would present a clean ledger over records the recipient cannot see, which reads as a stronger claim than the bundle actually supports. Scoped commit sets are simply not defined in v1.
+
+Continue with the [evidence graph](/docs/concepts/evidence-graph/) for the edge records a commit can bind, the [hash chain](/docs/concepts/hash-chain/) for the per-record integrity a commit deliberately does not re-prove, and the [export format](/docs/reference/export-format/) for where `records/commits.jsonl` sits inside a bundle.

@@ -1,0 +1,161 @@
+---
+title: Evidence graph
+description: Connect events to sessions, files, reviews, deployments, policies, and exports with a closed vocabulary and an independently verifiable edge chain.
+audience: [developer, governance]
+kind: concept
+searchIntent: Model and verify relationships between Veritio events, entities, changes, reviews, and deployments.
+questions:
+  - What is the Veritio evidence graph?
+  - How does an evidence edge connect two entities?
+  - How is an evidence-edge chain verified and what breaks it?
+  - What does an evidence relationship prove?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7', 'edge schema 2026-06-13']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/edge.schema.json
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/edge-record.schema.json
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/index.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/conformance/edge-creation.json
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/conformance/edge-record-hashing.json
+claimRefs: []
+---
+
+import { Code } from '@astrojs/starlight/components'
+import vocabularyOutput from '../../../../examples/graph/expected/vocabulary.txt?raw'
+import chainOutput from '../../../../examples/graph/expected/edges-and-chain.txt?raw'
+
+Audit events answer "what happened?" Evidence edges answer "how are two stable things related?" Keeping those records separate prevents event metadata from becoming an unstructured graph database, and it lets a lineage graph be verified with the same rigour as an event chain rather than being trusted because it renders nicely.
+
+An edge is a first-class evidence record. It has its own schema version, its own hash, its own tenant-local sequence, and its own verifier.
+
+## One relationship
+
+`createEvidenceEdge` turns an input into a normalized edge payload. This call is taken verbatim from the checked fixture further down the page:
+
+```ts
+const edge = createEvidenceEdge({
+  id: 'edge_change_reviewed_by_owner',
+  occurredAt: '2026-08-09T10:01:00.000Z',
+  scope: { tenantId: 'org_acme', environment: 'production' },
+  from: { type: 'change', id: 'chg_subscription_sub_9f31' },
+  relation: 'reviewed_by',
+  to: { type: 'principal', id: 'usr_owner', actorType: 'user' },
+  metadata: { decision: 'approved' },
+})
+```
+
+The direction is explicit: change `chg_subscription_sub_9f31` **was reviewed by** principal `usr_owner`. Reversing `from` and `to` would make a different claim, and nothing in the protocol would flag it — direction is the author's responsibility.
+
+## Edge anatomy
+
+| Field | Meaning |
+| --- | --- |
+| `id` | Stable edge identifier. Omitting it mints `edge_<uuid>`, which is not reproducible. |
+| `schemaVersion` | Always `2026-06-13`, stamped by the SDK. Callers cannot set it. |
+| `occurredAt` | Normalized UTC instant. Omitting it stamps the current clock. |
+| `from` | The entity the directed relationship starts at |
+| `relation` | One value from the closed relation vocabulary |
+| `to` | The entity the relationship ends at |
+| `scope` | Optional tenant, workspace, and environment context |
+| `metadata` | Minimized JSON details, redacted deterministically; always present, `{}` when omitted |
+
+Both endpoints are `{ type, id }` pairs with optional qualifiers: `actorType`, `resourceType`, `version`, and `pathHash`. Those qualifiers refine the reference; they do not embed the referenced object's content. When a filesystem path matters, the path enters the graph as a `pathHash` digest and the `id` stays an opaque host identifier.
+
+`createEvidenceEdge` validates `from` and `to` against the entity vocabulary **before** it validates `relation`, so an edge that is wrong in both places reports the entity error first. That order is pinned by the fixture below, not incidental.
+
+## The vocabulary is closed
+
+Thirty-two entity types and thirty-seven relations are the only values the protocol recognises. A host application cannot invent a private relation such as `promoted_by`, or a private entity type such as `invoice`, and still get an edge back: the guard throws a `TypeError` before any edge object exists. A reader of the graph therefore never has to interpret a vocabulary term it does not hold.
+
+The fixture below prints both lists in full, in declaration order, builds one accepted edge, then attempts three edges using terms the protocol does not define. Its output is byte-compared in CI.
+
+<Code code={vocabularyOutput} lang="json" title="verified output" />
+
+Declaration order is protocol documentation rather than presentation, so a future addition or removal shows up as a byte diff instead of a silently stale page. The per-term meaning of every entity type and relation — including which direction each relation points — lives on the [entity and relation vocabulary](/docs/reference/evidence-vocabulary/) reference.
+
+## A provenance path
+
+A development workflow becomes several independently readable edges over one governed change:
+
+```text
+change chg_subscription_sub_9f31 ──part_of─────▶ activity  act_subscription_sub_9f31
+change chg_subscription_sub_9f31 ──modified────▶ file      file_billing_plan_ts (pathHash sha256:6f4b…)
+change chg_subscription_sub_9f31 ──reviewed_by─▶ principal usr_owner (actorType user)
+```
+
+A traversal can then answer which reviewed change touched which file without copying prompts, diffs, or file contents into each event. What travels is stable ids, content digests, and bounded non-PII metadata.
+
+## Two hashes, one of which is verified
+
+Edges have two distinct digests, and conflating them is the most common misreading of this layer.
+
+```text
+edge payload    { id, schemaVersion, occurredAt, from, relation, to, metadata, scope }
+                  │
+                  ├─ hashEvidenceEdge(edge, previousHash)
+                  │     SHA-256(canonical { edge, previousHash })
+                  │     the cross-language link pinned by conformance fixtures
+                  │
+record envelope { edge, sequence, previousHash, hashAlgorithm,
+                  canonicalization, appendedAt, idempotencyKeyHash }
+                  │
+                  └─ hashEvidenceEdgeRecord(record)
+                        SHA-256(canonical envelope, stored `hash` excluded)
+                        what a store persists and what the verifier checks
+```
+
+The envelope hash commits to the edge **and** to `sequence`, `previousHash`, `appendedAt`, and `idempotencyKeyHash`. Reordering or re-stamping a stored edge is therefore detectable, not just editing its payload. `verifyEvidenceEdgeRecords` checks the envelope hash; it never recomputes `hashEvidenceEdge`.
+
+Audit-record and edge-record chains stay separate. An edge does not alter audit-event semantics, and a framework adapter cannot add private relation values to the protocol.
+
+## The chain rule
+
+A tenant's edge chain starts at sequence `1` with `previousHash: null`. Each later record's `previousHash` is the previous record's envelope hash:
+
+```text
+seq 1   previousHash null        hash 30d530bb…
+seq 2   previousHash 30d530bb…   hash 1a02ea70…
+seq 3   previousHash 1a02ea70…   hash 022988fd…
+```
+
+`@veritio/core` ships no edge store, and `@veritio/storage` implements `AuditStore` only. The chain rule, not a storage engine, is the protocol: the host supplies the `recordEdge` sink. The fixture below therefore chains the records the way `MemoryAuditStore` chains audit records, with the envelope hash as the tip.
+
+## A verified chain, then a broken one
+
+The fixture builds the three lineage edges, chains them, verifies the chain, then changes one metadata value in the second edge — `changedPathCount` from `2` to `1` — while leaving the stored envelope hash exactly as the chain wrote it.
+
+<Code code={chainOutput} lang="json" title="verified output" />
+
+Three things in that output are worth reading closely. `edgeHashDiffersFromRecordHash` is `true` on every record, which is the two-digest distinction made concrete. `linksToPreviousRecordHash` is `true`, confirming the chain links envelope hash to envelope hash rather than edge hash to edge hash. And the tamper result is not a vague failure: it is `{ ok: false, index: 1, reason: "hash_mismatch" }`, with the stored hash `1a02ea70…` and the recomputed hash `59f3a2a9…` printed side by side.
+
+One metadata integer changed. The digest is unrelated to the original. That is the property the whole layer rests on.
+
+## How verification walks an edge chain
+
+For each record in supplied order, `verifyEvidenceEdgeRecords` checks:
+
+1. `edge.scope.tenantId` exists — otherwise `missing_tenant_scope`.
+2. `hashAlgorithm` is `sha256` — otherwise `unsupported_hash_algorithm`.
+3. `canonicalization` is `veritio-json-v1` — otherwise `unsupported_canonicalization`.
+4. `sequence` is exactly one greater than the last record for that tenant — otherwise `sequence_mismatch`.
+5. `previousHash` matches the last verified hash for that tenant — otherwise `previous_hash_mismatch`.
+6. The recomputed envelope hash matches the stored `hash` — otherwise `hash_mismatch`.
+
+It stops at the first failure and reports the array index plus a stable reason. Verifier state is per tenant: two tenants may both hold sequence `1`, and their records must never be joined into one chain. The [verifier reference](/docs/reference/verifier/) covers every reason code.
+
+## Where edges come from in practice
+
+Few applications call `createEvidenceEdge` in a loop by hand. Two producers emit edges as part of a larger flow:
+
+- `createGovernedActionDraft` returns an `edges` array of `EvidenceEdgeInput` alongside its events and outbox entry, so a mutation boundary emits the change lineage in the same unit of work as the change itself.
+- The provenance recorder's session methods emit connecting edges per recorded step, and `session.link(from, relation, to, metadata, occurredAt)` adds an explicit one. The recorder performs no cross-sink transaction: a host that needs an event and its edges to commit together must wrap both sinks in one transaction, or an edge-sink failure leaves a committed event with missing edges.
+
+## What a relationship does not prove
+
+An edge is still a recorded claim, and verification proves that the claim has not changed since it was written — not that it was true when it was written.
+
+`reviewed_by` does not prove the reviewer examined every byte. `deployed_as` does not prove the deployment was healthy. `satisfies_policy` records an evaluation result; it is not a legal conclusion. A verified edge chain supports compliance evidence about what your systems recorded; it does not establish legal compliance on its own.
+
+A chain that verifies also says nothing about completeness. Edges that were never written leave no gap to detect, because the sequence counts what was appended, not what should have been. Capture the producing system and the supporting events when a stronger interpretation is needed, and bind the persisted records into an [evidence commit](/docs/concepts/evidence-commits/) when whole-history replacement is part of your threat model.
+
+Read [Agent events](/docs/ai/agent-events/) for a concrete capture model that emits these edges, or [Export format](/docs/reference/export-format/) for the layer that carries them off the host.

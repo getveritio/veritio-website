@@ -1,0 +1,177 @@
+---
+title: Express
+description: Record verifiable Veritio evidence from Express route handlers using only public core APIs, because no Express adapter package is published yet.
+audience: [developer]
+kind: guide
+searchIntent: Wire Veritio evidence into Express route handlers when no published Express adapter package exists.
+questions:
+  - Is there a published @veritio/express package I can install?
+  - Where should I create the Veritio recorder in an Express app?
+  - How do I stop a request from choosing its own tenantId?
+  - What happens if the evidence append fails after the database write?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/adapters/express/package.json
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/adapters/express/README.md
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/docs/templates/typescript-api-route.md
+claimRefs: []
+---
+
+import { Code } from '@astrojs/starlight/components'
+import boundaryOutput from '../../../../examples/adapters/expected/server-boundary.txt?raw'
+
+There is no `@veritio/express` package on npm. An Express application that needs verifiable evidence today writes the boundary itself, against `@veritio/core`, in about thirty lines. This page describes that boundary, the two invariants it must hold, and the failure window it leaves open.
+
+## What exists at the verified revision
+
+The `adapters/express` directory in the Veritio repository contains exactly two files: a `package.json` and a `README.md`. There is no `src` directory, no build output, and no test suite. The manifest is marked `"private": true`, which excludes it from publication, and it declares peer dependencies on `express` and `@veritio/core` for an implementation that does not exist yet. The README states an intent — "request middleware and route-level event capture" — not an API.
+
+So `bun add @veritio/express` fails, and no version of it has ever resolved. Nothing on this page imports it.
+
+That is less of a gap than it sounds. The adapter layer in Veritio is deliberately thin: adapters translate a framework's request object into a recorder call and own nothing else. Everything an Express adapter would eventually do, a host can do directly, because the recorder contract is the public part.
+
+## The boundary an adapter would sit on
+
+The fixture below is the adapter boundary contract, executed against `@veritio/core` alone with no adapter package installed. It is the same contract every published Veritio adapter is written against, which is why it stands in for the Express one.
+
+<Code code={boundaryOutput} lang="json" title="verified output" />
+
+Four facts in that output shape the Express code that follows.
+
+`contextKeys` is `["principal", "recorder", "scope"]`. Those three values — a configured recorder, the tenant scope, and the authenticated principal — are the entire surface that crosses from a host into adapter code. Nothing else is needed, so nothing else should be passed.
+
+`recorderMethods` is `["record"]`, and both `recorderExposesStore` and `recorderCanListOtherChains` are `false`. A recorder can append to a chain. It cannot read one, and it cannot reconfigure storage. A route handler holding a recorder therefore has no path to another tenant's evidence, even if it tries.
+
+`credentialShapedKeysCrossing` is empty while `serverOnlyConfigKeys` still lists seven credential names. The connection string, the archive keys, and the ingest key are inputs to the store constructor and to nothing downstream. The recorder closes over the store; the store closes over the credentials.
+
+`forwardedHeaderStored` is `"[redacted]"`. The fixture deliberately forwards a raw `Authorization` header into metadata, which is the realistic leak in an Express app that spreads `req.headers` into an event. `createAuditEvent` redacts sensitive keys before canonical JSON and before hashing, so the token never reaches the record or the digest. Redaction is a backstop, not a licence — see [Redaction](/docs/concepts/redaction/) for the key pattern.
+
+## Create the recorder once, at the composition root
+
+Install the one dependency that exists:
+
+```sh
+bun add @veritio/core@0.4.7 express
+```
+
+The recorder belongs in the module that already assembles your server — the same place that reads configuration and constructs the database pool. Core reads no environment variables and no framework globals, by design, so this is the only file where storage configuration appears.
+
+```ts
+// server/evidence.ts
+import { createAuditRecorder, MemoryAuditStore } from '@veritio/core'
+
+export const recorder = createAuditRecorder({
+  store: new MemoryAuditStore(),
+})
+```
+
+`MemoryAuditStore` keeps a local example runnable. It is not durable and is not an authoritative store. Before production, replace it with a conforming `AuditStore` — see [Storage overview](/docs/storage/overview/) and [Postgres](/docs/storage/postgres/) — and leave the rest of this page unchanged, because the recorder contract does not vary by driver.
+
+Inject the recorder rather than importing it deep in the route tree. In Express that usually means a factory:
+
+```ts
+// server/routes/entries.ts
+import { Router } from 'express'
+import type { AuditRecorder } from '@veritio/core'
+
+export function createEntriesRouter(deps: {
+  recorder: AuditRecorder
+  createEntry: (input: unknown, tenantId: string) => Promise<{ id: string }>
+}): Router {
+  const router = Router()
+  // routes below
+  return router
+}
+```
+
+The injection is not ceremony. It is what lets a test hand the router a recorder backed by `MemoryAuditStore` and assert on the resulting chain without touching a database.
+
+## Record after an authorized mutation
+
+```ts
+router.post('/entries', async (req, res) => {
+  const session = req.session
+  if (!session?.organizationId) {
+    return res.status(401).json({ error: 'unauthorized' })
+  }
+
+  const entry = await deps.createEntry(req.body, session.organizationId)
+
+  const record = await deps.recorder.record(
+    {
+      actor: { type: 'user', id: session.userId },
+      action: 'entry.created',
+      target: { type: 'entry', id: entry.id },
+      scope: {
+        tenantId: session.organizationId,
+        environment: 'production',
+      },
+      requestId: req.get('x-request-id'),
+      purpose: 'service_delivery',
+      retention: 'operational_1y',
+      metadata: { source: 'api' },
+    },
+    { idempotencyKey: `entry.created:${entry.id}` },
+  )
+
+  res.status(201).json({ entry, evidenceSequence: record.sequence })
+})
+```
+
+`req.session` stands in for whatever middleware already authenticated the request and resolved organization membership. Veritio does not authenticate anything. It records what your authorization layer already decided.
+
+Two details carry weight. `scope.tenantId` is read from the session, never from the body or a header. And `idempotencyKey` is derived from the entity that was just created, so it is stable across a client retry of the same logical change.
+
+## The request must never choose its own tenant
+
+`tenantId` is the isolation boundary for the entire chain. Sequence numbers are tenant-local, `previousHash` links are tenant-local, and `hashIdempotencyKey` mixes the tenant id into the key hash so one tenant's idempotency keys cannot collide with another's. If a request can supply its own `tenantId`, all three of those guarantees become attacker-controlled.
+
+```text
+trusted path        session → scope.tenantId → chain selection
+untrusted input     req.body, req.query, req.params, req.headers
+                    ↓
+                    never reaches scope.tenantId
+```
+
+Core fails closed rather than guessing: appending an event whose `scope.tenantId` is missing or blank throws `scope.tenantId is required`. That is a last defence against a forgotten scope, not a substitute for deriving the tenant from the session. A request that supplies a valid-looking foreign `tenantId` passes that check and writes to the wrong chain.
+
+The same reasoning applies to `actor`. Take the actor id from the authenticated session, not from a client-supplied field, or the evidence records an attribution the server never verified.
+
+## The failure window this leaves open
+
+The handler above writes the row, then records the evidence. Those are two operations against two systems, and the process can die between them.
+
+```text
+create row  ──✓── evidence append ──✓──  consistent
+create row  ──✓── evidence append ──✗──  row exists, no evidence
+create row  ──✗──                        neither exists (safe)
+```
+
+The middle line is the real one. A crashed process, a lost database connection, or a storage timeout after the row commits leaves a change with no evidence, and nothing in the chain reveals the omission: hash-chain verification proves that the records you have are intact and unreordered, not that every change produced a record. Missing evidence is exactly the failure verification cannot see.
+
+Whether that matters is a decision about the operation, not a global setting. For low-stakes activity logging, record-after-write is acceptable and you accept the window. For governed create, update, and delete actions — anything a reviewer would later be asked to account for — the coupling must be recoverable, which means the evidence intent has to commit atomically with the business row.
+
+That is what the transactional outbox is for. `createGovernedActionDraft` produces an `outboxEntry` alongside the change; you insert it in the same database transaction as the row, and a bounded worker drains it afterwards using `createPostgresOutboxAdapter` and `createOutboxDispatcher` from `@veritio/storage`. The transaction makes the pairing atomic; the dispatcher makes delivery retryable. The full wiring is in [Transactional outbox](/docs/guides/transactional-outbox/) and the change shape in [Governed actions](/docs/guides/governed-actions/).
+
+One rule holds in both designs: do not report success to the client for an append that failed. A rejected `record` call — a missing tenant scope, an `idempotency conflict`, a stale `expectedPreviousHash` — is a real error. In Express 5 a rejected promise returned from an async handler propagates to your error-handling middleware; make sure that middleware does not convert an evidence failure into a `201`.
+
+## Verification cases
+
+A working integration is not proven by the happy path alone. Exercise all four.
+
+**Authorized mutation.** An authenticated member creates an entry. The response carries an `evidenceSequence`, and listing the tenant's records shows exactly one new record whose `event.action`, `actor.id`, and `target.id` match the row that was written.
+
+**Unauthenticated request.** The request is rejected before the mutation. Assert on absence in both systems: no business row, and no new record in the tenant chain. A handler that records an attempt before checking authorization will fail this test, which is the point of writing it.
+
+**Cross-tenant attempt.** Send a request carrying another organization's id in the body, a query parameter, and a header, authenticated as a member of the first organization. The record that lands must be scoped to the session's tenant. Then list the second tenant's chain and confirm it is unchanged. Testing only the first half misses a handler that writes to both.
+
+**Replay.** Submit the same logical request twice under one idempotency key. The second call returns the original record — same `sequence`, same `hash` — and adds no new link to the chain. Then submit a different payload under the same key and confirm it throws `idempotency conflict` rather than silently overwriting or forking. Both halves matter: the first proves retries are safe, the second proves keys are not being reused across distinct changes.
+
+Run those against a real store before trusting the integration. `MemoryAuditStore` reproduces the sequence, idempotency, and chain semantics faithfully, but a passing suite against it proves the handler logic, not the durability of the store you ship.
+
+## Next
+
+- [TypeScript SDK](/docs/sdks/typescript/) for the full recorder and store contract.
+- [Transactional outbox](/docs/guides/transactional-outbox/) when the write and the evidence must commit together.
+- [Hash chain](/docs/concepts/hash-chain/) for what verification does and does not prove about the records above.

@@ -1,0 +1,102 @@
+{
+  "draft": {
+    "changeId": "chg_invoice_inv_123_bdb81c726b6eb5cc",
+    "activityId": "act_invoice_inv_123_bdb81c726b6eb5cc",
+    "entityId": "inv_123",
+    "revisionId": "rev_invoice_inv_123_5bd31df6f81c_9d1ee3ed",
+    "changedPaths": [
+      "/status"
+    ],
+    "stateDigest": "sha256:5bd31df6f81c5771276d1ad838a083f08715e90c1e4ca8d4faddae729280ed07",
+    "stateCommitmentFields": {
+      "amountCents": 48000,
+      "currency": "USD",
+      "customerEmail": {
+        "captureMode": "content_digest",
+        "digest": "sha256:e0bc5fb4b660ccb9376b5658539849d9d3e30f3cd147196de2ac6172f33e1013"
+      },
+      "id": "inv_123",
+      "status": "paid"
+    }
+  },
+  "outboxEntry": {
+    "schemaVersion": "2026-06-23",
+    "mutationBinding": "same_transaction",
+    "recordCount": 3,
+    "edgeCount": 4
+  },
+  "queueBefore": [
+    {
+      "id": "outbox_chg_invoice_inv_123_bdb81c726b6eb5cc",
+      "tenantId": "org_acme",
+      "status": "pending",
+      "payloadBytes": 5969
+    }
+  ],
+  "payloadContainsRawEmail": false,
+  "appliedInvoiceStatus": "paid",
+  "queueAfter": [
+    {
+      "id": "outbox_chg_invoice_inv_123_bdb81c726b6eb5cc",
+      "tenantId": "org_acme",
+      "status": "dispatched"
+    }
+  ],
+  "recordedEvents": [
+    {
+      "sequence": 1,
+      "action": "change.declared",
+      "targetType": "change"
+    },
+    {
+      "sequence": 2,
+      "action": "activity.recorded",
+      "targetType": "activity"
+    },
+    {
+      "sequence": 3,
+      "action": "entity.revision.created",
+      "targetType": "invoice"
+    }
+  ],
+  "recordedEdges": [
+    {
+      "sequence": 1,
+      "relation": "has_activity",
+      "from": "change",
+      "to": "activity"
+    },
+    {
+      "sequence": 2,
+      "relation": "has_output",
+      "from": "change",
+      "to": "revision"
+    },
+    {
+      "sequence": 3,
+      "relation": "performed_by",
+      "from": "activity",
+      "to": "principal"
+    },
+    {
+      "sequence": 4,
+      "relation": "generated",
+      "from": "activity",
+      "to": "revision"
+    }
+  ],
+  "replay": {
+    "eventsAfterFirstDrain": 3,
+    "eventsAfterReplay": 3,
+    "edgesAfterFirstDrain": 4,
+    "edgesAfterReplay": 4
+  },
+  "verification": {
+    "audit": {
+      "ok": true
+    },
+    "edges": {
+      "ok": true
+    }
+  }
+}

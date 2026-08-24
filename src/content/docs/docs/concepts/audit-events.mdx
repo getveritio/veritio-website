@@ -1,0 +1,119 @@
+---
+title: Audit events
+description: Understand the portable event body, the storage-owned record envelope, and why a canonical template and a hand-built event produce the same hash.
+audience: [developer, governance]
+kind: concept
+searchIntent: Understand the difference between a Veritio audit event input and its stored audit-record envelope.
+questions:
+  - What fields make up a Veritio audit event?
+  - What is the difference between an AuditEvent and an AuditRecord?
+  - Which fields are assigned by storage?
+  - Should I use an audit template or hand-write the action string?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7', 'schema 2026-06-10']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/event.schema.json
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/audit-record.schema.json
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/index.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/templates.ts
+claimRefs: []
+---
+
+import { Code } from '@astrojs/starlight/components'
+import parityOutput from '../../../../examples/templates/expected/signed-in-parity.txt?raw'
+
+An audit event is the application claim: who or what acted, what action occurred, which resource it concerned, and when it happened. An audit record is the storage envelope that makes the event's position and bytes verifiable. They are deliberately different objects, produced by different owners, at different times.
+
+```text
+host inputs
+     ↓  auditTemplates.<set>.<builder>     optional, canonical action strings
+AuditEventInput                            plain object, no side effects
+     ↓  createAuditEvent                   id, schemaVersion, UTC, redaction
+AuditEvent                                 the portable claim
+     ↓  AuditStore.append                  sequence, previousHash, hash
+AuditRecord                                the storage envelope
+```
+
+Only the middle step is required. The template layer above it is optional and hash-neutral; the record layer below it belongs to an authoritative store and must never be forged by the application.
+
+## The action string is the field that ages badly
+
+Every other field on an event is either an identifier the host already owns or a classification it already has a policy for. `action` is the one field a developer invents, and inventing it twice is the failure mode. One service records `user.login`, another records `auth.login.success`, a third records `session_created`. All three pass validation, all three hash correctly, and none of them join in a query.
+
+`@veritio/core@0.4.7` ships **26 template builders** to remove that decision from application code. Twenty-five are reachable through the `auditTemplates` registry and advertised as action strings by `auditTemplateSets`, grouped into five sets — `auth`, `organization`, `data`, `agent`, and `code`. A twenty-sixth, `episodeStartedTemplate`, builds `activity.episode.started` and is deliberately kept out of the sets.
+
+A template is an input builder, not a recorder. It returns an `AuditEventInput` — the same plain object you would have typed — carrying one canonical action string, one target resource type, and evidence defaults for `purpose`, `lawfulBasis`, and `retention`. It does not hash, sequence, store, or redact. Those happen in `createAuditEvent` and the store, exactly as they do for a hand-built event.
+
+Templates are the canonical-action path. Read [Audit templates](/docs/guides/audit-templates/) for precedence rules and the raw-content guard on the agent and code sets, and the [template catalogue](/docs/reference/template-catalogue/) for the builder-to-action mapping.
+
+## A template adds nothing you cannot see
+
+The strongest claim a template can make is that it is pure convenience. The checked fixture below builds one `auth.session.created` event twice: once through `authSessionCreatedTemplate`, once by writing out every field the template would have chosen. Both paths run through `createAuditEvent` with a pinned `id` and `occurredAt`, so any hidden default, silent field, or extra metadata key would move the digest.
+
+<Code code={parityOutput} lang="json" title="verified template parity output" />
+
+`canonicalJsonIdentical: true` is the load-bearing line. Two objects can look identical in a pretty-printer and still serialize differently; this compares the `veritio-json-v1` bytes that hashing actually consumes. `templateHash` and `handBuiltHash` are then the same SHA-256 digest.
+
+Three consequences follow. Adopting a template does not invalidate history recorded by hand. Migrating a hand-built call site to a template does not change what the recorded event means. And a template can never quietly widen an event, because whatever it returns is subject to the same constructor and the same fixture.
+
+Note also that the `securityContext` keys arrive sorted (`ipAddressHash`, `location`, `method`, `provider`, `userAgentHash`) even though the fixture writes them in a different order. That sorting is `createAuditEvent`'s work, not the template's, and it applies to hand-built metadata too.
+
+## Hand-building an event
+
+Hand-build when no template covers the action — a domain-specific action such as `billing.subscription.canceled` has no builder and should not be forced into one. The host supplies stable identifiers from authenticated server context rather than using display names or email addresses as identity.
+
+```json
+{
+  "id": "evt_subscription_canceled_01",
+  "occurredAt": "2026-08-09T10:00:00.000Z",
+  "actor": { "type": "user", "id": "usr_123" },
+  "action": "billing.subscription.canceled",
+  "target": { "type": "subscription", "id": "sub_9f2" },
+  "scope": { "tenantId": "org_acme", "environment": "production" },
+  "requestId": "req_7c1",
+  "purpose": "contract_administration",
+  "lawfulBasis": "contract",
+  "retention": "finance_7y",
+  "metadata": { "reason": "customer_request" }
+}
+```
+
+`purpose` and `retention` are free-form host labels, not a closed protocol vocabulary. `retention` names a policy; it does not schedule deletion. `lawfulBasis` is closed: `consent`, `contract`, `legal_obligation`, `vital_interests`, `public_task`, `legitimate_interests`, or `not_applicable`.
+
+`createAuditEvent` normalizes that input. It generates `id` as `evt_` plus a UUID when the host did not supply one, stamps `schemaVersion`, converts `occurredAt` to a UTC ISO string, drops empty `scope` sub-fields and omits `scope` entirely if nothing survives, sorts and de-duplicates `dataCategories` when present, drops `display` from actor and target when absent, and applies deterministic metadata redaction.
+
+The normalized result carries `metadata` as a required object — an event with no metadata gets `{}`, never a missing key.
+
+## The record envelope
+
+An authoritative store wraps the normalized event with fields the application must not invent:
+
+| Record field | Assigned by | Why it exists |
+| --- | --- | --- |
+| `sequence` | Authoritative store | Gapless append order inside one tenant chain |
+| `previousHash` | Authoritative store | Link to the preceding record, or `null` at sequence 1 |
+| `hash` | Authoritative store | SHA-256 over canonical record fields except `hash` itself |
+| `hashAlgorithm` | Protocol/store | Currently `sha256` |
+| `canonicalization` | Protocol/store | Currently `veritio-json-v1` |
+| `appendedAt` | Authoritative store | Time the store accepted the event |
+| `idempotencyKeyHash` | Authoritative store | Tenant-bound digest used for safe replay detection |
+
+The event's `occurredAt` and the record's `appendedAt` answer different questions. A delayed job can record an event that occurred earlier; both timestamps stay visible and both enter the hash.
+
+`idempotencyKeyHash` is `SHA-256(tenantId + NUL + idempotencyKey)`, defaulting the key to the event `id`. Because the tenant is bound into the digest, two tenants reusing the same application-level key cannot collide. A replay with the same key and byte-identical canonical event returns the original record; a replay with the same key and different bytes fails closed as an idempotency conflict rather than appending a second version of the same claim.
+
+## Rejected before append
+
+`createAuditEvent` throws a `TypeError` on an empty or non-string `actor.id`, `actor.type`, `action`, `target.id`, or `target.type`, and on an `occurredAt` that does not parse. It also rejects action names outside dotted lowercase form: the pattern requires at least two dot-separated segments, each starting with a lowercase letter and continuing with lowercase letters or digits. `Order.Created`, `user_login`, and `billing` are all rejected; `billing.subscription.canceled` is accepted.
+
+Metadata is coerced rather than rejected. Nested object keys are sorted, `undefined` object properties are dropped, `Date` values become ISO strings, and values that are not JSON-representable fall back to their string form. The one hard failure is a non-finite number, which throws instead of receiving an unstable representation. Keys matching the sensitive-name pattern — `password`, `secret`, `token`, `api_key`, `authorization`, `email`, `phone`, `ssn` — have their values replaced with `"[redacted]"`, recursively and at any depth. See [Deterministic redaction](/docs/concepts/redaction/) before allowing arbitrary metadata.
+
+An event may omit `scope` at the protocol level, but an `AuditStore` append requires a non-empty `scope.tenantId`. That is what prevents storage from creating an unowned global chain. The store also accepts an optional `expectedPreviousHash` and rejects the append when the tenant chain tip has moved, which is how a caller detects a concurrent writer instead of silently interleaving.
+
+## What an event does not establish
+
+An event is evidence supplied by the host. It does not prove the actor was authorized, that the real-world claim was true, or that a `lawfulBasis` label was legally correct. Authentication, authorization, tenant resolution, and governance decisions must happen before recording. Veritio supports compliance evidence; it does not settle the legal question.
+
+The record envelope raises the bar but not the subject. A valid chain proves the recorded bytes are internally consistent and correctly ordered within one tenant — it says nothing about events the host chose not to record.
+
+Use the [complete event schema](/docs/reference/event-schema/) when defining producers, reach for a [template](/docs/guides/audit-templates/) before writing a new action string, and read [Hash chain](/docs/concepts/hash-chain/) to see what the record envelope makes detectable.

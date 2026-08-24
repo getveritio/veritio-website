@@ -1,0 +1,63 @@
+---
+title: Verify a hash chain
+description: Recompute record hashes, sequence numbers, and previous-hash links, then understand the exact failure returned for a changed or missing record.
+audience: [developer, operator, governance]
+kind: tutorial
+searchIntent: Verify a Veritio audit-record chain and diagnose changed, missing, or reordered evidence.
+questions:
+  - How do I verify a Veritio hash chain?
+  - What error appears when an audit record is modified?
+  - Can Veritio detect a deleted or reordered record?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/index.ts
+  - https://github.com/getveritio/veritio/tree/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/examples/verify-tamper-detection
+claimRefs: []
+sidebar:
+  order: 4
+---
+
+import { Aside, Code } from '@astrojs/starlight/components'
+import example from '../../../../examples/tutorial/tamper.ts?raw'
+import expectedOutput from '../../../../examples/tutorial/expected/tamper.txt?raw'
+
+Start with the two intact records from [Record your first audit event](/docs/start/record-first-event/). This exercise changes a copied record and removes another one; it never mutates the store.
+
+## Run the failure exercise
+
+<Code code={example} lang="ts" title="src/examples/tutorial/tamper.ts" />
+
+```sh
+bun src/examples/tutorial/tamper.ts
+```
+
+The checked fixture prints:
+
+<Code code={expectedOutput} lang="json" title="verified output" />
+
+## Tampering detected
+
+The first result changes `metadata.role` from `viewer` to `admin` without recomputing the stored record hash. Verification stops at array index `1` with `hash_mismatch` because the current canonical record bytes no longer produce the stored hash.
+
+This is not a warning. A consumer must treat the record set as unverified and investigate the source, transport, or storage boundary that supplied it.
+
+## Dropped record detected
+
+The second result removes sequence `1`. The remaining record still says it is sequence `2`, so verification stops at array index `0` with `sequence_mismatch`.
+
+Removing a record from the middle of a longer chain can instead surface a sequence or previous-hash mismatch at the next surviving record. The first returned failure identifies the earliest inconsistency the verifier can prove.
+
+## Checks performed in order
+
+For each ordered record, the verifier checks the supported algorithms and canonicalization label, tenant scope, expected gapless sequence, expected previous hash, and recomputed record hash. It returns `{ ok: true }` only when every supplied record passes.
+
+<Aside type="caution" title="Verify the right artifact">
+  A filtered list is not automatically a complete chain. Use an export whose manifest declares its chain scope when you intentionally verify a subset. Never turn a failed result into warning-only success.
+</Aside>
+
+## What verification cannot prove
+
+Integrity verification proves consistency of the supplied record bytes and links. It cannot prove that the application reported a truthful real-world event, that the actor was authorized, or that an omitted chain was never created elsewhere. Those remain application, identity, and operational trust questions.
+
+Continue with the [byte-level hash-chain explanation](/docs/concepts/hash-chain/) or use the [verifier error reference](/docs/reference/verifier/).

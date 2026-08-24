@@ -16,7 +16,7 @@ import { alternatives, lastReviewed } from '../../data/alternatives'
 >
   <Nav />
 
-  <main>
+  <main id="main-content">
     <section>
       <div class="container">
         <div class="border-b border-line py-3 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-muted">
@@ -40,7 +40,7 @@ import { alternatives, lastReviewed } from '../../data/alternatives'
       <div class="flex flex-col">
         {alternatives.map((alt) => (
           <a
-            href={`/alternatives/${alt.slug}`}
+            href={`/alternatives/${alt.slug}/`}
             class="group flex flex-col gap-6 border-b border-line py-8 no-underline first:border-t sm:flex-row sm:items-center"
           >
             {alt.image && (

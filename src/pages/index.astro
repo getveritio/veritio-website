@@ -17,25 +17,7 @@ import EvidenceStreamPanel from '../components/EvidenceStreamPanel.astro'
 import { Image } from 'astro:assets'
 import consoleShot from '../assets/console-dashboard.png'
 import episodeShot from '../assets/episode-canvas.png'
-
-const quickstartCode = `import { MemoryAuditStore, createAuditEvent } from "@veritio/core";
-
-const store = new MemoryAuditStore();
-
-const event = createAuditEvent({
-  id: "evt_01",
-  occurredAt: "2026-06-10T00:00:00.000Z",
-  actor: { type: "user", id: "usr_123" },
-  action: "org.member.invited",
-  target: { type: "organization", id: "org_123" },
-  scope: { tenantId: "org_123", environment: "production" },
-  purpose: "access_management",
-  lawfulBasis: "contract",
-  retention: "security_1y",
-  metadata: { inviteId: "inv_123", role: "viewer" },
-});
-
-await store.append(event);`
+import quickstartCode from '../examples/quickstart/typescript.ts?raw'
 
 /**
  * Record #4 from the hero episode (the production table drop), shaped exactly
@@ -136,7 +118,7 @@ verifyAuditRecords(gapped);
 
 /** What ships in the open packages — the 04 · Get started manifest. */
 const manifest = [
-  { label: 'SDKs', value: '@veritio/core (TypeScript) · veritio (Python) · Go' },
+  { label: 'SDKs', value: '@veritio/core 0.4.7 · source-backed Python and Go SDKs' },
   { label: 'Adapters', value: 'Better Auth, Next.js, TanStack Start, SvelteKit · UI intent helpers for React, Vue, Svelte' },
   { label: 'Storage', value: 'PostgreSQL/Neon, MySQL, MariaDB, MongoDB · Redis tip cache' },
   { label: 'Schemas', value: 'Audit events, evidence graph edges, export bundle format' },
@@ -148,7 +130,7 @@ const cloudMailto = 'mailto:hello@getveritio.com?subject=Veritio%20Cloud'
 const cloudRegister = 'https://console.getveritio.com/register'
 
 const cloudPoints = [
-  'Managed ingest and durable retention',
+  'Managed projects and ingest',
   'A shared evidence graph across services',
   'Exports and verification on demand',
   'Team access and operational support',
@@ -164,10 +146,11 @@ const headlineStyle =
 <BaseLayout
   title="Veritio — Evidence Graph for Audit Trails, AI Changes, and Governance"
   description="Open-source evidence layer to record, connect, verify, and export application events, code changes, agent sessions, deployments, consent history, and retention decisions. Optional managed vault."
+  claimRefs={['cloud-managed-path', 'cloud-projects-keys-ingest', 'cloud-export-requests']}
 >
   <Nav />
 
-  <main>
+  <main id="main-content">
     <!-- COVER -->
     <section>
       <div class="container">
@@ -196,7 +179,7 @@ const headlineStyle =
             >
               View on GitHub ↗
             </a>
-            <a href="/examples" class="doc-btn">See examples</a>
+            <a href="/examples/" class="doc-btn">See examples</a>
           </div>
         </div>
       </div>
@@ -216,6 +199,7 @@ const headlineStyle =
             sizes="(min-width: 1600px) 1520px, calc(100vw - 32px)"
             quality={90}
             loading="eager"
+            fetchpriority="high"
             class="block h-full w-full object-cover object-top"
           />
         </div>
@@ -375,7 +359,7 @@ const headlineStyle =
                   >
                     View on GitHub ↗
                   </a>
-                  <a href="/examples" class="doc-btn">See examples</a>
+                  <a href="/examples/" class="doc-btn">See examples</a>
                 </div>
               </div>
             </div>
@@ -396,7 +380,7 @@ const headlineStyle =
               <circle cx="56" cy="56" r="52" fill="none" stroke="#f6f3ea" stroke-width="1.5"></circle>
               <circle cx="56" cy="56" r="42" fill="none" stroke="#f6f3ea" stroke-width="0.75"></circle>
               <text
-                font-family='"IBM Plex Mono", monospace'
+                font-family='"Geist Mono Variable", monospace'
                 font-size="9.5"
                 letter-spacing="1.4"
                 fill="#f6f3ea"
@@ -410,10 +394,10 @@ const headlineStyle =
             </h2>
             <p class="mt-5 max-w-[54ch] text-[17px] leading-relaxed text-surface/85">
               Veritio Cloud is the managed way to run the same open protocol: we
-              operate ingest, storage, retention, and exports — you keep evidence
-              that anyone can verify without trusting us. The open-source path
-              always works on its own; Cloud is for teams that would rather buy
-              the operations than staff them.
+              operate project-scoped ingest, evidence storage, and export
+              requests. Exported records remain independently checkable with the
+              open verifier. The open-source path always works on its own; Cloud
+              is for teams that would rather buy the operations than staff them.
             </p>
             <div class="mt-8 flex flex-wrap items-center gap-4">
               <a
@@ -426,7 +410,7 @@ const headlineStyle =
                 Create an account ↗
               </a>
               <a
-                href="/pricing"
+                href="/pricing/"
                 class="font-mono text-[13px] font-medium uppercase tracking-[0.08em] text-surface/85 no-underline hover:text-surface"
               >
                 See pricing →

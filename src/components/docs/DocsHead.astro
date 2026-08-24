@@ -1,0 +1,103 @@
+---
+import StarlightHead from '@astrojs/starlight/components/Head.astro'
+import geistNormalUrl from '@fontsource-variable/geist/files/geist-latin-wght-normal.woff2?url'
+import { UMAMI_SCRIPT_URL, UMAMI_WEBSITE_ID } from '../../config/analytics'
+import ConsentScript from '../ConsentScript.astro'
+
+const data = Astro.locals.starlightRoute.entry.data
+const canonicalPath = Astro.url.pathname === '/' ? '/' : `${Astro.url.pathname.replace(/\/$/, '')}/`
+const canonical = new URL(canonicalPath, Astro.site).href
+const markdownPath = canonicalPath === '/docs/' ? '/docs.md' : `${canonicalPath.replace(/\/$/, '')}.md`
+const segments = canonicalPath.split('/').filter(Boolean)
+const group = segments[1]
+const groupLabels: Record<string, string> = {
+  start: 'Start Here',
+  concepts: 'Core Concepts',
+  sdks: 'SDKs & Tools',
+  frameworks: 'Frameworks',
+  storage: 'Storage & Self-hosting',
+  ai: 'AI & Agents',
+  cloud: 'Veritio Cloud',
+  reference: 'Reference',
+}
+const questions = 'questions' in data && Array.isArray(data.questions) ? data.questions : []
+const audience = 'audience' in data && Array.isArray(data.audience) ? data.audience : []
+const sourceRefs = 'sourceRefs' in data && Array.isArray(data.sourceRefs) ? data.sourceRefs : []
+const searchIntent = 'searchIntent' in data && typeof data.searchIntent === 'string' ? data.searchIntent : undefined
+const modified = 'lastUpdated' in data && data.lastUpdated instanceof Date
+  ? data.lastUpdated.toISOString().slice(0, 10)
+  : undefined
+const breadcrumbItems = [
+  { name: 'Documentation', item: new URL('/docs/', Astro.site).href },
+  ...(group && groupLabels[group]
+    ? [{ name: groupLabels[group], item: new URL(`/docs/${group}/`, Astro.site).href }]
+    : []),
+  ...(canonicalPath !== '/docs/' ? [{ name: data.title, item: canonical }] : []),
+].map((item, index) => ({
+  '@type': 'ListItem',
+  position: index + 1,
+  ...item,
+}))
+const jsonLd = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    '@id': 'https://getveritio.com/#organization',
+    name: 'Veritio',
+    url: 'https://getveritio.com/',
+    logo: new URL('/favicon.svg', Astro.site).href,
+    sameAs: ['https://github.com/getveritio'],
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    '@id': 'https://getveritio.com/#website',
+    name: 'Veritio',
+    url: 'https://getveritio.com/',
+    publisher: { '@id': 'https://getveritio.com/#organization' },
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'TechArticle',
+    '@id': `${canonical}#article`,
+    headline: data.title,
+    description: data.description,
+    mainEntityOfPage: canonical,
+    url: canonical,
+    inLanguage: 'en',
+    ...(modified ? { dateModified: modified } : {}),
+    ...(searchIntent ? { keywords: searchIntent } : {}),
+    ...(questions.length > 0 ? { about: questions } : {}),
+    ...(audience.length > 0
+      ? { audience: audience.map((name) => ({ '@type': 'Audience', audienceType: name })) }
+      : {}),
+    ...(sourceRefs.length > 0 ? { citation: sourceRefs } : {}),
+    author: { '@type': 'Organization', '@id': 'https://getveritio.com/#organization', name: 'Veritio' },
+    publisher: { '@type': 'Organization', '@id': 'https://getveritio.com/#organization', name: 'Veritio' },
+    isPartOf: { '@type': 'WebSite', '@id': 'https://getveritio.com/#website', name: 'Veritio' },
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: breadcrumbItems,
+  },
+]
+---
+
+<StarlightHead />
+<script is:inline type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+<link rel="alternate" type="text/markdown" href={new URL(markdownPath, Astro.site).href} title={`${data.title} as Markdown`} />
+<link rel="alternate" type="text/plain" href={new URL('/llms.txt', Astro.site).href} title="Veritio agent overview" />
+<link rel="alternate" type="application/json" href={new URL('/agent-index.json', Astro.site).href} title="Veritio documentation index" />
+<link rel="preload" href={geistNormalUrl} as="font" type="font/woff2" crossorigin="anonymous" />
+<ConsentScript />
+<script is:inline defer src={UMAMI_SCRIPT_URL} data-website-id={UMAMI_WEBSITE_ID}></script>
+<script is:inline>
+  /** Keeps horizontally scrollable code reachable in Safari's keyboard order. */
+  function makeCodeScrollableByKeyboard() {
+    document.querySelectorAll('pre').forEach((block) => block.setAttribute('tabindex', '0'))
+  }
+  document.addEventListener('astro:page-load', makeCodeScrollableByKeyboard)
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', makeCodeScrollableByKeyboard)
+  else makeCodeScrollableByKeyboard()
+</script>

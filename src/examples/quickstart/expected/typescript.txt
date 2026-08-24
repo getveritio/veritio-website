@@ -1,0 +1,7 @@
+{
+  sequence: 1,
+  verification: {
+    ok: true,
+  },
+  hashPrefix: "3c1eb99f7a8f",
+}

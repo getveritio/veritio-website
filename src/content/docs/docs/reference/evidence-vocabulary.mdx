@@ -1,0 +1,205 @@
+---
+title: Entity and relation vocabulary
+description: The complete closed list of 32 evidence entity types and 37 edge relations, their direction semantics, entity qualifiers, and the known schema drift.
+audience: [developer, governance]
+kind: reference
+searchIntent: Look up every closed Veritio evidence entity type and edge relation and its exact direction meaning.
+questions:
+  - What are all the Veritio evidence graph entity types?
+  - Can I add my own evidence edge relation?
+  - Which direction does an evidence edge relation point?
+  - Why is activity_episode missing from edge.schema.json?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/index.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/edge.schema.json
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/edge-record.schema.json
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/python/src/veritio/event.py
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/go/event.go
+claimRefs: []
+---
+
+import { Code } from '@astrojs/starlight/components'
+import vocabularyOutput from '../../../../examples/graph/expected/vocabulary.txt?raw'
+
+A graph is only readable by someone who did not write it if both endpoints of every edge draw from a list they already hold. Veritio therefore fixes two vocabularies in the protocol: 32 entity types and 37 edge relations. This page prints both in full, states what each value means, and shows what happens to a value outside them.
+
+## The vocabularies, printed from the shipped package
+
+The checked fixture below imports `EVIDENCE_ENTITY_TYPES` and `EVIDENCE_EDGE_RELATIONS` from `@veritio/core` 0.4.7, prints them verbatim in declaration order, builds one accepted edge, and then attempts three edges that use terms the protocol does not define. Its output is byte-compared in CI, so a vocabulary change in a future release breaks the build rather than silently outdating this page.
+
+<Code code={vocabularyOutput} lang="json" title="verified output" />
+
+Declaration order is part of the reference, not presentation. The array is `as const`, so the order is stable across releases and can be relied on when diffing two versions of the vocabulary.
+
+## Entity types
+
+An entity reference is a `{ type, id }` pair plus optional qualifiers. The `id` is an opaque host identifier; the `type` tells a reader what kind of thing the id names.
+
+| Entity type | What the node represents |
+| --- | --- |
+| `tenant` | The isolation boundary that owns a chain. Every record already carries `scope.tenantId`; the node exists for edges that talk *about* a tenant. |
+| `principal` | An identified acting party — a user, service, system, or AI agent — refined by `actorType`. |
+| `actor` | An acting party recorded without a resolved principal identity. |
+| `activity` | One unit of work inside a change: the doing, separated from the resulting state. |
+| `change` | A governed change: the container that groups an activity with the revision it produced. |
+| `revision` | One committed state version of a governed entity. |
+| `assertion` | A recorded claim about something else, such as a `security.risk` assertion. |
+| `record` | An individual persisted audit record, referenced as a graph node. |
+| `evidence_commit` | A Merkle-rooted commit binding a set of already-persisted records. |
+| `data_subject` | The natural person a privacy workflow is about, referenced by stable id. |
+| `resource` | A generic host-application object, refined by `resourceType`. |
+| `data_category` | A named class of data (for example a contact-details category), not a value of that data. |
+| `purpose` | A declared processing purpose that activities and consents attach to. |
+| `policy` | A named rule set a deployment, change, or activity is evaluated against. |
+| `consent` | One consent state instance for a subject, purpose, and basis. |
+| `processor` | A party that processes data on the tenant's behalf. |
+| `system` | A non-human system participating in the graph. |
+| `repository` | A source repository. |
+| `branch` | A named line of development inside a repository. |
+| `commit` | A source-control commit. |
+| `pull_request` | A proposed, reviewable set of changes. |
+| `file` | A file identified by a `pathHash`, never by a raw path. |
+| `diff_hunk` | One contiguous fragment of a change, keyed by its content hash. |
+| `agent_session` | One AI-agent working session that emitted evidence. |
+| `activity_episode` | A durable grouping of steps that belong to one episode of work, used for risk rollup. |
+| `tool_call` | One invocation of a tool by an agent or system. |
+| `ci_run` | One continuous-integration execution. |
+| `artifact` | A produced build output, referenced by id and usually a digest in metadata. |
+| `deployment` | One release of an artifact into an environment. |
+| `runtime_event` | Something observed in production after deployment. |
+| `subject_request` | A data-subject request such as an access or erasure request. |
+| `export_bundle` | A produced evidence export bundle. |
+
+## Edge relations
+
+Every relation is directed. `from` is the subject of the sentence and `to` is its object, so reversing the endpoints makes a different claim rather than an equivalent one.
+
+| Relation | `from` → `to` reads as |
+| --- | --- |
+| `caused_by` | the source was caused by the target |
+| `part_of` | the source is a component of the target |
+| `read` | the source read the target |
+| `modified` | the source changed the target |
+| `created` | the source brought the target into existence |
+| `deleted` | the source removed the target |
+| `derived_from` | the source was produced from the target |
+| `reviewed_by` | the source was reviewed by the target |
+| `approved_by` | the source was approved by the target |
+| `waived_by` | a required review of the source was waived by the target |
+| `built_by` | the source was built by the target |
+| `deployed_as` | the source went out as the target deployment |
+| `observed_in` | the source was observed in the target |
+| `attests_to` | the source attests to the target |
+| `exports` | the source export contains the target |
+| `satisfies_policy` | the source was evaluated as satisfying the target policy |
+| `violates_policy` | the source was evaluated as violating the target policy |
+| `subject_of` | the source concerns the target data subject |
+| `processed_for` | the source was processed for the target purpose |
+| `retained_under` | the source is retained under the target policy |
+| `sent_to` | the source was transmitted to the target |
+| `has_activity` | the source change contains the target activity |
+| `has_input` | the source consumed the target as input |
+| `has_output` | the source produced the target as output |
+| `has_assertion` | the source carries the target assertion |
+| `resulted_in` | the source led to the target outcome |
+| `performed_by` | the source activity was performed by the target |
+| `used` | the source used the target |
+| `generated` | the source generated the target |
+| `based_on` | the source was based on the target |
+| `asserts_about` | the source assertion is about the target |
+| `retracts` | the source withdraws the target |
+| `corrects` | the source fixes an error in the target |
+| `supersedes` | the source replaces the target |
+| `disputes` | the source contests the target |
+| `confirms` | the source independently supports the target |
+| `compensates` | the source is a compensating action for the target |
+
+The last seven relations are the correction vocabulary. Records are append-only, so a wrong record is never edited; a later record is appended and linked with `retracts`, `corrects`, `supersedes`, `disputes`, `confirms`, or `compensates`. That is what keeps the correction itself auditable.
+
+Eighteen relations are emitted today by shipped builders in the TypeScript provenance recorder and governed-change draft — for example `has_activity` and `performed_by` from `createGovernedActionDraft`, `built_by` and `deployed_as` and `observed_in` from the CI, deploy, and runtime recorders. The other nineteen are valid protocol vocabulary that no shipped helper emits yet. A host application constructs those edges itself with `createEvidenceEdge`; the guard accepts them because they are in the vocabulary, not because a builder exists.
+
+## Both vocabularies are closed
+
+`createEvidenceEdge` validates against these lists before it returns anything. The fixture output above pins the exact behaviour: an unknown relation throws `TypeError: relation must be a supported evidence graph relation`, an unknown entity type throws `TypeError: from.type must be a supported evidence graph entity type`, and no edge object is created in either case.
+
+```text
+createEvidenceEdge(input)
+  ↓ cleanEvidenceEntity(input.from)   → throws first on an unknown from.type
+  ↓ cleanEvidenceEntity(input.to)
+  ↓ isEvidenceEdgeRelation(relation)  → throws on an unknown relation
+  ↓ redactMetadata, normalize occurredAt, stamp schemaVersion
+EvidenceEdge
+```
+
+Endpoint validation runs before relation validation, so an edge that is wrong in both places reports the entity error. The third probe in the fixture proves that ordering.
+
+Closed means closed for everyone. A framework adapter cannot register a private relation, and neither can a hosted product: validation lives in `@veritio/core`, upstream of every adapter and every store, and the edge is hashed only after it has passed. There is no registration hook and no permissive mode. The practical consequence is that a reader of an exported chain never encounters a relation whose meaning is defined only inside the system that wrote it.
+
+Host-specific meaning belongs in `metadata` instead. The accepted edge in the fixture carries `{ "reviewDecision": "approved" }` alongside the protocol relation `reviewed_by` — the relation stays interpretable everywhere, and the local detail rides in the redacted metadata object.
+
+## Entity qualifiers
+
+Four optional fields refine an entity reference without embedding the referenced object.
+
+| Qualifier | Type | Purpose |
+| --- | --- | --- |
+| `actorType` | `user` \| `service` \| `system` \| `ai_agent` | Narrows a `principal` or `actor` node to the kind of party it is. |
+| `resourceType` | string | Names the host-application type behind a generic `resource` node. |
+| `version` | string | Pins which version of the entity the edge refers to. |
+| `pathHash` | string | Identifies a `file` node without disclosing its path. |
+
+`cleanEvidenceEntity` copies only `type`, `id`, and these four fields onto the stored entity. Any other property a caller attaches is dropped before the edge is hashed, so a private field cannot change the canonical bytes and cannot leak into an export.
+
+`pathHash` exists because a filesystem path is often itself sensitive: it can carry a customer name, a ticket number, an internal project codename, or a home directory. The Claude Code adapter never puts a raw path into evidence. It computes `sha256:<hex>` over the UTF-8 path, uses that as the entity's `pathHash`, and derives the entity id from the first 16 hex characters of the same digest as `f_<16 hex>`:
+
+```text
+"/srv/acme/apps/billing/invoice.ts"
+        ↓ sha256, prefixed
+pathHash "sha256:9f2c…"           → the qualifier on the file entity
+        ↓ strip prefix, first 16 hex
+id       "f_9f2c…"                → the node id used across every edge
+```
+
+Both are deterministic and one-way. Two edges touching the same file agree on the node without either edge revealing where the file lives. A host that holds the original path can confirm a match by hashing it again; a reader who does not cannot recover the path from the digest.
+
+## The export surface differs by language
+
+`EVIDENCE_ENTITY_TYPES` and `EVIDENCE_EDGE_RELATIONS` are public exports in TypeScript only. `@veritio/core` ships them as `readonly` const tuples and derives `EvidenceEntityType` and `EvidenceEdgeRelation` from them, so TypeScript callers get compile-time narrowing *and* can enumerate the vocabulary at runtime — which is exactly what the fixture on this page does.
+
+Python and Go hold the same values privately. The Python SDK stores them as module-private sets `_EVIDENCE_ENTITY_TYPES` and `_EVIDENCE_EDGE_RELATIONS`, absent from `__all__`. The Go module stores them as unexported `map[string]struct{}` values. Both enforce identical membership and raise or return the same fail-closed messages, but neither offers a supported way to list the vocabulary. Python and Go code that needs the list must copy it from this page or the spec, and both hold it as an unordered set, so the declaration order shown above is a TypeScript and spec property rather than a cross-language one.
+
+## Known drift: `activity_episode`
+
+All three SDKs accept `activity_episode` as an entity type — it is the twenty-fifth value in the printed list, it is present in the Python set and the Go map, and the TypeScript test suite asserts its presence. `spec/edge.schema.json` has not been updated: its entity enum still holds 31 values and omits `activity_episode`.
+
+The observable consequence is a split verdict on one specific edge shape:
+
+```text
+edge with an activity_episode endpoint
+  ├─ createEvidenceEdge / create_evidence_edge / CreateEvidenceEdge → accepted
+  └─ JSON Schema validation against edge.schema.json               → rejected
+```
+
+Nothing else is affected. Chain hashing, sequence checking, and `verifyEvidenceEdgeRecords` do not consult the enum, so an existing chain containing such an edge still verifies. `activity_episode` also appears as the `target.type` of the `activity.episode.started` audit template, and that path is unaffected because audit-event targets are free-form strings rather than enum-validated entity references.
+
+Until the schema is republished, treat 32 as the SDK count and 31 as the schema count, and avoid `activity_episode` as an edge endpoint if any consumer in your pipeline validates edges against the published schema. Prefer carrying the episode id as `metadata.activityEpisodeId`, which is how the provenance recorder already groups a session's events.
+
+## The gate is at write time, not at verify time
+
+Vocabulary membership is enforced exactly once, in `createEvidenceEdge`, before the edge is hashed. `verifyEvidenceEdgeRecords` never consults either list. It checks tenant scope, `hashAlgorithm`, `canonicalization`, the per-tenant sequence, `previousHash`, and the recomputed envelope hash — and nothing about `from.type`, `relation`, or `to.type`.
+
+That placement is deliberate, and it has two consequences worth planning around.
+
+The first is that verification stays a pure integrity question. A chain written under one release still verifies under a later one even if the vocabulary changed in between, because the verifier is not comparing recorded terms against the vocabulary the verifying binary happens to ship. An evidence store does not become unverifiable because a term was added.
+
+The second is that an edge whose bytes were assembled outside the SDK — hand-written JSON, or a store populated by a service that skipped `createEvidenceEdge` — can carry an unknown relation and still verify cleanly. The chain proves the bytes have not changed since they were appended, not that they passed the vocabulary guard. If you accept edge records from a boundary you do not control, validate them against `spec/edge.schema.json` on ingest; the hash chain will not do it for you.
+
+## What membership does and does not prove
+
+A relation drawn from this list proves that the writer chose a term with a defined, language-neutral meaning, and that the term survived validation before the edge was hashed. It proves nothing about whether the claim is true. `reviewed_by` does not show that a reviewer read the diff; `satisfies_policy` records an evaluation result, not a legal conclusion; `attests_to` is a recorded assertion whose weight depends entirely on who produced it and under what controls.
+
+The vocabulary is what makes those claims comparable across systems and auditable after the fact. Interpreting them still requires the producing system, the surrounding events, and the chain verification that shows the edge has not changed since it was written.
+
+Continue with [Evidence graph](/docs/concepts/evidence-graph/) for how edges are chained and verified, [Activity episodes](/docs/concepts/activity-episodes/) for what `activity_episode` groups, or the [parity matrix](/docs/reference/parity-matrix/) for which SDK exposes which surface.

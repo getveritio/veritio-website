@@ -1,39 +1,47 @@
 # Veritio
 
 > Veritio is a protocol-first, open-source evidence layer for application audit
-> trails: hash-chained events, AI-agent session capture, deterministic risk
-> scoring, and signed export bundles (vevb-1) that anyone can verify offline.
-> Veritio Cloud is the optional managed service on the same open protocol.
-> Veritio supports compliance evidence; it does not make an organization
-> compliant and is not legal advice.
+> events, hash-linked records, evidence graphs, and independently verifiable
+> export bundles. Veritio Cloud is a separate optional managed path. Veritio
+> supports evidence workflows; it is not legal advice or automatic compliance.
 
-Key facts: every event is locked into a gapless, hash-chained per-tenant
-sequence; the TypeScript, Python, and Go SDKs implement one language-neutral
-protocol with byte-identical hashing and risk scores; export bundles verify
-offline without a Veritio account; tenant data lives in the region chosen at
-signup (EU jurisdiction, US, or APAC). Veritio Cloud plans: Pro $29/mo,
-Team $99/mo, Compliance $499/mo, Enterprise custom — self-hosting the
-open-source stack is free.
+The TypeScript, Python, and Go SDKs share language-neutral event semantics,
+canonical JSON, hashing, and deterministic redaction. The OSS path does not
+require a hosted account, hosted project, hosted key, or proprietary storage.
 
 ## Documentation
 
-- [Documentation hub](https://getveritio.com/docs/): Cloud onboarding, agent capture, SDKs, self-hosting, pricing
-- [Cloud getting started](https://getveritio.com/docs/cloud-getting-started/): sign-up, region choice, API keys, first events, verifiable export
-- [Connect Claude Code & Codex](https://getveritio.com/docs/connect-agents/): tamper-evident audit trail for AI coding sessions, hosted MCP to query it back
+- [Documentation overview](https://getveritio.com/docs/)
+- [Record your first event](https://getveritio.com/docs/start/record-first-event/)
+- [Hash chain](https://getveritio.com/docs/concepts/hash-chain/)
+- [Redaction](https://getveritio.com/docs/concepts/redaction/)
+- [Storage and self-hosting](https://getveritio.com/docs/storage/overview/)
+- [Agent events](https://getveritio.com/docs/ai/agent-events/)
+- [Veritio Cloud overview](https://getveritio.com/docs/cloud/overview/)
+- [Reference](https://getveritio.com/docs/reference/event-schema/)
+
+Every documentation page also has a static Markdown representation at the
+same path without the trailing slash and with `.md` appended.
+
+## Agent discovery
+
+- [Structured documentation index](https://getveritio.com/agent-index.json)
+- [Bounded full documentation corpus](https://getveritio.com/llms-full.txt)
+
+HTML routes are canonical. The Markdown, JSON, and full-text files are generated
+from the same verified content for retrieval and citation; their presence does
+not guarantee selection, citation, or ranking by any search or agent system.
 
 ## Product
 
-- [Veritio Cloud](https://getveritio.com/cloud/): the hosted evidence layer — managed ingest, regional storage, signed exports
-- [Pricing](https://getveritio.com/pricing/): plan rate table, allowances, overage, and what ships on every plan
-- [Examples](https://getveritio.com/examples/): copy-pasteable SDK examples, no hosted account required
+- [Product](https://getveritio.com/product/)
+- [Open source](https://getveritio.com/open-source/)
+- [Veritio Cloud](https://getveritio.com/cloud/)
+- [Pricing catalog](https://getveritio.com/pricing/)
+- [Examples](https://getveritio.com/examples/)
+- [Changelog](https://getveritio.com/changelog/)
 
-## Open source
+## Source
 
-- [GitHub — getveritio](https://github.com/getveritio): protocol spec, SDKs, storage conformance, verifier
-
-## Legal
-
-- [Terms](https://getveritio.com/legal/terms/)
-- [Privacy](https://getveritio.com/legal/privacy/)
-- [Data Processing Agreement](https://getveritio.com/legal/dpa/)
-- [Imprint](https://getveritio.com/legal/imprint/)
+- [Veritio OSS](https://github.com/getveritio/veritio)
+- [Website](https://github.com/getveritio/veritio-website)

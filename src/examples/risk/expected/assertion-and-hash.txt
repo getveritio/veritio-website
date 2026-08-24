@@ -1,0 +1,272 @@
+{
+  "assertion": {
+    "recordType": "assertion.recorded",
+    "schemaVersion": "2026-06-23",
+    "recordAuthority": "veritio",
+    "id": "asr_risk_sub_9f31_01",
+    "type": "security.risk",
+    "scope": {
+      "tenantId": "org_acme",
+      "environment": "production"
+    },
+    "occurredAt": "2026-08-09T10:00:00.000Z",
+    "producer": {
+      "authority": "veritio.detectors",
+      "kind": "principal",
+      "type": "service",
+      "id": "svc_risk_detector"
+    },
+    "idempotencyKeyHash": "ec759d4cdacbcf8341d5e8fb83d19453503bd756c6661a8b56799ad0318cbfbc",
+    "subject": {
+      "authority": "acme-billing",
+      "kind": "change",
+      "type": "subscription",
+      "id": "chg_subscription_sub_9f31_4d21c0"
+    },
+    "conclusion": {
+      "score": 1,
+      "level": "critical",
+      "policyVersion": "veritio.reference.v1",
+      "assessment": "step"
+    },
+    "factors": [
+      {
+        "key": "operationType",
+        "value": "destructive",
+        "kind": "base",
+        "weight": 1,
+        "contribution": 0.85
+      },
+      {
+        "key": "dataVolume",
+        "value": 4200,
+        "kind": "additive",
+        "weight": 0.5,
+        "contribution": 0.1953
+      },
+      {
+        "key": "fanOut",
+        "value": 6,
+        "kind": "additive",
+        "weight": 0.3,
+        "contribution": 0.0232
+      },
+      {
+        "key": "referenceCount",
+        "value": 18,
+        "kind": "additive",
+        "weight": 0.2,
+        "contribution": 0.0212
+      },
+      {
+        "key": "reversibility",
+        "value": "irreversible",
+        "kind": "multiplier",
+        "weight": 1.3,
+        "contribution": 1.3
+      },
+      {
+        "key": "envCriticality",
+        "value": "production",
+        "kind": "multiplier",
+        "weight": 1,
+        "contribution": 1
+      }
+    ]
+  },
+  "assertionHash": "412d24652fbef6090751f71fb61bb5012a91b0b6109f82d7fe35d5815aef1c91",
+  "assessedEvent": {
+    "id": "evt_risk_assessed_01",
+    "schemaVersion": "2026-06-10",
+    "occurredAt": "2026-08-09T10:00:00.000Z",
+    "actor": {
+      "type": "service",
+      "id": "svc_risk_detector"
+    },
+    "action": "security.risk.assessed",
+    "target": {
+      "type": "subscription",
+      "id": "chg_subscription_sub_9f31_4d21c0"
+    },
+    "metadata": {
+      "activityEpisodeId": "aep_billing_upgrade_01",
+      "assertionId": "asr_risk_sub_9f31_01",
+      "riskAssessment": {
+        "assessment": "step",
+        "factors": [
+          {
+            "contribution": 0.85,
+            "key": "operationType",
+            "kind": "base",
+            "value": "destructive",
+            "weight": 1
+          },
+          {
+            "contribution": 0.1953,
+            "key": "dataVolume",
+            "kind": "additive",
+            "value": 4200,
+            "weight": 0.5
+          },
+          {
+            "contribution": 0.0232,
+            "key": "fanOut",
+            "kind": "additive",
+            "value": 6,
+            "weight": 0.3
+          },
+          {
+            "contribution": 0.0212,
+            "key": "referenceCount",
+            "kind": "additive",
+            "value": 18,
+            "weight": 0.2
+          },
+          {
+            "contribution": 1.3,
+            "key": "reversibility",
+            "kind": "multiplier",
+            "value": "irreversible",
+            "weight": 1.3
+          },
+          {
+            "contribution": 1,
+            "key": "envCriticality",
+            "kind": "multiplier",
+            "value": "production",
+            "weight": 1
+          }
+        ],
+        "level": "critical",
+        "policyVersion": "veritio.reference.v1",
+        "score": 1
+      },
+      "riskSignals": {
+        "dataVolume": 4200,
+        "envCriticality": "production",
+        "fanOut": 6,
+        "operationType": "destructive",
+        "referenceCount": 18,
+        "reversibility": "irreversible"
+      }
+    },
+    "scope": {
+      "tenantId": "org_acme",
+      "environment": "production"
+    }
+  },
+  "auditRecord": {
+    "event": {
+      "id": "evt_risk_assessed_01",
+      "schemaVersion": "2026-06-10",
+      "occurredAt": "2026-08-09T10:00:00.000Z",
+      "actor": {
+        "type": "service",
+        "id": "svc_risk_detector"
+      },
+      "action": "security.risk.assessed",
+      "target": {
+        "type": "subscription",
+        "id": "chg_subscription_sub_9f31_4d21c0"
+      },
+      "metadata": {
+        "activityEpisodeId": "aep_billing_upgrade_01",
+        "assertionId": "asr_risk_sub_9f31_01",
+        "riskAssessment": {
+          "assessment": "step",
+          "factors": [
+            {
+              "contribution": 0.85,
+              "key": "operationType",
+              "kind": "base",
+              "value": "destructive",
+              "weight": 1
+            },
+            {
+              "contribution": 0.1953,
+              "key": "dataVolume",
+              "kind": "additive",
+              "value": 4200,
+              "weight": 0.5
+            },
+            {
+              "contribution": 0.0232,
+              "key": "fanOut",
+              "kind": "additive",
+              "value": 6,
+              "weight": 0.3
+            },
+            {
+              "contribution": 0.0212,
+              "key": "referenceCount",
+              "kind": "additive",
+              "value": 18,
+              "weight": 0.2
+            },
+            {
+              "contribution": 1.3,
+              "key": "reversibility",
+              "kind": "multiplier",
+              "value": "irreversible",
+              "weight": 1.3
+            },
+            {
+              "contribution": 1,
+              "key": "envCriticality",
+              "kind": "multiplier",
+              "value": "production",
+              "weight": 1
+            }
+          ],
+          "level": "critical",
+          "policyVersion": "veritio.reference.v1",
+          "score": 1
+        },
+        "riskSignals": {
+          "dataVolume": 4200,
+          "envCriticality": "production",
+          "fanOut": 6,
+          "operationType": "destructive",
+          "referenceCount": 18,
+          "reversibility": "irreversible"
+        }
+      },
+      "scope": {
+        "tenantId": "org_acme",
+        "environment": "production"
+      }
+    },
+    "sequence": 1,
+    "previousHash": null,
+    "hashAlgorithm": "sha256",
+    "canonicalization": "veritio-json-v1",
+    "appendedAt": "2026-08-09T10:00:00.500Z",
+    "idempotencyKeyHash": "05eb1f027143d5e64e806b62ee4c0244bf873a8510b54f72ed9ea125e6658e56",
+    "hash": "c7f1ab227c15267c459058e8f601dfb51074c18211b05396602088fad50dd523"
+  },
+  "hashParity": {
+    "note": "hashAssertionRecord and hashAuditRecord both hash the canonical JSON of the record with its own `hash` field excluded, and emit bare lowercase sha256 hex.",
+    "rawIdempotencyKeyStored": false,
+    "assertion": {
+      "digest": "412d24652fbef6090751f71fb61bb5012a91b0b6109f82d7fe35d5815aef1c91",
+      "recomputedFromPersistedForm": true,
+      "tamperedStoredHashIgnored": true,
+      "bareLowercaseSha256Hex": true
+    },
+    "auditRecord": {
+      "digest": "c7f1ab227c15267c459058e8f601dfb51074c18211b05396602088fad50dd523",
+      "recomputedFromPersistedForm": true,
+      "tamperedStoredHashIgnored": true,
+      "bareLowercaseSha256Hex": true
+    },
+    "digestsDiffer": true,
+    "chainVerification": {
+      "ok": true
+    },
+    "tamperedChainVerification": {
+      "ok": false,
+      "index": 0,
+      "reason": "hash_mismatch"
+    }
+  }
+}

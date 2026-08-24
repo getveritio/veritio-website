@@ -3,18 +3,18 @@ import BaseLayout from '../../layouts/BaseLayout.astro'
 import Nav from '../../components/Nav.astro'
 import Footer from '../../components/Footer.astro'
 
-const lastUpdated = '25 July 2026'
+const lastUpdated = '9 August 2026'
 
 const subprocessors = [
   {
     name: 'Cloudflare, Inc.',
     role: 'Application compute, object storage for evidence records, and transactional email delivery',
-    location: 'Region pinned to your chosen storage region (EU, US, or APAC)',
+    location: 'Provider-operated infrastructure; location depends on the configured service and provider terms',
   },
   {
     name: 'Neon, Inc. (on Amazon Web Services)',
     role: 'Managed Postgres databases holding tenant metadata and evidence sequence state',
-    location: 'Region pinned to your chosen storage region',
+    location: 'Provider-operated infrastructure; location depends on the configured service and provider terms',
   },
   {
     name: 'Polar Software, Inc.',
@@ -27,9 +27,12 @@ const subprocessors = [
 
 <BaseLayout
   title="Privacy Policy — Veritio"
-  description="How Veritio Cloud processes account and security data, our subprocessors, regional storage commitments, and your data-subject rights under the GDPR."
+  description="How Veritio Cloud processes account and security data, our subprocessors, and your data-subject rights under the GDPR."
+  claimRefs={['cloud-identity-and-evidence-processing', 'cloud-security-controls', 'cloud-provider-configuration']}
 >
   <Nav />
+
+  <main id="main-content">
 
   <section class="py-16 sm:py-20">
     <div class="container">
@@ -72,7 +75,7 @@ const subprocessors = [
           No Data Protection Officer is appointed; the thresholds of
           Art. 37 GDPR and § 38 BDSG are not met at the current scale of
           processing. Direct all privacy inquiries to the controller at the
-          address above. See also the <a href="/legal/imprint">Imprint</a>.
+          address above. See also the <a href="/legal/imprint/">Imprint</a>.
         </p>
 
         <h2><span class="num">2</span> Two roles: controller and processor</h2>
@@ -83,7 +86,7 @@ const subprocessors = [
           governs it. For the <strong>evidence records</strong> your applications
           and agents send into your tenant, Veritio is a <strong>processor</strong>
           acting on your instructions; you are the controller of that data, and
-          our <a href="/legal/dpa">Data Processing Agreement</a> governs it.
+          our <a href="/legal/dpa/">Data Processing Agreement</a> governs it.
         </p>
 
         <h2><span class="num">3</span> Account data we process</h2>
@@ -166,19 +169,18 @@ const subprocessors = [
         </div>
         <p>
           We maintain this list current and give notice of material changes as
-          described in the <a href="/legal/dpa">Data Processing Agreement</a>.
+          described in the <a href="/legal/dpa/">Data Processing Agreement</a>.
         </p>
 
-        <h2><span class="num">6</span> Where data is stored</h2>
+        <h2><span class="num">6</span> International processing</h2>
         <p>
-          You choose the region where your tenant evidence data is stored — the
-          <strong>EU</strong>, the <strong>US</strong>, or <strong>APAC</strong>.
-          For the EU region, we commit to an EU jurisdiction guarantee on object
-          storage. Tenant databases run on Neon (on Amazon Web Services) and
-          compute and object storage run on Cloudflare, each pinned to your
-          chosen region. Where personal data is transferred outside the EEA, we
-          rely on appropriate safeguards, including the European Commission&rsquo;s
-          Standard Contractual Clauses.
+          The service uses the subprocessors listed above. Their processing
+          locations depend on the services configured for the account and their
+          applicable terms. Where a transfer of personal data outside the EEA
+          requires safeguards, we rely on an available lawful transfer mechanism,
+          including Standard Contractual Clauses where applicable. This public
+          policy does not promise a specific storage region unless that
+          commitment appears in a separate signed agreement.
         </p>
 
         <h2><span class="num">7</span> Cookies &amp; website analytics</h2>
@@ -202,8 +204,10 @@ const subprocessors = [
           Framework). Google Analytics sets cookies and processes usage data to
           report how visitors use the site. It does not load unless you accept,
           and you can withdraw consent at any time via &ldquo;Cookie
-          settings&rdquo; in the footer, which stops further data collection
-          and removes its cookies.
+          settings&rdquo; in the footer. Withdrawal updates Google consent to
+          denied and removes the site's Google Analytics cookies. Google may
+          still receive cookieless consent-status pings after the tag has
+          loaded; no Google Analytics tag is requested before you accept.
         </p>
 
         <h2><span class="num">8</span> Retention</h2>
@@ -213,7 +217,7 @@ const subprocessors = [
           then delete or de-identify it. Security audit data is kept only as long
           as needed for security and legal purposes. Retention of tenant evidence
           data is governed by your instructions and the
-          <a href="/legal/dpa">Data Processing Agreement</a>.
+          <a href="/legal/dpa/">Data Processing Agreement</a>.
         </p>
 
         <h2><span class="num">9</span> Your rights</h2>
@@ -243,6 +247,7 @@ const subprocessors = [
     </div>
   </section>
 
+  </main>
   <Footer />
 </BaseLayout>
 

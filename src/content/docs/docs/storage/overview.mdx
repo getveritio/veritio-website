@@ -1,0 +1,178 @@
+---
+title: Storage overview
+description: Choose an authoritative AuditStore from the drivers @veritio/storage ships, then keep archives, analytics, and caches strictly derived.
+audience: [developer, operator]
+kind: overview
+searchIntent: Compare authoritative Veritio stores with derived archives, analytics projections, and caches.
+questions:
+  - Which storage drivers does @veritio/storage actually ship?
+  - Which invariants must a production AuditStore prove?
+  - Why are object storage and ClickHouse derived tiers?
+  - What does a green conformance run not prove?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/storage@0.4.7', '@veritio/core@0.4.7']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/storage/src/index.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/storage/src/conformance.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/storage/src/object-archive.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/storage/src/clickhouse-read-model.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/storage/src/file-store.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/storage/package.json
+claimRefs: []
+---
+
+import { Code } from '@astrojs/starlight/components'
+import conformanceOutput from '../../../../examples/storage/expected/conformance-suite.txt?raw'
+
+Storage is part of the evidence model, not an interchangeable persistence detail. Exactly one authoritative store owns each tenant chain. Archives, analytical views, and caches may accelerate access, but they never assign sequence numbers and they are never the definitive input to verification.
+
+That single rule decides most storage questions in a Veritio deployment.
+
+```text
+                 host mutation transaction
+                            │
+                            ▼
+              ┌───────────────────────────┐
+              │   authoritative store     │  ← owns sequence, idempotency,
+              │   (AuditStore contract)   │    previous-hash linkage
+              └───────────────────────────┘
+                   │            │
+      one-way copy │            │ one-way projection
+                   ▼            ▼
+        object archive     ClickHouse read model
+        (R2 / S3 / MinIO)  (episodes, subjects)
+                   ╳            ╳
+            never a sequence owner, never
+            authoritative for verify or DSAR
+```
+
+## What `@veritio/storage@0.4.7` ships
+
+The package exports factories and schema constants; it opens no connections and reads no environment variables. Every driver below is a published export of `@veritio/storage`, except `MemoryAuditStore`, which lives in `@veritio/core`.
+
+| Export | Tier | Notes |
+| --- | --- | --- |
+| `MemoryAuditStore` (`@veritio/core`) | Authoritative, ephemeral | Tests, examples, Workbench. Does not survive a restart. |
+| `createPostgresAuditStore` | Authoritative | Postgres dialect over a host-injected `SqlAuditExecutor`. |
+| `createNeonAuditStore` | Authoritative | Same Postgres dialect; Neon preserves the ordering semantics. |
+| `createMysqlAuditStore` / `createMySqlAuditStore` | Authoritative | MySQL dialect. The second name is a spelling alias. |
+| `createMariaDbAuditStore` / `createMariaDBAuditStore` | Authoritative | MariaDB through the MySQL dialect, plus an all-caps alias. |
+| `createMongoAuditStore` | Authoritative | Needs a host-injected collection **and** transaction callback. |
+| `createFileEvidenceStore` | Authoritative, single-writer | Durable JSONL event **and** edge chains under one directory. Not the `AuditStore` interface. |
+| `createRedisAuditTipCache` | Derived cache | Tenant tip only. Records are re-validated on read and write. |
+| `createObjectAuditArchive`, `archiveAuditStoreTenant` | Derived cold tier | Sealed NDJSON segments on any S3-compatible client. |
+| `createClickHouseAuditReadModel` | Derived read model | Episode, session, and subject scans. |
+| `createPostgresOutboxAdapter`, `createNeonOutboxAdapter`, `createMysqlOutboxAdapter`, `createMariaDbOutboxAdapter`, `createMariaDBOutboxAdapter`, `createFileOutboxAdapter` | Transactional outbox | Durable queue between an application commit and evidence append. |
+| `createOutboxDispatcher`, `createHttpOutboxDispatcher`, `createHttpIngestTarget` | Delivery | Leased draining to a local sink or an HTTP ingest endpoint. |
+
+Schema constants ship alongside the factories: `POSTGRES_AUDIT_RECORDS_SCHEMA_SQL`, `MYSQL_AUDIT_RECORDS_SCHEMA_SQL`, `MONGO_AUDIT_RECORD_INDEXES`, `POSTGRES_OUTBOX_SCHEMA_SQL`, `MYSQL_OUTBOX_SCHEMA_SQL`, and `clickHouseAuditReadModelSchemaSql()`. You own migrations; the constants only fix the shape the adapters depend on.
+
+Two shapes are load-bearing in the audit table. The primary key is `(tenant_id, sequence)`, which makes a duplicate sequence in one tenant impossible. A separate unique key on `(tenant_id, idempotency_key_hash)` makes a reused key impossible. Both are per tenant, which is why two tenants can each hold sequence `1` without colliding.
+
+## The `AuditStore` contract
+
+The interface is two methods:
+
+```ts
+interface AuditStore {
+  append(event: AuditEvent, options?: AuditStoreAppendOptions): Promise<AuditRecord>
+  list(scope: EvidenceScope & { tenantId: string }, options?: AuditStoreListOptions): Promise<AuditRecord[]>
+}
+```
+
+`AuditStoreAppendOptions` carries `idempotencyKey` and `expectedPreviousHash`. `AuditStoreListOptions` carries `afterSequence` and `limit`.
+
+Behind those two methods, an authoritative store must keep four decisions together in one atomic boundary:
+
+1. assign a gapless sequence inside the tenant boundary;
+2. reject a reused idempotency key when canonical event bytes differ;
+3. reject an unexpected previous hash;
+4. recompute record integrity before returning persisted data.
+
+If a backend cannot make those decisions atomically, it is not an `AuditStore`.
+
+The SQL adapters get this from the engine. Inside the host transaction they first look up the tenant-scoped idempotency hash, then read the tenant tip with `ORDER BY sequence DESC LIMIT 1 FOR UPDATE`, then insert. The row lock is what serializes two concurrent appends for the same tenant into two consecutive sequence numbers instead of one duplicate. The Mongo adapter reaches the same outcome through a host-supplied session and the two unique indexes in `MONGO_AUDIT_RECORD_INDEXES`; without a replica set and real transactions it will not hold.
+
+Reads are equally strict. Every adapter parses the stored `record_json`, re-hashes it with `hashAuditRecord`, and returns a clone. A record edited directly in the database fails closed on the next read instead of being served as evidence, and a caller mutating a returned record cannot reach stored bytes.
+
+Note the exception in the table above: `createFileEvidenceStore` is durable and hash-chained, but it does not implement `AuditStore`. It exposes `recordEvent`, `recordEdge`, `recordBatch`, `listEvents`, `listEdges`, `listCommits`, and `verify` — the recorder-facing sink shape, covering both the event chain and the edge chain, for tools that run as a fresh process per event. One directory holds exactly one tenant's chains, and it coordinates exactly one writer.
+
+## Host-injected configuration
+
+`@veritio/storage` exports factories, schemas, conformance tests, and transport-neutral executor interfaces. It deliberately does not open database connections or read environment variables. Your server bootstrap owns the vendor client and adapts its transaction callback into the required executor:
+
+```ts
+interface SqlAuditSession {
+  execute(statement: string, params: readonly unknown[]): Promise<SqlAuditQueryResult>
+}
+interface SqlAuditExecutor extends SqlAuditSession {
+  transaction<T>(run: (session: SqlAuditSession) => Promise<T>): Promise<T>
+}
+```
+
+This keeps credentials and deployment choices outside protocol code, and makes Neon, self-managed Postgres, or another compatible service a host decision rather than a protocol one.
+
+## Authoritative write path
+
+The safe service flow is:
+
+1. Authenticate the request and resolve tenant scope on the server.
+2. Normalize and deterministically redact the event.
+3. Begin the authoritative database transaction.
+4. Lock or compare the tenant tip.
+5. Apply idempotency and expected-previous-hash checks.
+6. Assign sequence, hash canonical bytes, and append.
+7. Commit before acknowledging success.
+
+When an application mutation and its evidence must share one commit, that flow moves behind a queue: enqueue a minimized governed-change outbox row inside the application transaction, and let a leased dispatcher append retry-safe evidence afterwards using stable event and edge identities. Outbox rows move through `pending`, `leased`, `paused`, `dispatched`, and `dead`, and a paused row re-arms only after an explicit circuit acknowledgement. See [Transactional outbox](/docs/storage/outbox/) for the adapter, dispatcher, and delivery-safety surface.
+
+## Derived tiers, and why the label is a hard rule
+
+Two derived tiers ship in the package. Both look like storage. Neither is.
+
+**Object archive.** `createObjectAuditArchive` seals already-sequenced records into segments on an injected `ObjectArchiveClient` (`put`, `get`, `list`) backed by R2, S3, or MinIO. Segments hold the exact `canonicalJson` bytes of each record as NDJSON lines, so the chain verifies byte-for-byte from the archive alone. A manifest is written *after* its segment, so a manifest's existence means the bytes are durable. Events and edges are the protocol's two independently sequenced chains, so they archive under separate key namespaces and `verifyTenant` replays both. Sealing validates hashes, tenant scope, and chain continuity before writing, and reads recompute the segment digest and every record hash. `archiveAuditStoreTenant` drains a tenant's un-archived event tail incrementally, resuming from the archive's own tip.
+
+It is still derived. Object storage cannot couple gapless per-tenant sequencing to an idempotency-conflict check atomically, and the tip check between two concurrent sealers can race — hosts must run one archiver per tenant.
+
+**ClickHouse read model.** `createClickHouseAuditReadModel` accelerates scans that would otherwise page whole tenant chains into memory: `listEpisodes`, `listEpisodeSteps`, `listBySubject`. Envelope and grouping keys become typed columns for pruning, but the full canonical record travels in a raw `String` column — never ClickHouse's native JSON type, which parses and re-serializes and would break hash recompute. Projection is at-least-once; duplicates collapse through the ReplacingMergeTree engine and the read helpers query with `FINAL`. Every projected and returned record is hash-revalidated. All value filters bind through ClickHouse query parameters rather than SQL interpolation.
+
+It is still derived, for the same structural reason: no synchronous unique constraints, no transactional tip check.
+
+So the rule stands in both directions. Derived tiers never assign a sequence number, never adjudicate an idempotency conflict, and are never the authority for verification or a data-subject request. They keep canonical bytes as opaque strings and hash-revalidate on read, which is what makes them safe to *hold* evidence — not what makes them fit to *own* it. Run verification and definitive exports from the authoritative chain, and use derived tiers for recovery copies, long-range scans, and operational views only once their lag and replay behavior are visible to you.
+
+The Redis tip cache is the smallest case of the same rule: it stores a validated tenant tip to save a lookup, and never the only copy of anything.
+
+## Prove the store before you trust it
+
+`@veritio/storage/conformance` exports the contract as executable checks. `createAuditStoreConformanceTests` returns five named tests; a store is authoritative only when all five pass. Running them against a custom in-process store gives:
+
+<Code code={conformanceOutput} lang="json" title="verified output" />
+
+The fifth check is the one that matters most and is easiest to skip. The suite corrupts a stored record behind the store's back through a `mutateStoredRecord` seam that is deliberately not reachable through the `AuditStore` interface, then requires the store to refuse to hand the record out. The [store conformance guide](/docs/storage/conformance/) walks the full custom-store implementation.
+
+For the repository's disposable live matrix, run the same five checks against real engines:
+
+```sh
+bun run --cwd storage db:up
+bun run --cwd storage test:live
+bun run --cwd storage db:down
+```
+
+The matrix covers Postgres, Neon-compatible Postgres, MySQL, MariaDB, MongoDB replica-set transactions, MinIO-compatible object storage, and ClickHouse. Each backend is skipped when its `VERITIO_*_TEST_*` variable is absent, so a skipped live suite is not production evidence — assert the variables are present in your own CI.
+
+## What a green run does and does not prove
+
+A passing conformance run proves the store honors tenant-scoped ordering, idempotent replay, fail-closed rejection of missing scope and stale tips, cloned reads, and fail-closed integrity on tampered bytes.
+
+It does not prove concurrency safety. The five checks are sequential; nothing in them appends from two callers at once. Concurrent correctness comes from the transaction and locking you wired underneath — `FOR UPDATE` on the tip row, a real replica-set session for Mongo — and from operating the engine that way in production. The repository's separate `bun run --cwd storage test:stress` suite exercises outbox lease concurrency, not `AuditStore` appends.
+
+It also does not prove durability, backup integrity, retention behavior, or that your host actually resolved tenant scope from an authenticated request rather than from client input. And like everything in Veritio, a conforming store supports compliance evidence; it does not by itself satisfy any legal obligation.
+
+## Next
+
+- [Postgres and Neon](/docs/storage/postgres/) for the concurrent production path.
+- [MySQL and MariaDB](/docs/storage/mysql-mariadb/) for existing transactional SQL estates.
+- [MongoDB](/docs/storage/mongodb/) for replica-set sessions and required indexes.
+- [File store](/docs/storage/file-store/) for the executable single-directory tutorial.
+- [Store conformance suite](/docs/storage/conformance/) before you ship a custom store.
+- [Transactional outbox](/docs/storage/outbox/) when evidence must share a commit with an application mutation.

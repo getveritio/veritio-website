@@ -21,10 +21,11 @@ const headlineStyle =
 <BaseLayout
   title="Veritio — 감사 추적·AI 변경·거버넌스를 위한 에비던스 그래프"
   description="오픈 소스 에비던스 레이어: 애플리케이션 이벤트, 에이전트 세션, 코드 변경, 배포를 해시로 연결되고 누구나 독립적으로 검증·내보내기할 수 있는 감사 이벤트로 기록합니다."
+  claimRefs={['cloud-managed-path']}
 >
   <Nav />
 
-  <main>
+  <main id="main-content">
     <!-- COVER -->
     <section>
       <div class="container">
@@ -53,7 +54,7 @@ const headlineStyle =
             >
               GitHub에서 보기 ↗
             </a>
-            <a href="/examples" class="doc-btn">예제 보기</a>
+            <a href="/examples/" class="doc-btn">예제 보기</a>
           </div>
         </div>
       </div>
@@ -109,8 +110,6 @@ const headlineStyle =
           </div>
           <EvidenceStreamPanel
             caption="Evidence stream · 데모 데이터"
-            pauseLabel="애니메이션 일시정지"
-            playLabel="애니메이션 재생"
           />
         </div>
       </div>
@@ -159,13 +158,13 @@ const headlineStyle =
             계정 만들기 ↗
           </a>
           <a
-            href="/ko/pricing"
+            href="/ko/pricing/"
             class="font-mono text-[13px] font-medium uppercase tracking-[0.08em] text-surface/85 no-underline hover:text-surface"
           >
             요금 보기 →
           </a>
           <a
-            href="/ko/cloud"
+            href="/ko/cloud/"
             class="font-mono text-[13px] font-medium uppercase tracking-[0.08em] text-surface/60 no-underline hover:text-surface"
           >
             Cloud 더 알아보기

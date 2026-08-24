@@ -1,0 +1,145 @@
+---
+title: Risk signals from agent capture
+description: How the Claude Code capture classifier turns Bash commands and file-change batches into frozen risk-signal enums before an event is hashed.
+audience: [developer, governance]
+kind: guide
+searchIntent: Reproduce the Claude Code capture classifier that stamps hash-affecting riskSignals on captured agent steps.
+questions:
+  - How does Veritio classify a Bash command into risk signals?
+  - Does the raw agent command text end up in the audit record?
+  - Why must a Python or Go capture adapter copy the classifier exactly?
+  - How does one agent session become a single episode risk score?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/adapters/claude-code/src/map.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/adapters/claude-code/DESIGN.md
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/spec/risk-signals.schema.json
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/risk-score.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/.claude/rules/02-sdk-parity.md
+claimRefs: []
+---
+
+import { Code } from '@astrojs/starlight/components'
+import rollupOutput from '../../../../examples/risk/expected/episode-rollup.txt?raw'
+
+Agent capture classifies each captured step into `metadata.riskSignals` before the event is canonicalized and hashed. That ordering makes the command-to-class mapping part of the record bytes, not a display concern layered on afterwards. A second implementation that classifies the same command differently produces a different record hash for the same agent activity, so the mapping is a normative capture contract.
+
+## Where classification sits in the pipeline
+
+```text
+Claude Code hook payload (raw prompt, command, file paths)
+                    ↓ classify
+riskSignals: frozen enums only, no raw text
+                    ↓ redact
+hashes + stable ids only
+                    ↓ createAuditEvent
+canonical JSON (veritio-json-v1)
+                    ↓ SHA-256
+record hash
+```
+
+Classification runs first because the signal values are ordinary metadata. Once `withRiskSignals` stamps the normalized signals onto `metadata.riskSignals`, they sit inside the canonical bytes like any other field. Nothing downstream can re-classify a stored record without changing its hash.
+
+The vocabulary is frozen by `spec/risk-signals.schema.json`. `operationType` is one of `read`, `create`, `update`, `config`, `bulk`, `permission`, `delete`, `destructive`. `reversibility` is `reversible`, `recoverable`, or `irreversible`. `envCriticality` is `sandbox`, `development`, `staging`, or `production`. The three magnitude fields (`dataVolume`, `fanOut`, `referenceCount`) are non-negative integers. There is no free-text field anywhere in the shape.
+
+## The Bash classification table
+
+`bashRiskSignals(command, environment)` evaluates four pattern classes in a fixed order and returns on the first match. Precedence is part of the contract: a command matching several classes must be reported as the earliest one.
+
+| # | Class | Patterns (case-insensitive) | `operationType` | `reversibility` |
+|---|---|---|---|---|
+| 1 | Destructive | `rm` with a recursive short-flag group, `rm … --recursive`, `rimraf`, `find … -delete`, a hard `git reset`, a forced `git clean`, a forced `git push`, `drop table` / `drop database` / `drop schema`, `truncate table`, `terraform destroy`, `kubectl delete`, `mkfs`, `dd if=` | `destructive` | `irreversible` |
+| 2 | Delete | `rm`, `rmdir`, `unlink`, `git branch -D` | `delete` | `recoverable` |
+| 3 | Permission | `chmod`, `chown`, `sudo` | `permission` | `reversible` |
+| 4 | Config | `git config`, `npm config`, `wrangler secret`, `export VAR=` | `config` | `reversible` |
+
+An unmatched command returns `undefined` and the tool call carries **no** `riskSignals` key at all. That is deliberate: reads, builds, test runs, and status checks are the overwhelming majority of an agent turn, and giving them a low-but-nonzero score would let a long quiet session drift upward for no reason. Absence of signals is the normal case.
+
+Two consequences follow from precedence, and both fall out of the patterns rather than being special-cased.
+
+`sudo rm -rf /var/tmp/build` is `destructive`, not `permission`. Class 1 is tested first, so the most severe applicable class always wins, and prefixing a command with `sudo` can never soften it.
+
+Class 2 catches the residue class 1 missed. A plain `rm build/artifact.tar` has no recursive flag, so it falls through to `delete` / `recoverable`. The two classes together mean any `rm` is classified; only its severity varies.
+
+### Pattern scoping, and where it is loose
+
+The `rm … --recursive` and `find … -delete` alternatives are scoped to one shell word group — the pattern refuses to cross `|`, `;`, or `&`. Without that, a `-delete` flag belonging to a later pipeline segment would smear onto an unrelated leading command.
+
+The forced-push alternative is not scoped that way. It matches a `git push` followed by anything on the line that contains `--force` or a bare `-f`, so a push chained with `grep -f patterns.txt src/` classifies as `destructive`. Classes 2 through 4 are bare word matches with no argument parsing at all, so `npm run rm-cache` matches `rm` and lands on `delete`.
+
+This is a pattern matcher, not a shell parser, and it errs toward over-classification. Over-classifying raises an episode score and surfaces a step for review; under-classifying hides it. When you tune the patterns, verify that your change moves the error in that direction and not the other.
+
+## File-change batches
+
+`fileChangeRiskSignals(files, environment)` classifies a whole batch at once rather than a file at a time, and always returns signals — there is no unmatched case.
+
+- Any file in the batch with `action: "delete"` makes the batch `delete` / `recoverable`. Deletes dominate; one deletion is not averaged away by nine edits.
+- Otherwise, a batch where every file is `action: "create"` is `create` / `reversible`.
+- Every other batch, including any mix of creates and upserts, is `update` / `reversible`.
+
+`dataVolume` is set on every result and is exactly `files.length`. It is a file count, not a byte count, line count, or diff size. A 4000-line rewrite of one file and a one-character fix to one file both carry `dataVolume: 1`. Reading it as anything other than "how many files this batch touched" will misread every captured score.
+
+Volume matters because it feeds the saturating magnitude curve in per-step scoring. Under `veritio.reference.v1`, a single-file production update scores `0.1812` and a forty-file production update scores `0.2143`. Batch size moves the number, but it cannot dominate it — the operation class and the environment do most of the work.
+
+The two capture paths produce very different volumes. The `PostToolUse` path for `Edit`, `Write`, and `MultiEdit` records exactly one file, so it always yields `dataVolume: 1`. The `Stop` turn scan reads the working tree's porcelain status to catch files that Bash wrote without any edit tool, and batches everything that turn changed, so its `dataVolume` is the turn's changed-file count.
+
+The `PostToolUse` path also never produces a `delete` batch. Its action is `create` when `Write` had no pre-image and `upsert` otherwise. Deletions reach the graph only through the `Stop` scan, which is why removing a file by shell command shows up twice: once as a destructive- or delete-class Bash tool call, and once as a delete-class file-change event in that turn's scan.
+
+## Environment criticality
+
+`envCriticalityOf(environment)` lowercases the configured label and tests substrings in order: `prod` gives `production`, then `stag` gives `staging`, then `sandbox` gives `sandbox`, and anything else gives `development`. Every signal the classifier emits carries the result.
+
+Order decides ambiguous labels. `preproduction` contains `prod` and maps to `production`. A label like `staging-sandbox` matches `stag` first and maps to `staging`.
+
+The fallback is the failure mode worth knowing. `normalizeRiskSignals` defaults an *absent* `envCriticality` to `production`, the most conservative class. But `envCriticalityOf` never returns absent — an unrecognized label returns `development`, the second-lowest multiplier. Configuring a production capture with an environment label of `live` or `main` therefore scores everything at the development multiplier. The same destructive command scores `1` under `production` and `0.663` under `development`; that is the difference between `critical` and `high`. Use a label containing `prod`.
+
+## The command text never leaves the classifier
+
+`bashRiskSignals` receives the command string, tests it against four regular expressions, and returns enums. The string is not returned, stored, logged, or hashed by that function. What travels with the tool call is `inputHash`, a `sha256:`-prefixed digest of the JSON-serialized tool input.
+
+That leaves the classification as the only externalized description of what the command did. A reviewer sees `operationType: "destructive"`, `reversibility: "irreversible"`, `envCriticality: "production"` — and nothing else. The `inputHash` proves that a specific command produced that record if you still hold the original text, and proves nothing about the text on its own. This is the intended trade: a bounded, non-PII signal instead of a stored shell history that may contain paths, hostnames, or secrets.
+
+## Which record carries the signals
+
+Signals are attached exactly once, on the record that represents the effect.
+
+```text
+Bash tool call         → riskSignals on the tool_call event
+                         (no file-change event unless the Stop scan finds one)
+
+Edit / Write tool call → NO riskSignals on the tool_call event
+                       → riskSignals on the file_change event it produced
+
+Stop turn scan         → riskSignals on that turn's file_change event
+```
+
+The edit path is the one that is easy to get wrong. `buildToolCall` classifies only when the tool is `Bash`; for edit tools it builds the file-change record and puts the signals there, with `changedBy` pointing back at the tool call. The tool call is the cause, the file change is the effect, and only the effect is scored. Double-stamping would make one edit contribute two steps to the episode rollup and inflate momentum for activity that happened once. The same rule governs the file edges: they live on the file change, never also on `toolCall.modifies`, so the modified-file edge is emitted exactly once.
+
+## From captured steps to one episode score
+
+Every event a capture session emits carries `metadata.activityEpisodeId`, derived deterministically as `ep_` plus the sanitized session id and stamped by the recorder *after* caller metadata so a host cannot shadow it. Hook invocations are separate processes with no shared memory, so deriving the id from the session id is what lets them agree without coordination.
+
+A read model groups records by that key, scores each step's `metadata.riskSignals` with `scoreRiskSignals`, and rolls the scored steps up with `rollupEpisodeRisk`. The rollup takes the maximum of `peak` and `velocityScore`: the worst single step, or the worst decayed momentum burst, whichever is higher. It is never a sum and never an average, so padding an episode with quiet steps cannot dilute one bad one.
+
+<Code code={rollupOutput} lang="json" title="verified output" />
+
+That fixture uses hand-pinned signals rather than signals produced by the capture classifier, so read it as proof of the rollup arithmetic, not of the classification. The mechanism it demonstrates is exactly what captured episodes go through: momentum carries between steps, gaps are floored into whole 60-second windows, `decayPerWindow` is applied once per whole window by repeated multiplication, and `velocityNormalizer` alone decides whether a burst can out-rank the peak. Ordering is taken from `occurredAt` on a non-mutating copy, so the order hooks happened to append records in cannot move the published score.
+
+One detail applies to captured episodes specifically. The classifier emits only `operationType`, `reversibility`, `envCriticality`, and — for file changes — `dataVolume`. It never emits `fanOut` or `referenceCount`. Captured Bash steps therefore receive no magnitude boost at all, and their score is exactly the operation base times the two multipliers. Under the reference policy that gives `0.7` for a production delete, `0.36` for a production permission change, and `0.27` for a production config change.
+
+## TypeScript only, and what parity requires
+
+The classifier exists in TypeScript only, in the Claude Code adapter's `map.ts`. There is no Python or Go capture adapter yet. This is recorded as an open parity obligation alongside the `metadata.sessionId` and `metadata.activityEpisodeId` stamping conventions.
+
+Because classification is hash-affecting, parity here is stricter than for most SDK features. A second implementation must reproduce the pattern set, the case-insensitivity, the word-group scoping, the four-class precedence, the unmatched-means-no-signal rule, the batch rules with `dataVolume` as the file count, the `envCriticalityOf` substring order, and the decision to attach signals to the effect record only. Any divergence in any of those produces different canonical bytes, a different record hash, and a chain that a verifier written against the other implementation cannot reproduce. Approximate classification is a protocol break, not a cosmetic difference.
+
+## What a captured signal does and does not establish
+
+A stamped `riskSignals` value establishes that the capture adapter matched a specific pattern class against a command or a batch at capture time, and that the classification was fixed into the record bytes before hashing. Verifying the chain then establishes that the classification has not been edited since.
+
+It does not establish that the command did what its class suggests. A recursive delete of an empty scratch directory and a recursive delete of a data volume classify identically. It does not establish intent, authorization, or outcome — a `destructive` step may have been reviewed and approved, and a step with no signals at all may have been the one that mattered. And it does not establish completeness: the classifier only sees what the hooks delivered, so activity outside the captured session is simply absent from the episode.
+
+Read the score as a ranking device for human attention, and treat the underlying evidence, not the band, as the thing under review.
+
+Continue with [Activity episodes](/docs/concepts/activity-episodes/) for how episodes group and close, [Risk scoring](/docs/concepts/risk-scoring/) for the per-step math these signals feed, and [Claude Code capture](/docs/ai/claude-code/) to configure the adapter that emits them.

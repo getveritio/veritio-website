@@ -1,0 +1,24 @@
+{
+  "eventActions": [
+    "agent.session.started",
+    "agent.tool.called"
+  ],
+  "edgeRelations": [
+    "caused_by",
+    "created",
+    "read"
+  ],
+  "rawPromptStored": false,
+  "verification": {
+    "ok": true,
+    "audit": {
+      "ok": true
+    },
+    "edges": {
+      "ok": true
+    },
+    "commits": {
+      "ok": true
+    }
+  }
+}

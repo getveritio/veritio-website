@@ -1,0 +1,329 @@
+{
+  "vocabulary": {
+    "visibility": [
+      "internal",
+      "external",
+      "partner",
+      "system"
+    ],
+    "surface": [
+      "api",
+      "app",
+      "worker",
+      "cli",
+      "webhook"
+    ]
+  },
+  "roundTrips": [
+    {
+      "case": "canonical values pass through unchanged",
+      "input": {
+        "visibility": "internal",
+        "surface": "api"
+      },
+      "metadata": {
+        "logVisibility": "internal",
+        "logSurface": "api"
+      },
+      "metadataKeys": [
+        "logSurface",
+        "logVisibility"
+      ],
+      "detected": {
+        "visibility": "internal",
+        "surface": "api"
+      },
+      "expected": {
+        "visibility": "internal",
+        "surface": "api"
+      },
+      "lossless": true
+    },
+    {
+      "case": "aliases with casing and punctuation collapse to canonical values",
+      "input": {
+        "visibility": "User-Facing",
+        "surface": "GraphQL"
+      },
+      "metadata": {
+        "logVisibility": "external",
+        "logSurface": "api"
+      },
+      "metadataKeys": [
+        "logSurface",
+        "logVisibility"
+      ],
+      "detected": {
+        "visibility": "external",
+        "surface": "api"
+      },
+      "expected": {
+        "visibility": "external",
+        "surface": "api"
+      },
+      "lossless": true
+    },
+    {
+      "case": "partner and worker aliases",
+      "input": {
+        "visibility": "Third Party",
+        "surface": "cron"
+      },
+      "metadata": {
+        "logVisibility": "partner",
+        "logSurface": "worker"
+      },
+      "metadataKeys": [
+        "logSurface",
+        "logVisibility"
+      ],
+      "detected": {
+        "visibility": "partner",
+        "surface": "worker"
+      },
+      "expected": {
+        "visibility": "partner",
+        "surface": "worker"
+      },
+      "lossless": true
+    },
+    {
+      "case": "system and webhook aliases",
+      "input": {
+        "visibility": "automation",
+        "surface": "callback"
+      },
+      "metadata": {
+        "logVisibility": "system",
+        "logSurface": "webhook"
+      },
+      "metadataKeys": [
+        "logSurface",
+        "logVisibility"
+      ],
+      "detected": {
+        "visibility": "system",
+        "surface": "webhook"
+      },
+      "expected": {
+        "visibility": "system",
+        "surface": "webhook"
+      },
+      "lossless": true
+    },
+    {
+      "case": "visibility only — surface key is omitted, not emitted as null",
+      "input": {
+        "visibility": "staff"
+      },
+      "metadata": {
+        "logVisibility": "internal"
+      },
+      "metadataKeys": [
+        "logVisibility"
+      ],
+      "detected": {
+        "visibility": "internal"
+      },
+      "expected": {
+        "visibility": "internal"
+      },
+      "lossless": true
+    },
+    {
+      "case": "surface only — visibility key is omitted, not emitted as null",
+      "input": {
+        "surface": "terminal"
+      },
+      "metadata": {
+        "logSurface": "cli"
+      },
+      "metadataKeys": [
+        "logSurface"
+      ],
+      "detected": {
+        "surface": "cli"
+      },
+      "expected": {
+        "surface": "cli"
+      },
+      "lossless": true
+    },
+    {
+      "case": "unrecognized labels are dropped on both sides",
+      "input": {
+        "visibility": "confidential",
+        "surface": "sms"
+      },
+      "metadata": {},
+      "metadataKeys": [],
+      "detected": {},
+      "expected": {},
+      "lossless": true
+    }
+  ],
+  "allRoundTripsLossless": true,
+  "rejections": [
+    {
+      "field": "visibility",
+      "input": "\"confidential\"",
+      "normalized": null,
+      "rejected": true,
+      "metadataKeys": []
+    },
+    {
+      "field": "visibility",
+      "input": "\"restricted\"",
+      "normalized": null,
+      "rejected": true,
+      "metadataKeys": []
+    },
+    {
+      "field": "visibility",
+      "input": "\"\"",
+      "normalized": null,
+      "rejected": true,
+      "metadataKeys": []
+    },
+    {
+      "field": "visibility",
+      "input": "\"   \"",
+      "normalized": null,
+      "rejected": true,
+      "metadataKeys": []
+    },
+    {
+      "field": "visibility",
+      "input": "42",
+      "normalized": null,
+      "rejected": true,
+      "metadataKeys": []
+    },
+    {
+      "field": "visibility",
+      "input": "null",
+      "normalized": null,
+      "rejected": true,
+      "metadataKeys": []
+    },
+    {
+      "field": "visibility",
+      "input": "undefined",
+      "normalized": null,
+      "rejected": true,
+      "metadataKeys": []
+    },
+    {
+      "field": "visibility",
+      "input": "[\"internal\"]",
+      "normalized": null,
+      "rejected": true,
+      "metadataKeys": []
+    },
+    {
+      "field": "surface",
+      "input": "\"sms\"",
+      "normalized": null,
+      "rejected": true,
+      "metadataKeys": []
+    },
+    {
+      "field": "surface",
+      "input": "\"fax\"",
+      "normalized": null,
+      "rejected": true,
+      "metadataKeys": []
+    },
+    {
+      "field": "surface",
+      "input": "\"kiosk\"",
+      "normalized": null,
+      "rejected": true,
+      "metadataKeys": []
+    },
+    {
+      "field": "surface",
+      "input": "\"\"",
+      "normalized": null,
+      "rejected": true,
+      "metadataKeys": []
+    },
+    {
+      "field": "surface",
+      "input": "7",
+      "normalized": null,
+      "rejected": true,
+      "metadataKeys": []
+    },
+    {
+      "field": "surface",
+      "input": "null",
+      "normalized": null,
+      "rejected": true,
+      "metadataKeys": []
+    },
+    {
+      "field": "surface",
+      "input": "undefined",
+      "normalized": null,
+      "rejected": true,
+      "metadataKeys": []
+    },
+    {
+      "field": "surface",
+      "input": "{\"surface\":\"api\"}",
+      "normalized": null,
+      "rejected": true,
+      "metadataKeys": []
+    }
+  ],
+  "allUnknownValuesRejected": true,
+  "hostAliasDetection": [
+    {
+      "case": "flat host aliases (audience / channel)",
+      "metadata": {
+        "audience": "customer",
+        "channel": "browser"
+      },
+      "detected": {
+        "visibility": "external",
+        "surface": "app"
+      }
+    },
+    {
+      "case": "nested auditLog bag",
+      "metadata": {
+        "auditLog": {
+          "visibility": "vendor",
+          "channel": "hook"
+        }
+      },
+      "detected": {
+        "visibility": "partner",
+        "surface": "webhook"
+      }
+    },
+    {
+      "case": "client descriptor from a request logger",
+      "metadata": {
+        "client": {
+          "type": "cli"
+        },
+        "exposure": "ops"
+      },
+      "detected": {
+        "visibility": "internal",
+        "surface": "cli"
+      }
+    },
+    {
+      "case": "metadata with no classifier hints at all",
+      "metadata": {
+        "role": "viewer",
+        "requestId": "req_7c2a"
+      },
+      "detected": {}
+    }
+  ],
+  "undefinedMetadataDetectsNothing": {}
+}

@@ -1,0 +1,150 @@
+---
+title: Activity episodes
+description: Understand how activityEpisodeId opens, joins, and scores one Layer-1 activity episode across agent capture, templates, governed changes, and risk rollup.
+audience: [developer, governance]
+kind: concept
+searchIntent: Group agent, change, review, and deploy evidence under one un-shadowable activity episode key.
+questions:
+  - What is an activity episode in Veritio?
+  - Why can a caller not overwrite metadata.activityEpisodeId?
+  - How do separate hook processes agree on the same episode id?
+  - What breaks in a risk rollup when the episode key is missing?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/core@0.4.7']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/templates.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/provenance.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/governed-change.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/sdks/typescript/src/risk-score.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/adapters/claude-code/src/map.ts
+claimRefs: []
+---
+
+import { Code } from '@astrojs/starlight/components'
+import stampingOutput from '../../../../examples/templates/expected/episode-and-risk-stamping.txt?raw'
+
+One unit of work produces evidence in several event families. A prompt, four file changes, a review finding, a CI job, and a deployment are all separate records, and they target different entities. An activity episode is the durable key that says those records belong to the same stretch of work, so a reader can rebuild it and score it as one thing.
+
+## What an episode is
+
+An activity episode is a Layer-1 grouping: a named span of work that owns a set of events. It is identified by an opaque string carried at `metadata.activityEpisodeId` on every event in the span.
+
+It is deliberately not an event-schema field. `spec/event.schema.json` contains no `activityEpisodeId`; the dotted-action pattern and open `metadata` object already accept it. That keeps episodes additive — an SDK, store, or verifier that has never heard of episodes still reads, hashes, and verifies these records correctly, because nothing about the envelope changed.
+
+The episode id is opaque to the protocol. Nothing enforces a prefix. The fixture below uses a host-chosen `aep_…`; the Claude Code adapter derives `ep_<sessionId>`. Only equality matters.
+
+## Opening an episode
+
+`episodeStartedTemplate` emits the canonical opening event:
+
+- `action` is always `activity.episode.started`. The template owns it, so a caller cannot drift onto a near-miss string and silently split a read model.
+- `target` is `{ type: "activity_episode", id }`. The episode is a first-class evidence entity, so [evidence-graph](/docs/concepts/evidence-graph/) edges can point at it directly.
+- `purpose` defaults to `change_provenance` and `retention` to `security_1y`.
+- `authSessionId`, `authContextId`, `domain`, and `startReason` land in template-reserved metadata.
+
+The event answers three questions a downstream group-by cannot answer on its own: when the episode opened, who opened it, and why. `startReason` is the human-legible cause — `deploy_requested`, `incident_response`, `scheduled_job`. Without an opening event you can still group events by key, but you have no record of the episode's own beginning, and an episode whose first surviving event is a `deploy.deployed` looks identical to one whose earlier events were never recorded.
+
+Emitting the opening event is optional. Stamping the key is what actually makes the group-by work; `activity.episode.started` makes the group *explainable*.
+
+## The stamp is applied last
+
+The grouping key is only trustworthy if the code being audited cannot rewrite it. Every path that stamps `activityEpisodeId` applies it after caller-supplied metadata.
+
+```text
+caller metadata
+        ↓ merge — template-reserved keys win
+template metadata (authSessionId, authContextId, domain, startReason)
+        ↓ stamp — unconditional assignment
+metadata.activityEpisodeId = input.activityEpisodeId
+        ↓ withRiskSignals — only when riskSignals was supplied
+metadata.riskSignals = normalizeRiskSignals(signals)
+```
+
+The checked fixture hands the template a hostile caller: metadata that claims `activityEpisodeId: 'aep_caller_supplied'` and a cheap `riskSignals: { operationType: 'read' }` envelope for what is actually an irreversible production release.
+
+<Code code={stampingOutput} lang="json" title="verified output" />
+
+`activityEpisodeIdUnshadowable` is `true`: the stamped id survives, the caller's substitute does not. `unrelatedCallerKeysPreserved` shows the stamp is targeted rather than a wipe — `domain` and `releaseId` come through untouched. The same ordering protects the risk envelope, and `riskHiddenByTheShadowAttempt` measures what the substitution would have concealed: `0.05` / `low` from the caller's claim against `1` / `critical` from the observed signals.
+
+Key insertion order in the printed object is incidental. Metadata keys are sorted during redaction before canonicalization, which is why `sealedEvent.riskSignals` comes back alphabetized. Two events with the same metadata values hash identically regardless of the order a host built them in. See [hash chain](/docs/concepts/hash-chain/).
+
+There are two enforcement styles, and the difference matters when you are debugging:
+
+- **Templates and the provenance recorder overwrite.** `buildTemplate` assigns `metadata.activityEpisodeId` after the merge; the recorder's `buildEvent` spreads caller metadata first and then sets `sessionId` and `activityEpisodeId`. A caller's value is discarded silently.
+- **Governed changes reject.** `mergeVeritioMetadata` treats `activityEpisodeId` as a reserved context key alongside `authSessionId`, `traceId`, `changeId`, and others. Supplying one in caller metadata throws `metadata.activityEpisodeId is reserved by Veritio` rather than being quietly replaced. Governed changes fail closed because the same metadata feeds Change, Trace, and Explain projections.
+
+Neither mode lets application code choose which episode its evidence lands in. That is the point: the episode boundary is set by the capture boundary, not by the code under audit.
+
+## Why the group-by is necessary
+
+The obvious objection is that the evidence graph should already connect these records. It does not, and the reason is structural rather than incidental.
+
+A provenance session's events target different entities by design. `agent.prompt.recorded` and `agent.tool.called` target the `agent_session`. `change.files.changed` targets a `source_tree`. `review.approval.recorded` targets a `pull_request`. `deploy.deployed` targets an environment or release. Several of those entities are shared: two concurrent sessions editing the same repository produce file-change events against the same source tree, and a pull request accumulates reviews from humans and agents alike.
+
+So an edge from a shared entity does not identify the session that produced a record. Traversal from the shared node fans out to everything that ever touched it, and traversal from the session node stops wherever a record was attached to a shared entity instead of a session-private one. The stamped key sidesteps traversal entirely: `WHERE metadata.activityEpisodeId = ?` is exact, cheap, and does not depend on the graph being complete.
+
+The recorder stamps `metadata.sessionId` for the same reason and at the same point in the merge. `sessionId` scopes to one agent session; `activityEpisodeId` can span several — a release episode that opens before an agent session starts and closes after a deployment lands.
+
+## Deriving an id with no shared memory
+
+Agent capture makes this harder than it looks. Claude Code invokes its hooks as separate short-lived processes. `SessionStart`, each `PostToolUse`, and `Stop` run in different processes with no shared heap, and any process may be the first to run after state is lost.
+
+`episodeIdOf` solves that by deriving the id from something every process already has:
+
+```ts
+export function episodeIdOf(sessionId: string): string {
+  return `ep_${sanitize(sessionId)}`
+}
+```
+
+`sanitize` replaces every character outside `[A-Za-z0-9_-]` with `_`.
+
+```text
+hook process 1  SessionStart   session_id=sess_a7f2 → ep_sess_a7f2
+hook process 2  PostToolUse    session_id=sess_a7f2 → ep_sess_a7f2
+hook process 3  Stop           session_id=sess_a7f2 → ep_sess_a7f2
+```
+
+The adapter resolves the id by a fixed precedence: persisted session state first, then the opt-in `VERITIO_ACTIVITY_EPISODE_ID` override, then `episodeIdOf(session_id)`. Persisted state wins so the id stays frozen once the session has begun; the override only takes effect on the first `SessionStart`, before state exists, and exists to thread several sessions into one operator-defined episode.
+
+The derivation is a function, not a hash. Because `sanitize` is lossy, two session ids that differ only in punctuation — `a/b` and `a_b` — map to the same episode id. Claude Code session ids are UUID-shaped, so this does not arise there, but a capture adapter for a source with punctuation-bearing ids should derive its own id rather than assume `episodeIdOf` is injective.
+
+## Rolling an episode into one score
+
+`rollupEpisodeRisk` consumes steps, not events. Building the steps is exactly the group-by:
+
+```text
+records WHERE metadata.activityEpisodeId = 'ep_sess_a7f2'
+        ↓ scoreRiskSignals(metadata.riskSignals) per record
+steps [{ occurredAt, score, action? }, …]
+        ↓ rollupEpisodeRisk(steps, DEFAULT_RISK_POLICY)
+{ score, level, peak, velocityScore, stepCount, policyVersion }
+```
+
+Under `veritio.reference.v1` the rollup sorts steps by `occurredAt`, tracks `peak` as the highest single step score, and accumulates momentum with a 0.5 decay per elapsed 60-second window. `velocityScore` is that maximum momentum divided by a normalizer of 3.0, clamped to `[0,1]`. The episode score is the maximum of `peak` and `velocityScore` — and of `frequencyScore` too when the policy configures frequency rules, which the default policy does not.
+
+Only `peak` is grouping-independent. `velocityScore`, `stepCount`, and every frequency rule are functions of which steps were placed in the same bucket, which is why a wrong or missing key changes the answer rather than merely losing a label:
+
+- **Key absent.** The record cannot be selected into any episode. It never becomes a step, `stepCount` is short, and a burst of moderate individual scores never compounds into velocity. The episode looks calmer than the work was.
+- **Key split across two ids.** One stretch of work becomes two episodes. Momentum restarts at the split, and a frequency rule that needed six qualifying steps inside a window sees three and three.
+- **Key over-merged.** Unrelated concurrent work shares an id. Momentum accumulates across activity that never interacted, and the rollup reports velocity nobody generated.
+
+The rollup makes no attempt to detect any of these. It scores the steps it is given. Correct grouping is an input invariant, which is why the key is stamped at the capture boundary and made un-shadowable there.
+
+## Privacy and parity
+
+`activityEpisodeId` is non-PII by construction. It is a stable synthetic identifier — a sanitized session id or an operator-chosen release label — and it must not match Veritio's redaction key pattern (`password|secret|token|api_key|authorization|email|phone|ssn`), because a match would replace the value with `[redacted]` and destroy the join. That constraint is on the key *name*, which is fixed. Redaction is by key name only, so it will not rescue a badly chosen *value*: an episode id built from a user's email address would travel intact into canonical bytes and hashes. Keep episode ids opaque and derived from identifiers that are already safe to store. See [redaction](/docs/concepts/redaction/).
+
+Parity is uneven, and the split is worth stating precisely:
+
+- **The template layer has full parity.** `episodeStartedTemplate` (TypeScript), `activity_episode_started_template` (Python), and `EpisodeStartedTemplate` (Go) all emit `activity.episode.started`, target the episode entity, and stamp `metadata.activityEpisodeId` after caller metadata through their shared template builder.
+- **The reserved-key rejection has full parity.** All three SDKs raise on a caller-supplied `metadata.activityEpisodeId` in the governed-change path, with the same `metadata.activityEpisodeId is reserved by Veritio` message.
+- **The recorder and capture stamp are TypeScript only.** The provenance recorder that stamps `sessionId` and `activityEpisodeId` onto every downstream event exists only in TypeScript, as does the Claude Code capture adapter that derives the id. This is a documented parity obligation, not a design choice: a Python or Go provenance recorder or capture adapter must reproduce the same post-caller stamp and the same derivation before it can be considered at parity.
+
+## What an episode does and does not prove
+
+A complete episode shows that a set of records was captured under one grouping key and, with an opening event, when and why that group began. Combined with a verified chain it shows those records have not been altered since they were appended.
+
+It does not prove that the episode is complete. Events emitted by code paths that were never instrumented, or by a process that crashed before its hook ran, leave no trace of their absence — the key groups what was recorded, and a chain proves nothing was changed, but neither can attest to work that was never captured. It also does not prove causation: sharing an episode means sharing a capture boundary, not that one step caused another. Causal claims belong on explicit edges.
+
+Continue with [risk scoring](/docs/concepts/risk-scoring/) for how a single step's signals become a score, [agent events](/docs/ai/agent-events/) for the recorder that stamps the key on every event a session emits, or [changes, activities, and revisions](/docs/concepts/governed-changes/) for the governed-mutation path that treats the key as reserved.

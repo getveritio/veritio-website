@@ -5,55 +5,19 @@ import Footer from '../components/Footer.astro'
 import Section from '../components/Section.astro'
 import CodeBlock from '../components/CodeBlock.astro'
 import FeatureCard from '../components/FeatureCard.astro'
+import typescriptQuickstart from '../examples/quickstart/typescript.ts?raw'
+import pythonQuickstart from '../examples/quickstart/python.py?raw'
+import goQuickstart from '../examples/quickstart/go.go?raw'
 
-const installTs = `npm install @veritio/core
+const installTs = `npm install @veritio/core@0.4.7
 # or
-bun add @veritio/core`
+bun add @veritio/core@0.4.7`
 
-const installPy = `pip install veritio`
+const installPy = `git clone https://github.com/getveritio/veritio.git
+git -C veritio checkout c4100ee7b678d0c6b227c67ae6ea1d8a1f373967
+pip install -e ./veritio/sdks/python`
 
-const installGo = `go get github.com/getveritio/veritio/sdks/go`
-
-const recordEvent = `import { MemoryAuditStore, createAuditEvent, createEvidenceEdge } from "@veritio/core";
-
-const store = new MemoryAuditStore();
-
-const event = createAuditEvent({
-  id: "evt_01",
-  occurredAt: "2026-06-10T00:00:00.000Z",
-  actor: { type: "user", id: "usr_123" },
-  action: "org.member.invited",
-  target: { type: "organization", id: "org_123" },
-  scope: { tenantId: "org_123", environment: "production" },
-  purpose: "access_management",
-  lawfulBasis: "contract",
-  retention: "security_1y",
-  metadata: { inviteId: "inv_123", role: "viewer" },
-});
-
-await store.append(event);
-
-const edge = createEvidenceEdge({
-  id: "edge_01",
-  occurredAt: "2026-06-10T00:00:01.000Z",
-  scope: { tenantId: "org_123", environment: "production" },
-  from: { type: "actor", id: "usr_123", actorType: "user" },
-  relation: "created",
-  to: { type: "runtime_event", id: "evt_01" },
-  metadata: { reason: "member_invite" },
-});`
-
-const pythonEdge = `from veritio import create_evidence_edge, hash_evidence_edge
-
-edge = create_evidence_edge({
-    "from": {"type": "agent_session", "id": "agt_sess_123"},
-    "relation": "created",
-    "to": {"type": "file", "id": "file_billing_plan", "pathHash": "sha256:..."},
-    "scope": {"tenantId": "org_123", "environment": "production"},
-    "metadata": {"reason": "ai_agent"},
-})
-
-edge_hash = hash_evidence_edge(edge)`
+const installGo = `go get github.com/getveritio/veritio/sdks/go@c4100ee7b678d0c6b227c67ae6ea1d8a1f373967`
 
 const workbench = `veritio dev --mcp`
 
@@ -91,6 +55,7 @@ const adapters = [
 >
   <Nav />
 
+  <main id="main-content">
   <section class="py-16 sm:py-20">
     <div class="container">
       <span class="eyebrow">Examples</span>
@@ -111,7 +76,8 @@ const adapters = [
   <Section id="install">
     <h2 class="text-2xl font-semibold tracking-tight text-ink">Install</h2>
     <p class="mt-3 max-w-2xl text-ink-soft">
-      Pick the SDK for your stack. Each package ships independently.
+      TypeScript is published as an exact package version. Python and Go are
+      currently installed from the public source tree.
     </p>
     <div class="mt-8 grid gap-5 lg:grid-cols-3">
       <CodeBlock code={installTs} lang="bash" title="TypeScript" />
@@ -125,29 +91,37 @@ const adapters = [
       Record your first event
     </h2>
     <p class="mt-3 max-w-2xl text-ink-soft">
-      Append a structured audit event to a store, then link the actor to it with
-      an evidence edge.
+      Append a structured audit event, read the tenant chain, and verify it.
     </p>
     <div class="mt-8">
-      <CodeBlock code={recordEvent} lang="ts" title="audit-event.ts" />
+      <CodeBlock code={typescriptQuickstart} lang="ts" title="typescript.ts" />
     </div>
     <p class="mt-5 max-w-2xl text-sm leading-relaxed text-ink-soft">
-      The evidence edge connects the actor (<code class="inline">usr_123</code>)
-      to the recorded event in the evidence graph, capturing who did what
-      without overwriting the original event.
+      This fixture is imported directly from the checked example source and is
+      type-checked against <code class="inline">@veritio/core@0.4.7</code>.
     </p>
   </Section>
 
   <Section id="python-edges" tone="sunken">
     <h2 class="text-2xl font-semibold tracking-tight text-ink">
-      Python: evidence edges
+      The same event in Python
     </h2>
     <p class="mt-3 max-w-2xl text-ink-soft">
-      Build an evidence edge — for example, linking an AI agent session to a
-      file it created — and produce a stable hash for that edge.
+      Create and hash the equivalent event with the source-backed Python SDK.
     </p>
     <div class="mt-8">
-      <CodeBlock code={pythonEdge} lang="python" title="edge.py" />
+      <CodeBlock code={pythonQuickstart} lang="python" title="python.py" />
+    </div>
+  </Section>
+
+  <Section id="go-event">
+    <h2 class="text-2xl font-semibold tracking-tight text-ink">The same event in Go</h2>
+    <p class="mt-3 max-w-2xl text-ink-soft">
+      The Go fixture uses the same actor, action, target, scope, purpose, lawful
+      basis, retention label, and metadata as the TypeScript and Python versions.
+    </p>
+    <div class="mt-8">
+      <CodeBlock code={goQuickstart} lang="go" title="main.go" />
     </div>
   </Section>
 
@@ -162,8 +136,8 @@ const adapters = [
       <CodeBlock code={workbench} lang="bash" title="terminal" />
     </div>
     <p class="mt-5 max-w-2xl text-sm leading-relaxed text-ink-soft">
-      This opens a browser evidence-graph UI with a verifier, a scenario runner,
-      and MCP tools for AI agents — all running locally, with no account needed.
+      Run this command from a source checkout. It starts the local Workbench and
+      MCP tooling with no hosted account required.
     </p>
   </Section>
 
@@ -235,13 +209,14 @@ const adapters = [
         </a>
         <a
           class="doc-btn"
-          href="/cloud"
+          href="/cloud/"
         >
           When you want it hosted →
         </a>
       </div>
     </div>
   </Section>
+  </main>
 
   <Footer />
 </BaseLayout>

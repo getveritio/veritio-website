@@ -1,0 +1,25 @@
+{
+  "bundleVersion": "vevb-1",
+  "files": [
+    "records/audit-events.jsonl",
+    "records/evidence-edges.jsonl",
+    "records/commits.jsonl",
+    "verification.json"
+  ],
+  "valid": {
+    "valid": true,
+    "checks": {
+      "structure": true,
+      "integrity": true,
+      "chains": true,
+      "signature": "absent"
+    },
+    "chainScope": "full",
+    "issues": []
+  },
+  "tampered": {
+    "valid": false,
+    "integrity": false,
+    "issueCount": 3
+  }
+}

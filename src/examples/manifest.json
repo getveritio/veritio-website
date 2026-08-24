@@ -1,0 +1,690 @@
+{
+  "verifiedAt": "2026-08-23",
+  "upstreamRevision": "c4100ee7b678d0c6b227c67ae6ea1d8a1f373967",
+  "examples": [
+    {
+      "id": "quickstart-typescript",
+      "language": "typescript",
+      "path": "src/examples/quickstart/typescript.ts",
+      "upstreamPath": "sdks/typescript/src/index.ts",
+      "sha256": "5ca3728003862054f0200d9bb2366b9a8676ed89fd947455767a77b0d2de633a",
+      "command": [
+        "bun",
+        "src/examples/quickstart/typescript.ts"
+      ],
+      "expectedOutputPath": "src/examples/quickstart/expected/typescript.txt",
+      "semanticsId": "audit-event@1",
+      "routes": [
+        "/",
+        "/examples/",
+        "/docs/",
+        "/docs/start/record-first-event/"
+      ]
+    },
+    {
+      "id": "quickstart-python",
+      "language": "python",
+      "path": "src/examples/quickstart/python.py",
+      "upstreamPath": "sdks/python/src/veritio/event.py",
+      "sha256": "95b3a293b7a91790277390f934aa963bb313aa85b33fe87fa4e62df475d6840d",
+      "command": [
+        "python3",
+        "src/examples/quickstart/python.py"
+      ],
+      "expectedOutputPath": "src/examples/quickstart/expected/python.txt",
+      "semanticsId": "audit-event@1",
+      "routes": [
+        "/examples/",
+        "/docs/",
+        "/docs/sdks/python/"
+      ]
+    },
+    {
+      "id": "quickstart-go",
+      "language": "go",
+      "path": "src/examples/quickstart/go.go",
+      "upstreamPath": "sdks/go/event.go",
+      "sha256": "6696ba1b01bff5325c91bca3433a9bf1a195e6d39690cc3bbb0ff3174d0673f7",
+      "command": [
+        "go",
+        "run",
+        "."
+      ],
+      "expectedOutputPath": "src/examples/quickstart/expected/go.txt",
+      "semanticsId": "audit-event@1",
+      "routes": [
+        "/examples/",
+        "/docs/",
+        "/docs/sdks/go/"
+      ]
+    },
+    {
+      "id": "tutorial-record-and-verify",
+      "language": "typescript",
+      "path": "src/examples/tutorial/record-and-verify.ts",
+      "upstreamPath": "sdks/typescript/src/index.ts",
+      "sha256": "54d4d479addd4a73c8def9eb010919af077e432ec0495993b3eba2545c5e288d",
+      "command": [
+        "bun",
+        "src/examples/tutorial/record-and-verify.ts"
+      ],
+      "expectedOutputPath": "src/examples/tutorial/expected/record-and-verify.txt",
+      "semanticsId": "audit-event@1",
+      "routes": [
+        "/docs/",
+        "/docs/start/record-first-event/",
+        "/docs/start/verify-a-chain/"
+      ]
+    },
+    {
+      "id": "tutorial-tamper",
+      "language": "typescript",
+      "path": "src/examples/tutorial/tamper.ts",
+      "upstreamPath": "sdks/typescript/src/index.ts",
+      "sha256": "74b30eda15913e182aea98389fdc63cda53a69b515164392d0c41c51b4bc86f2",
+      "command": [
+        "bun",
+        "src/examples/tutorial/tamper.ts"
+      ],
+      "expectedOutputPath": "src/examples/tutorial/expected/tamper.txt",
+      "semanticsId": "audit-event@1",
+      "routes": [
+        "/docs/start/verify-a-chain/",
+        "/docs/concepts/hash-chain/"
+      ]
+    },
+    {
+      "id": "storage-file-store",
+      "language": "typescript",
+      "path": "src/examples/storage/file-store.ts",
+      "upstreamPath": "storage/src/file-store.ts",
+      "sha256": "4d57d5cb948feb925b39690c4d8b93914fdddfc7d6baf5e51fe59afddf92af25",
+      "command": [
+        "bun",
+        "src/examples/storage/file-store.ts"
+      ],
+      "expectedOutputPath": "src/examples/storage/expected/file-store.txt",
+      "semanticsId": "file-evidence-store@1",
+      "routes": [
+        "/docs/storage/file-store/"
+      ]
+    },
+    {
+      "id": "agent-session-and-tool",
+      "language": "typescript",
+      "path": "src/examples/agents/session-and-tool.ts",
+      "upstreamPath": "sdks/typescript/src/provenance.ts",
+      "sha256": "44c3885c3ca924d7879782a60ef138ac23e4e7e729c3a87575dd035d20a27fa1",
+      "command": [
+        "bun",
+        "src/examples/agents/session-and-tool.ts"
+      ],
+      "expectedOutputPath": "src/examples/agents/expected/session-and-tool.txt",
+      "semanticsId": "agent-provenance@1",
+      "routes": [
+        "/docs/ai/agent-events/"
+      ]
+    },
+    {
+      "id": "export-build-and-verify",
+      "language": "typescript",
+      "path": "src/examples/exports/build-and-verify.ts",
+      "upstreamPath": "sdks/typescript/src/export-bundle.ts",
+      "sha256": "bbf89361be0453a937425fd0140ec31322f731bff7bfa024e377df2d6df56145",
+      "command": [
+        "bun",
+        "src/examples/exports/build-and-verify.ts"
+      ],
+      "expectedOutputPath": "src/examples/exports/expected/build-and-verify.txt",
+      "semanticsId": "vevb-1@1",
+      "routes": [
+        "/docs/reference/export-format/",
+        "/docs/reference/verifier/",
+        "/docs/cloud/exports/"
+      ]
+    },
+    {
+      "id": "risk-score-and-explain",
+      "language": "typescript",
+      "path": "src/examples/risk/score-and-explain.ts",
+      "upstreamPath": "sdks/typescript/src/risk-score.ts",
+      "sha256": "98777f758c2006618d1e0376bce48c8add15006ed3c47cf3db348586e745d8c9",
+      "command": [
+        "bun",
+        "src/examples/risk/score-and-explain.ts"
+      ],
+      "expectedOutputPath": "src/examples/risk/expected/score-and-explain.txt",
+      "semanticsId": "risk-scoring@1",
+      "routes": [
+        "/docs/concepts/risk-scoring/"
+      ]
+    },
+    {
+      "id": "risk-signals-fail-closed",
+      "language": "typescript",
+      "path": "src/examples/risk/signals-fail-closed.ts",
+      "upstreamPath": "sdks/typescript/src/risk-score.ts",
+      "sha256": "d493ab9ccf43ecb297e623052f8624ffa82a432d2f8ce4ad8145a7d6313bdce8",
+      "command": [
+        "bun",
+        "src/examples/risk/signals-fail-closed.ts"
+      ],
+      "expectedOutputPath": "src/examples/risk/expected/signals-fail-closed.txt",
+      "semanticsId": "risk-scoring@1",
+      "routes": [
+        "/docs/concepts/risk-scoring/",
+        "/docs/reference/troubleshooting/"
+      ]
+    },
+    {
+      "id": "risk-policy-temperature",
+      "language": "typescript",
+      "path": "src/examples/risk/policy-temperature.ts",
+      "upstreamPath": "sdks/typescript/src/risk-policy.ts",
+      "sha256": "44ed0cf6c19e57302c82f55b0a12919eb87935b19d7c45e4cfd26bd3cdcaaef9",
+      "command": [
+        "bun",
+        "src/examples/risk/policy-temperature.ts"
+      ],
+      "expectedOutputPath": "src/examples/risk/expected/policy-temperature.txt",
+      "semanticsId": "risk-policy@1",
+      "routes": [
+        "/docs/reference/risk-policy/"
+      ]
+    },
+    {
+      "id": "governed-action-draft",
+      "language": "typescript",
+      "path": "src/examples/governed/action-draft.ts",
+      "upstreamPath": "sdks/typescript/src/governed-change.ts",
+      "sha256": "77d81bbe1037dab212d95bfe48c7076b0f281fa4e68f85469b7a40387a2cc43e",
+      "command": [
+        "bun",
+        "src/examples/governed/action-draft.ts"
+      ],
+      "expectedOutputPath": "src/examples/governed/expected/action-draft.txt",
+      "semanticsId": "governed-action@1",
+      "routes": [
+        "/docs/guides/governed-actions/",
+        "/docs/reference/governed-change-api/"
+      ]
+    },
+    {
+      "id": "governed-capture-modes",
+      "language": "typescript",
+      "path": "src/examples/governed/capture-modes.ts",
+      "upstreamPath": "sdks/typescript/src/governed-change.ts",
+      "sha256": "6fe4c7eca6638b7a41378387c12d725db048f6e9f1d408a95081d66ece50419e",
+      "command": [
+        "bun",
+        "src/examples/governed/capture-modes.ts"
+      ],
+      "expectedOutputPath": "src/examples/governed/expected/capture-modes.txt",
+      "semanticsId": "governed-action@1",
+      "routes": [
+        "/docs/concepts/governed-changes/"
+      ]
+    },
+    {
+      "id": "governed-lineage-and-revision-id",
+      "language": "typescript",
+      "path": "src/examples/governed/lineage-and-revision-id.ts",
+      "upstreamPath": "sdks/typescript/src/governed-change.ts",
+      "sha256": "fcce28b6367b83b1345aaebe2e3e5fba60dcc360b7597f0b04389921c216632d",
+      "command": [
+        "bun",
+        "src/examples/governed/lineage-and-revision-id.ts"
+      ],
+      "expectedOutputPath": "src/examples/governed/expected/lineage-and-revision-id.txt",
+      "semanticsId": "governed-action@1",
+      "routes": [
+        "/docs/concepts/governed-changes/"
+      ]
+    },
+    {
+      "id": "governed-fail-closed",
+      "language": "typescript",
+      "path": "src/examples/governed/fail-closed.ts",
+      "upstreamPath": "sdks/typescript/src/governed-change.ts",
+      "sha256": "f4e94210645e5c85cfba804514431ea22f4be2ffeac180a8af28276b6d220dc2",
+      "command": [
+        "bun",
+        "src/examples/governed/fail-closed.ts"
+      ],
+      "expectedOutputPath": "src/examples/governed/expected/fail-closed.txt",
+      "semanticsId": "governed-action@1",
+      "routes": [
+        "/docs/guides/governed-actions/",
+        "/docs/reference/troubleshooting/"
+      ]
+    },
+    {
+      "id": "governed-outbox-roundtrip",
+      "language": "typescript",
+      "path": "src/examples/governed/outbox-roundtrip.ts",
+      "upstreamPath": "sdks/typescript/src/governed-change.ts",
+      "sha256": "d894757bd817f8be59155fc16002d57dd62344c884ab4d5cf11fb200771a5799",
+      "command": [
+        "bun",
+        "src/examples/governed/outbox-roundtrip.ts"
+      ],
+      "expectedOutputPath": "src/examples/governed/expected/outbox-roundtrip.txt",
+      "semanticsId": "governed-outbox@1",
+      "routes": [
+        "/docs/guides/transactional-outbox/"
+      ]
+    },
+    {
+      "id": "templates-signed-in-parity",
+      "language": "typescript",
+      "path": "src/examples/templates/signed-in-parity.ts",
+      "upstreamPath": "sdks/typescript/src/templates.ts",
+      "sha256": "8909005b3bebf7bc337197e9aed2bfeb45bb561ccaae9e0db37d9633c3b5c813",
+      "command": [
+        "bun",
+        "src/examples/templates/signed-in-parity.ts"
+      ],
+      "expectedOutputPath": "src/examples/templates/expected/signed-in-parity.txt",
+      "semanticsId": "audit-template@1",
+      "routes": [
+        "/docs/guides/audit-templates/"
+      ]
+    },
+    {
+      "id": "templates-raw-content-guard",
+      "language": "typescript",
+      "path": "src/examples/templates/raw-content-guard.ts",
+      "upstreamPath": "sdks/typescript/src/templates.ts",
+      "sha256": "09fdece460920f8a794b4e2f1f8c88460eccf20d25c9dd4ed7442c98109769f9",
+      "command": [
+        "bun",
+        "src/examples/templates/raw-content-guard.ts"
+      ],
+      "expectedOutputPath": "src/examples/templates/expected/raw-content-guard.txt",
+      "semanticsId": "audit-template@1",
+      "routes": [
+        "/docs/guides/audit-templates/",
+        "/docs/reference/troubleshooting/"
+      ]
+    },
+    {
+      "id": "templates-action-catalogue",
+      "language": "typescript",
+      "path": "src/examples/templates/action-catalogue.ts",
+      "upstreamPath": "sdks/typescript/src/templates.ts",
+      "sha256": "73d792d83a3f38f9ed4346faf0667963396b6b6656cf4af9e2e0585d82f4de5c",
+      "command": [
+        "bun",
+        "src/examples/templates/action-catalogue.ts"
+      ],
+      "expectedOutputPath": "src/examples/templates/expected/action-catalogue.txt",
+      "semanticsId": "audit-template@1",
+      "routes": [
+        "/docs/reference/template-catalogue/"
+      ]
+    },
+    {
+      "id": "consent-grant-and-revoke",
+      "language": "typescript",
+      "path": "src/examples/consent/grant-and-revoke.ts",
+      "upstreamPath": "sdks/typescript/src/templates.ts",
+      "sha256": "9e2b4a2398f2a60e1ff06a162283ec09febe85a532ba6982198719ad64cbc202",
+      "command": [
+        "bun",
+        "src/examples/consent/grant-and-revoke.ts"
+      ],
+      "expectedOutputPath": "src/examples/consent/expected/grant-and-revoke.txt",
+      "semanticsId": "consent-history@1",
+      "routes": [
+        "/docs/guides/consent-history/"
+      ]
+    },
+    {
+      "id": "dsar-subject-bundle",
+      "language": "typescript",
+      "path": "src/examples/dsar/subject-bundle.ts",
+      "upstreamPath": "sdks/typescript/src/export-bundle.ts",
+      "sha256": "8d309c02f9707a2432ae495e6d25eeaa45bf37e955e69895f8de66c43877b9da",
+      "command": [
+        "bun",
+        "src/examples/dsar/subject-bundle.ts"
+      ],
+      "expectedOutputPath": "src/examples/dsar/expected/subject-bundle.txt",
+      "semanticsId": "dsar-export@1",
+      "routes": [
+        "/docs/guides/dsar-fulfillment/"
+      ]
+    },
+    {
+      "id": "commit-merkle-root",
+      "language": "typescript",
+      "path": "src/examples/commits/merkle-root.ts",
+      "upstreamPath": "sdks/typescript/src/index.ts",
+      "sha256": "3f3c0f761ebbc3178e3d7b4d0a7dacc4fcee73a6ed00bff32b30d7a102e92b68",
+      "command": [
+        "bun",
+        "src/examples/commits/merkle-root.ts"
+      ],
+      "expectedOutputPath": "src/examples/commits/expected/merkle-root.txt",
+      "semanticsId": "evidence-commit@1",
+      "routes": [
+        "/docs/concepts/evidence-commits/",
+        "/docs/reference/evidence-commit-hashing/"
+      ]
+    },
+    {
+      "id": "commit-tamper",
+      "language": "typescript",
+      "path": "src/examples/commits/tamper.ts",
+      "upstreamPath": "sdks/typescript/src/index.ts",
+      "sha256": "9099f08d08570a1aa9aa1ea828a92651130f5596587fad245e25d7a325d893d2",
+      "command": [
+        "bun",
+        "src/examples/commits/tamper.ts"
+      ],
+      "expectedOutputPath": "src/examples/commits/expected/tamper.txt",
+      "semanticsId": "evidence-commit@1",
+      "routes": [
+        "/docs/concepts/evidence-commits/"
+      ]
+    },
+    {
+      "id": "errors-fail-closed-catalogue",
+      "language": "typescript",
+      "path": "src/examples/errors/fail-closed-catalogue.ts",
+      "upstreamPath": "sdks/typescript/src/index.ts",
+      "sha256": "216151fc918a0e662368982a4a8ca056391e689ce9e409da7bf7d43e58e9ecee",
+      "command": [
+        "bun",
+        "src/examples/errors/fail-closed-catalogue.ts"
+      ],
+      "expectedOutputPath": "src/examples/errors/expected/fail-closed-catalogue.txt",
+      "semanticsId": "fail-closed@1",
+      "routes": [
+        "/docs/reference/troubleshooting/"
+      ]
+    },
+    {
+      "id": "risk-episode-rollup",
+      "language": "typescript",
+      "path": "src/examples/risk/episode-rollup.ts",
+      "upstreamPath": "sdks/typescript/src/risk-score.ts",
+      "sha256": "f633255e7d4c72a3002322777ce462b95bad917c35021554e4d552c9d4989aab",
+      "command": [
+        "bun",
+        "src/examples/risk/episode-rollup.ts"
+      ],
+      "expectedOutputPath": "src/examples/risk/expected/episode-rollup.txt",
+      "semanticsId": "risk-rollup@1",
+      "routes": [
+        "/docs/guides/risk-policy-tuning/",
+        "/docs/ai/risk-signals/"
+      ]
+    },
+    {
+      "id": "risk-frequency-rules",
+      "language": "typescript",
+      "path": "src/examples/risk/frequency-rules.ts",
+      "upstreamPath": "sdks/typescript/src/risk-policy.ts",
+      "sha256": "a38a45b45509bde19a0ead0307f36c73736d8765b99907fb66868b6ece6ee438",
+      "command": [
+        "bun",
+        "src/examples/risk/frequency-rules.ts"
+      ],
+      "expectedOutputPath": "src/examples/risk/expected/frequency-rules.txt",
+      "semanticsId": "risk-frequency@1",
+      "routes": [
+        "/docs/guides/risk-policy-tuning/"
+      ]
+    },
+    {
+      "id": "risk-assertion-and-hash",
+      "language": "typescript",
+      "path": "src/examples/risk/assertion-and-hash.ts",
+      "upstreamPath": "sdks/typescript/src/risk.ts",
+      "sha256": "be00b67db0b8036822e593709289e42b9a583f6f01349770fc9d784bb6b48a2b",
+      "command": [
+        "bun",
+        "src/examples/risk/assertion-and-hash.ts"
+      ],
+      "expectedOutputPath": "src/examples/risk/expected/assertion-and-hash.txt",
+      "semanticsId": "security-risk-assertion@1",
+      "routes": [
+        "/docs/guides/security-risk-assertions/"
+      ]
+    },
+    {
+      "id": "risk-parity-python",
+      "language": "python",
+      "path": "src/examples/risk/parity.py",
+      "upstreamPath": "sdks/python/src/veritio/risk_policy.py",
+      "sha256": "c5b234512be6b587e7c8156d642e3819a6e792d30b6a43b57996a676d3127a75",
+      "command": [
+        "python3",
+        "src/examples/risk/parity.py"
+      ],
+      "expectedOutputPath": "src/examples/risk/expected/parity-python.txt",
+      "semanticsId": "risk-parity@1",
+      "routes": [
+        "/docs/reference/parity-matrix/"
+      ]
+    },
+    {
+      "id": "risk-parity-go",
+      "language": "go",
+      "path": "src/examples/risk/parity.go",
+      "upstreamPath": "sdks/go/risk_policy.go",
+      "sha256": "25e6e3ac7e3ae3ee6fc929fd6a42df793b4d05d6e3ed23a6ccf92b5b0f1638c4",
+      "command": [
+        "go",
+        "run",
+        "."
+      ],
+      "expectedOutputPath": "src/examples/risk/expected/parity-go.txt",
+      "semanticsId": "risk-parity@1",
+      "routes": [
+        "/docs/reference/parity-matrix/"
+      ]
+    },
+    {
+      "id": "templates-episode-and-risk-stamping",
+      "language": "typescript",
+      "path": "src/examples/templates/episode-and-risk-stamping.ts",
+      "upstreamPath": "sdks/typescript/src/templates.ts",
+      "sha256": "a608e2239bde61ebc4f330babed7be77034618ee14891b6889d3bd181a165ea0",
+      "command": [
+        "bun",
+        "src/examples/templates/episode-and-risk-stamping.ts"
+      ],
+      "expectedOutputPath": "src/examples/templates/expected/episode-and-risk-stamping.txt",
+      "semanticsId": "activity-episode@1",
+      "routes": [
+        "/docs/concepts/activity-episodes/"
+      ]
+    },
+    {
+      "id": "templates-log-classifiers",
+      "language": "typescript",
+      "path": "src/examples/templates/log-classifiers.ts",
+      "upstreamPath": "sdks/typescript/src/templates.ts",
+      "sha256": "e468c9c9fdab4ace9ff09e9726524b330f2758c5cefb64e5cf20902aa5015335",
+      "command": [
+        "bun",
+        "src/examples/templates/log-classifiers.ts"
+      ],
+      "expectedOutputPath": "src/examples/templates/expected/log-classifiers.txt",
+      "semanticsId": "audit-template@1",
+      "routes": [
+        "/docs/reference/template-catalogue/"
+      ]
+    },
+    {
+      "id": "graph-edges-and-chain",
+      "language": "typescript",
+      "path": "src/examples/graph/edges-and-chain.ts",
+      "upstreamPath": "sdks/typescript/src/index.ts",
+      "sha256": "c46aa9c5b9b211bd400ac215902942cfd155c1921169a3b54964c92b07bee061",
+      "command": [
+        "bun",
+        "src/examples/graph/edges-and-chain.ts"
+      ],
+      "expectedOutputPath": "src/examples/graph/expected/edges-and-chain.txt",
+      "semanticsId": "evidence-edge@1",
+      "routes": [
+        "/docs/concepts/evidence-graph/"
+      ]
+    },
+    {
+      "id": "graph-vocabulary",
+      "language": "typescript",
+      "path": "src/examples/graph/vocabulary.ts",
+      "upstreamPath": "sdks/typescript/src/index.ts",
+      "sha256": "87adfa9db232e295ca95121d57c498f0832253f5885850f039b9b8e1b0e4bbc7",
+      "command": [
+        "bun",
+        "src/examples/graph/vocabulary.ts"
+      ],
+      "expectedOutputPath": "src/examples/graph/expected/vocabulary.txt",
+      "semanticsId": "evidence-vocabulary@1",
+      "routes": [
+        "/docs/reference/evidence-vocabulary/"
+      ]
+    },
+    {
+      "id": "storage-conformance-suite",
+      "language": "typescript",
+      "path": "src/examples/storage/conformance-suite.ts",
+      "upstreamPath": "storage/src/conformance.ts",
+      "sha256": "f9cac95374c7b8a3c729e6f82622d88f49e6174abceaadc72941512b066b7c80",
+      "command": [
+        "bun",
+        "src/examples/storage/conformance-suite.ts"
+      ],
+      "expectedOutputPath": "src/examples/storage/expected/conformance-suite.txt",
+      "semanticsId": "storage-conformance@1",
+      "routes": [
+        "/docs/storage/conformance/"
+      ]
+    },
+    {
+      "id": "redaction-key-patterns",
+      "language": "typescript",
+      "path": "src/examples/concepts/redaction.ts",
+      "upstreamPath": "sdks/typescript/src/index.ts",
+      "sha256": "08672e3588c28b5c021c0bf2de1116dba0c299d373891cbd48b0dd5a8eb46925",
+      "command": [
+        "bun",
+        "src/examples/concepts/redaction.ts"
+      ],
+      "expectedOutputPath": "src/examples/concepts/expected/redaction.txt",
+      "semanticsId": "redaction@1",
+      "routes": [
+        "/docs/concepts/redaction/"
+      ]
+    },
+    {
+      "id": "agents-provenance-graph",
+      "language": "typescript",
+      "path": "src/examples/agents/provenance-graph.ts",
+      "upstreamPath": "sdks/typescript/src/provenance.ts",
+      "sha256": "9c08f657c328d658d6036f68ce0317180ebb3c4eb6c74298b330ba13d5ba3503",
+      "command": [
+        "bun",
+        "src/examples/agents/provenance-graph.ts"
+      ],
+      "expectedOutputPath": "src/examples/agents/expected/provenance-graph.txt",
+      "semanticsId": "agent-provenance@1",
+      "routes": [
+        "/docs/ai/provenance-recorder/"
+      ]
+    },
+    {
+      "id": "adapter-server-boundary",
+      "language": "typescript",
+      "path": "src/examples/adapters/server-boundary.ts",
+      "upstreamPath": "sdks/typescript/src/index.ts",
+      "sha256": "1a3b80625c0c1bb56f5511bb48d5fc39572b76fedcabdd6efccae7654eda6c00",
+      "command": [
+        "bun",
+        "src/examples/adapters/server-boundary.ts"
+      ],
+      "expectedOutputPath": "src/examples/adapters/expected/server-boundary.txt",
+      "semanticsId": "adapter-boundary@1",
+      "routes": [
+        "/docs/frameworks/tanstack-start/",
+        "/docs/frameworks/sveltekit/",
+        "/docs/frameworks/express/"
+      ]
+    },
+    {
+      "id": "governed-action-draft-python",
+      "language": "python",
+      "path": "src/examples/governed/action-draft.py",
+      "upstreamPath": "sdks/python/src/veritio/governed_change.py",
+      "sha256": "6211027710ddba9f84e8afa5cf2ac0a12fcd50eb24980632c59562fca57e6ef2",
+      "command": [
+        "python3",
+        "src/examples/governed/action-draft.py"
+      ],
+      "expectedOutputPath": "src/examples/governed/expected/action-draft-python.txt",
+      "semanticsId": "governed-parity@1",
+      "routes": [
+        "/docs/reference/governed-change-api/",
+        "/docs/reference/parity-matrix/"
+      ]
+    },
+    {
+      "id": "governed-action-draft-go",
+      "language": "go",
+      "path": "src/examples/governed/action-draft.go",
+      "upstreamPath": "sdks/go/governed_change.go",
+      "sha256": "a7c5599a340cc52faae526c8f844b452aff60149f715718697495bc6d65d4f09",
+      "command": [
+        "go",
+        "run",
+        "."
+      ],
+      "expectedOutputPath": "src/examples/governed/expected/action-draft-go.txt",
+      "semanticsId": "governed-parity@1",
+      "routes": [
+        "/docs/reference/governed-change-api/",
+        "/docs/reference/parity-matrix/"
+      ]
+    },
+    {
+      "id": "commit-parity-python",
+      "language": "python",
+      "path": "src/examples/commits/parity.py",
+      "upstreamPath": "sdks/python/src/veritio/event.py",
+      "sha256": "3a1541b13a5226d6cde0854dad830ad297521db5f6b96b1134ef46c9eb883a24",
+      "command": [
+        "python3",
+        "src/examples/commits/parity.py"
+      ],
+      "expectedOutputPath": "src/examples/commits/expected/parity-python.txt",
+      "semanticsId": "commit-parity@1",
+      "routes": [
+        "/docs/reference/evidence-commit-hashing/",
+        "/docs/reference/parity-matrix/"
+      ]
+    },
+    {
+      "id": "commit-parity-go",
+      "language": "go",
+      "path": "src/examples/commits/parity.go",
+      "upstreamPath": "sdks/go/event.go",
+      "sha256": "34e47984523bf88e13816fdb5d14acaa04ea830f8a9761d0c983d66042560ee4",
+      "command": [
+        "go",
+        "run",
+        "."
+      ],
+      "expectedOutputPath": "src/examples/commits/expected/parity-go.txt",
+      "semanticsId": "commit-parity@1",
+      "routes": [
+        "/docs/reference/evidence-commit-hashing/",
+        "/docs/reference/parity-matrix/"
+      ]
+    }
+  ]
+}

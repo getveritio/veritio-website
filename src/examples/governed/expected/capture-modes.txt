@@ -1,0 +1,59 @@
+{
+  "changedPaths": [
+    "/billingCity",
+    "/email",
+    "/plan"
+  ],
+  "stateCommitmentFields": {
+    "billingCity": {
+      "captureMode": "content_digest",
+      "digest": "sha256:5cf1d78a3ca4f9f4f5bde60556503ad5158370821e20196bc104c822aeb71478"
+    },
+    "email": {
+      "algorithm": "hmac-sha256",
+      "keyVersion": "billing-2026-01",
+      "digest": "sha256:23822cf1c6dda29e44732233cfe4f0534b6b3302e703cc2baf17256eb408b555"
+    },
+    "plan": "growth"
+  },
+  "stateCommitmentDigest": "sha256:e34168aa49510393d39157292b5f6c221296f27cb1933aa6ff7d5f85fb675380",
+  "leakProofs": {
+    "rawEmailAppearsInDraft": false,
+    "digestSecretAppearsInDraft": false,
+    "omittedFieldValueAppearsInDraft": false
+  },
+  "reservedCaptureModes": [
+    {
+      "mode": "randomized_digest",
+      "failedClosed": true,
+      "error": {
+        "name": "TypeError",
+        "message": "capture mode randomized_digest is not supported by the current governed-change draft helper"
+      }
+    },
+    {
+      "mode": "reference",
+      "failedClosed": true,
+      "error": {
+        "name": "TypeError",
+        "message": "capture mode reference is not supported by the current governed-change draft helper"
+      }
+    },
+    {
+      "mode": "redact",
+      "failedClosed": true,
+      "error": {
+        "name": "TypeError",
+        "message": "capture mode redact is not supported by the current governed-change draft helper"
+      }
+    },
+    {
+      "mode": "encrypt",
+      "failedClosed": true,
+      "error": {
+        "name": "TypeError",
+        "message": "capture mode encrypt is not supported by the current governed-change draft helper"
+      }
+    }
+  ]
+}

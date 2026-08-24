@@ -22,10 +22,11 @@ const headlineStyle =
 <BaseLayout
   title="Veritio — Evidence-Graph für Audit-Trails, KI-Änderungen und Governance"
   description="Open-Source-Evidence-Layer: Anwendungsereignisse, Agent-Sessions, Code-Änderungen und Deployments als hash-verkettete, unabhängig verifizierbare Audit-Events aufzeichnen, verknüpfen und exportieren."
+  claimRefs={['cloud-managed-path']}
 >
   <Nav />
 
-  <main>
+  <main id="main-content">
     <!-- COVER -->
     <section>
       <div class="container">
@@ -55,7 +56,7 @@ const headlineStyle =
             >
               Auf GitHub ansehen ↗
             </a>
-            <a href="/examples" class="doc-btn">Beispiele ansehen</a>
+            <a href="/examples/" class="doc-btn">Beispiele ansehen</a>
           </div>
         </div>
       </div>
@@ -113,8 +114,6 @@ const headlineStyle =
           </div>
           <EvidenceStreamPanel
             caption="Evidence stream · Demonstrationsdaten"
-            pauseLabel="Animation pausieren"
-            playLabel="Animation abspielen"
           />
         </div>
       </div>
@@ -164,13 +163,13 @@ const headlineStyle =
             Konto erstellen ↗
           </a>
           <a
-            href="/de/pricing"
+            href="/de/pricing/"
             class="font-mono text-[13px] font-medium uppercase tracking-[0.08em] text-surface/85 no-underline hover:text-surface"
           >
             Preise ansehen →
           </a>
           <a
-            href="/de/cloud"
+            href="/de/cloud/"
             class="font-mono text-[13px] font-medium uppercase tracking-[0.08em] text-surface/60 no-underline hover:text-surface"
           >
             Mehr über Cloud

@@ -3,15 +3,18 @@ import BaseLayout from '../../layouts/BaseLayout.astro'
 import Nav from '../../components/Nav.astro'
 import Footer from '../../components/Footer.astro'
 
-const lastUpdated = '17 July 2026'
+const lastUpdated = '9 August 2026'
 ---
 <!-- DRAFT: review with counsel before launch announcement -->
 
 <BaseLayout
   title="Terms of Service — Veritio"
   description="The terms governing use of Veritio Cloud, the hosted audit-trail and compliance-evidence service operated from Germany."
+  claimRefs={['cloud-managed-path', 'cloud-projects-keys-ingest', 'cloud-identity-and-evidence-processing', 'cloud-security-controls', 'cloud-export-requests', 'cloud-price-catalog']}
 >
   <Nav />
+
+  <main id="main-content">
 
   <section class="py-16 sm:py-20">
     <div class="container">
@@ -52,7 +55,7 @@ const lastUpdated = '17 July 2026'
           pursuant to § 27&nbsp;a Umsatzsteuergesetz:
           <span class="font-mono">DE406158651</span>. Full provider
           identification is published in the
-          <a href="/legal/imprint">Imprint</a>.
+          <a href="/legal/imprint/">Imprint</a>.
         </p>
 
         <h2><span class="num">1</span> The service</h2>
@@ -99,8 +102,10 @@ const lastUpdated = '17 July 2026'
         <p>
           Where Veritio processes personal data contained in Customer Data on your
           behalf, that processing is governed by our
-          <a href="/legal/dpa">Data Processing Agreement</a>, which is
-          incorporated into these Terms.
+          <a href="/legal/dpa/">Data Processing Agreement</a> only after the
+          parties accept it through the authorized contracting process described
+          there. Opening an account or accepting these Terms does not by itself
+          incorporate the DPA.
         </p>
 
         <h2><span class="num">4</span> Acceptable use</h2>
@@ -136,18 +141,17 @@ const lastUpdated = '17 July 2026'
 
         <h2><span class="num">5</span> Plans, quotas, and fees</h2>
         <p>
-          Available plans, their usage quotas, and prices are described on our
-          <a href="/pricing">pricing page</a>. Paid plans are billed through our
-          payment processor, Polar, once billing is live; until then, plans made
-          available to you are provided on the terms stated at sign-up. Fees are
-          exclusive of taxes unless stated otherwise, and you are responsible for
-          applicable taxes other than taxes on our income.
+          The <a href="/pricing/">pricing page</a> publishes a current catalog
+          of usage rates; it does not by itself promise an active subscription
+          tier, quota, or entitlement. The terms shown at sign-up or in a signed
+          order govern any plan made available to you. Fees are exclusive of
+          taxes unless stated otherwise, and you are responsible for applicable
+          taxes other than taxes on our income.
         </p>
         <p>
-          If your usage exceeds your plan&rsquo;s quota, we may throttle ingestion,
-          require an upgrade, or apply overage terms described on the pricing
-          page. We may change prices and plan features on prospective notice; the
-          change takes effect at your next renewal.
+          Account-specific quotas, billing, overages, renewal, and prospective
+          price changes apply only when they are stated in the terms presented at
+          sign-up or in a signed order.
         </p>
 
         <h2><span class="num">6</span> Availability</h2>
@@ -168,12 +172,12 @@ const lastUpdated = '17 July 2026'
           with notice where practical.
         </p>
         <p>
-          For <strong>30 days</strong> after termination you may export your
-          Customer Data as verifiable evidence bundles through the service&rsquo;s
-          export tools. After that window we will delete or de-identify Customer
-          Data in the ordinary course, subject to the retention terms of the
-          <a href="/legal/dpa">Data Processing Agreement</a> and any legal
-          retention obligation.
+          After termination you may export Customer Data for the period stated
+          in your account terms or signed agreement. We then delete or
+          de-identify Customer Data in the ordinary course, subject to the
+          <a href="/legal/dpa/">Data Processing Agreement</a> and any legal
+          retention obligation. These public Terms do not promise a fixed export
+          window.
         </p>
 
         <h2><span class="num">8</span> Intellectual property</h2>
@@ -245,6 +249,7 @@ const lastUpdated = '17 July 2026'
     </div>
   </section>
 
+  </main>
   <Footer />
 </BaseLayout>
 

@@ -1,0 +1,178 @@
+---
+title: MongoDB
+description: Wire the published Mongo AuditStore over a host-owned collection and transaction boundary, and understand why it needs a replica set.
+audience: [developer, operator]
+kind: guide
+searchIntent: Configure the MongoDB AuditStore with host-owned sessions, unique indexes, and a replica set.
+questions:
+  - How do I use Veritio with MongoDB?
+  - Why does the Mongo AuditStore require a replica set?
+  - Which MongoDB indexes does Veritio require and why are both unique?
+  - Why are canonical record bytes stored as strings instead of BSON?
+lastUpdated: 2026-08-23
+verifiedAgainst: ['@veritio/storage@0.4.7', '@veritio/core@0.4.7']
+sourceRefs:
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/storage/src/index.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/storage/src/conformance.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/storage/integration/live-databases.test.ts
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/storage/docker-compose.yml
+  - https://github.com/getveritio/veritio/blob/c4100ee7b678d0c6b227c67ae6ea1d8a1f373967/examples/storage-mongodb/src/create-mongo-audit-store.ts
+claimRefs: []
+---
+
+An authoritative Veritio store must assign gapless per-tenant sequence numbers, reject duplicate idempotency keys, and refuse records whose stored bytes no longer hash to their envelope. MongoDB can satisfy that contract, but only across a multi-document transaction, and MongoDB offers transactions only on a replica set or sharded cluster. A standalone `mongod` will accept the driver connection and then fail every append.
+
+## What the factory actually accepts
+
+`createMongoAuditStore` takes two things and nothing else:
+
+```ts
+interface MongoAuditStoreOptions {
+  collection: MongoAuditCollection
+  transaction<T>(run: (context: MongoAuditTransactionContext) => Promise<T>): Promise<T>
+}
+```
+
+`MongoAuditCollection` is a three-method structural interface — `findOne`, `find`, `insertOne` — not the driver's `Collection` class. `MongoAuditTransactionContext` carries an optional `collection` and an optional `options` bag. There is no connection string, no `MongoClient`, no session type, and no `mongodb` import anywhere in `@veritio/storage`. The driver is a `devDependency` of the storage package used by its live tests; it is not shipped or required by the published tarball.
+
+That is the boundary on purpose:
+
+```text
+your application                      @veritio/storage
+─────────────────────────────         ────────────────────────────
+MongoClient, connect, pooling
+db().collection(name)          ──►    collection: MongoAuditCollection
+client.withSession(...)
+  session.withTransaction(...)  ──►   transaction(run)
+    run({ collection, options })  ◄── the adapter's append body
+index creation / migrations           MONGO_AUDIT_RECORD_INDEXES
+credentials, TLS, read prefs          (never seen by the adapter)
+```
+
+The adapter never opens a session, so it can never leak one, and it cannot pin you to a driver major version. It also means the adapter cannot verify that your callback really opened a transaction — that obligation is yours, and the failure mode is described below.
+
+## Wiring the host side
+
+The reference skeleton in the OSS repo (`examples/storage-mongodb`) keeps the same split. Your host module owns the client; the exported function only translates.
+
+```ts
+import { MongoClient } from 'mongodb'
+import { createAuditRecorder } from '@veritio/core'
+import {
+  createMongoAuditStore,
+  MONGO_AUDIT_RECORD_INDEXES,
+  type MongoAuditCollection,
+  type MongoAuditDocument,
+} from '@veritio/storage'
+
+declare const url: string // from your server config, never from SDK code
+
+const client = new MongoClient(url)
+await client.connect()
+
+const collection = client.db().collection<MongoAuditDocument>('veritio_audit_records')
+for (const index of MONGO_AUDIT_RECORD_INDEXES) {
+  await collection.createIndex(index.keys, index.options)
+}
+
+const store = createMongoAuditStore({
+  collection: collection as unknown as MongoAuditCollection,
+  transaction: (run) =>
+    client.withSession((session) =>
+      session.withTransaction(() =>
+        run({
+          collection: collection as unknown as MongoAuditCollection,
+          options: { session },
+        }),
+      ),
+    ),
+})
+
+const recorder = createAuditRecorder({ store })
+```
+
+Two details in that snippet are load-bearing. First, `options: { session }` must be passed through: the adapter merges that bag into every `findOne` and hands it to `insertOne` inside the append. Second, the `as unknown as` casts exist because the driver's `Collection` is wider than the structural interface, not because types are being suppressed — the adapter only ever calls the three methods it declares.
+
+## The two required indexes
+
+`MONGO_AUDIT_RECORD_INDEXES` is exported as a frozen tuple. Both entries are unique, and each protects a different invariant:
+
+| Keys | Name | Protects |
+| --- | --- | --- |
+| `{ tenantId: 1, sequence: 1 }` | `veritio_audit_records_tenant_sequence_unique` | one record per tenant-local sequence number |
+| `{ tenantId: 1, idempotencyKeyHash: 1 }` | `veritio_audit_records_idempotency_unique` | one record per tenant-scoped idempotency key |
+
+Neither is an optimization. In the SQL stores, the tenant tip is read with `SELECT ... ORDER BY sequence DESC LIMIT 1 FOR UPDATE`, and the row lock serializes concurrent appenders. MongoDB has no equivalent read lock in the adapter. Two transactions can both read the same tip, both compute sequence `n + 1`, and both attempt the insert. The unique index on `(tenantId, sequence)` is what turns that race into a duplicate-key error on the loser instead of a forked chain with two records at the same position. Create the indexes before the first append; creating them later on a collection that already forked will fail, which is the correct outcome but a much worse time to discover it.
+
+The idempotency index plays the same role for retries. The adapter's first read looks up `{ tenantId, idempotencyKeyHash }` and returns the existing record when the canonical event bytes match, or throws `idempotency conflict` when the same key was reused for different bytes. Under concurrency, the index is what stops two simultaneous first-attempts from both inserting.
+
+## Inside one append
+
+```text
+transaction(run)                       ← host opens session + transaction
+  findOne { tenantId, idempotencyKeyHash }
+    hit  → eventCanonical equal?  yes → return the stored record (idempotent)
+                                  no  → throw "idempotency conflict"
+  findOne { tenantId } sort sequence:-1  ← tenant chain tip
+    validate the tip's stored envelope (hash recomputed)
+    expectedPreviousHash supplied and different?
+        → throw "expectedPreviousHash does not match tenant chain tip"
+  buildAuditRecord: sequence = tip.sequence + 1, previousHash = tip.hash
+  insertOne(document, options)
+commit                                 ← host closes the transaction
+```
+
+Every step after the first read depends on the two before it, which is exactly why they must share one transaction. Missing tenant scope fails earlier still: `scope.tenantId` is required before any query runs.
+
+## Canonical bytes stay opaque strings
+
+The stored document is deliberately flat and stringly typed:
+
+```ts
+interface MongoAuditDocument {
+  tenantId: string
+  sequence: number
+  idempotencyKeyHash: string
+  eventCanonical: string   // veritio-json-v1 bytes of the event
+  recordJson: string       // JSON.stringify of the full record envelope
+  hash: string
+  previousHash: string | null
+  appendedAt: string
+}
+```
+
+`recordJson` and `eventCanonical` are strings and must never be converted into BSON subdocuments, `Extended JSON`, or any driver-native JSON type. BSON is a different data model: it reorders nothing you can rely on, it has its own numeric types, and a round trip through it can silently change the byte sequence that `hashAuditRecord` covers. A record that survives such a round trip would fail its own integrity check on read — or, worse, pass while no longer being the bytes an external verifier was given. Storing the canonical string keeps the hash input identical to what the file store, the SQL stores, and an export bundle hold.
+
+The read path enforces this. `list()` queries `{ tenantId, sequence: { $gt: afterSequence } }` sorted ascending, then for every document: rejects a tenant mismatch, parses `recordJson`, re-validates scope, sequence, `hashAlgorithm`, `canonicalization`, hash shapes, `appendedAt`, and recomputes the record hash. Any mismatch throws `stored audit record integrity check failed` for the whole call. It then asserts the returned sequences strictly increase and returns clones, so a caller mutating what it received cannot reach stored evidence.
+
+## Replica set, concretely
+
+The transactional append path calls `client.withSession().withTransaction()`. That requires a replica set (or a sharded cluster). For local work, a single-node replica set is enough — the OSS repo runs `mongo:7` with `--replSet rs0`, initiates it once with `rs.initiate(...)`, and connects with `?replicaSet=rs0` in the URL. In production this is not a special requirement; it is the normal deployment for anything you would trust with audit evidence, and it is also what gives you the durable-write and failover behaviour the chain assumes.
+
+## Prove it with the conformance suite
+
+A store is only authoritative once it passes `createAuditStoreConformanceTests` from `@veritio/storage/conformance`. The suite is store-agnostic and asserts five behaviours: tenant-scoped chains that list deterministically and verify, idempotent replays plus conflict rejection, fail-closed handling of missing tenant scope and wrong `expectedPreviousHash`, cloned reads, and a deliberately corrupted stored record that must make `list()` throw. You supply a `createTarget()` that builds a throwaway collection, creates both indexes, and provides a `mutateStoredRecord` hook that rewrites `recordJson` in place.
+
+The OSS repo runs exactly this against a live Mongo replica set in CI and locally:
+
+```sh
+bun run --cwd storage db:up
+bun run --cwd storage test:live
+bun run --cwd storage db:down
+```
+
+This documentation site has no MongoDB, so this page carries no executable fixture and none of the numbers above are reproduced from a recorded run. The suite itself, and its Mongo target, are in the pinned sources listed at the top.
+
+## Failure modes worth knowing
+
+- **A `transaction` callback that does not open a transaction.** Nothing type-checks differently, single-writer tests pass, and the unique indexes still catch the worst case — but the tip read and the insert are no longer atomic, so concurrent appends turn into duplicate-key errors on the write path instead of clean ordering. Verify the session reaches `options`.
+- **Dropping `options`.** If your callback passes `{ collection }` without `options: { session }`, the reads and the insert run outside the session entirely. The adapter cannot detect this.
+- **Missing indexes.** Everything works under one writer and forks under two.
+- **A standalone `mongod`.** Every append fails at `withTransaction`, not at connect.
+- **Bun plus recent driver builds.** Observed on Bun 1.3.10: `mongodb` 7.5.0 resolves `bson` 7.3.2, whose module initializer calls the `node:v8` `startupSnapshot.isBuildingSnapshot()` API that Bun does not implement, so importing the driver throws `ERR_NOT_IMPLEMENTED`. The OSS repo pins its lockfile to `mongodb` 7.3.0 / `bson` 7.2.0 for that reason and imports the driver lazily in its live suite. Published tarballs are unaffected — `@veritio/storage` declares no runtime dependency on the driver. If you run Bun, pin a known-good driver resolution and check it at import time, not at first append.
+
+## What a passing store does not prove
+
+A green conformance run says the adapter preserves ordering, idempotency, cloning, and fail-closed reads against that database. It says nothing about whether your application recorded every event it should have, whether the recorded claim was true, or whether an operator with database credentials rewrote history wholesale — a fully replaced collection is internally consistent. Detection of that class of change comes from evidence commits and independently held exports, not from the store.
+
+Continue with [Storage overview](/docs/storage/overview/) to see how authoritative stores relate to derived archives, [Conformance](/docs/storage/conformance/) for the full suite contract, or [Hash chain](/docs/concepts/hash-chain/) for what the recomputed record hash covers.
