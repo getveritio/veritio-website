@@ -1,10 +1,28 @@
 import { createHash } from 'node:crypto'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 
 const root = join(import.meta.dir, '..')
-const sibling = join(root, '..', 'veritio')
+
+/** Resolves the OSS checkout from both a normal clone and a nested worktree. */
+function resolveOssRoot(): string {
+  if (process.env.VERITIO_OSS_ROOT) return resolve(process.env.VERITIO_OSS_ROOT)
+
+  let current = resolve(root)
+  while (dirname(current) !== current) {
+    if (basename(current) === 'veritio-website') {
+      const candidate = join(dirname(current), 'veritio')
+      if (existsSync(join(candidate, '.git'))) return candidate
+      break
+    }
+    current = dirname(current)
+  }
+
+  throw new Error('Could not resolve the Veritio OSS checkout. Set VERITIO_OSS_ROOT explicitly.')
+}
+
+const sibling = resolveOssRoot()
 const manifestPath = resolve(root, process.env.VERITIO_EXAMPLE_MANIFEST ?? 'src/examples/manifest.json')
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
   upstreamRevision: string

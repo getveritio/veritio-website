@@ -1,31 +1,178 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro'
+import billingCatalog from '../data/cloud-billing-catalog.json'
 import Nav from './Nav.astro'
 import Footer from './Footer.astro'
 
 type Locale = 'en' | 'de' | 'ko'
-const { locale = 'en' } = Astro.props as { locale?: Locale }
+type PlanId = 'pro' | 'team' | 'compliance'
+type BillingInterval = 'monthly' | 'yearly'
 
-const plans = [
-  { name: 'Pro', monthly: '$29', annual: '$24.17' },
-  { name: 'Team', monthly: '$99', annual: '$82.50' },
-  { name: 'Compliance', monthly: '$499', annual: '$415.83' },
-  { name: 'Enterprise', monthly: 'Custom', annual: 'Custom' },
-]
+const { locale = 'en' } = Astro.props as { locale?: Locale }
+const localeTag = { en: 'en-US', de: 'de-DE', ko: 'ko-KR' }[locale]
 
 const copy = {
-  en: { title: 'Veritio pricing — OSS free, Cloud catalog', description: 'Self-host the open-source Veritio stack without a license fee or review the current Cloud catalog rates and implementation boundary.', eyebrow: 'Pricing · Verified catalog', heading: 'Open source is free. Cloud is the optional operating path.', lead: 'The protocol, SDKs, storage interfaces, examples, and verifier are Apache-2.0. Cloud’s source-of-truth catalog currently lists the rates below. Plan subscription resolution and some feature entitlements are not yet represented here as active guarantees.', monthly: 'Monthly', annual: 'Annual, effective monthly', noteTitle: 'What this page deliberately does not promise', note: 'Retention enforcement, regional compute, plan-specific feature gates, service levels, and legal outcomes require separate implementation evidence. Contact us before treating any plan detail beyond the catalog price as a contractual commitment.', oss: 'Use open source', cloud: 'Discuss Cloud' },
-  de: { title: 'Veritio Preise — OSS kostenlos, Cloud-Katalog', description: 'Open-Source-Veritio ohne Lizenzgebühr selbst hosten oder die aktuellen Cloud-Katalogpreise und Implementierungsgrenzen prüfen.', eyebrow: 'Preise · Geprüfter Katalog', heading: 'Open Source ist kostenlos. Cloud ist der optionale Betriebsweg.', lead: 'Protokoll, SDKs, Storage-Schnittstellen, Beispiele und Verifier sind Apache-2.0. Der Cloud-Quellkatalog enthält die folgenden Preise. Abonnementauflösung und einige Feature-Entitlements werden hier nicht als aktive Garantien dargestellt.', monthly: 'Monatlich', annual: 'Jährlich, effektiv pro Monat', noteTitle: 'Was diese Seite bewusst nicht verspricht', note: 'Retention-Durchsetzung, Compute-Region, planspezifische Feature-Gates, Service-Level und rechtliche Ergebnisse benötigen separate Implementierungsnachweise. Planangaben jenseits des Katalogpreises sind ohne Bestätigung keine vertragliche Zusage.', oss: 'Open Source nutzen', cloud: 'Cloud besprechen' },
-  ko: { title: 'Veritio 요금 — 무료 OSS, Cloud 카탈로그', description: '오픈 소스 Veritio를 라이선스 비용 없이 직접 호스팅하거나 현재 Cloud 카탈로그 가격과 구현 경계를 확인하세요.', eyebrow: '요금 · 검증된 카탈로그', heading: '오픈 소스는 무료입니다. Cloud는 선택형 운영 경로입니다.', lead: '프로토콜, SDK, 스토리지 인터페이스, 예제, 검증기는 Apache-2.0입니다. Cloud 소스 카탈로그에는 아래 가격이 정의되어 있습니다. 구독 연결과 일부 기능 권한은 여기서 활성 보장으로 제시하지 않습니다.', monthly: '월간', annual: '연간 결제 시 월 환산', noteTitle: '이 페이지가 의도적으로 약속하지 않는 것', note: '보존 실행, 컴퓨트 지역, 플랜별 기능 게이트, 서비스 수준, 법률 결과는 별도의 구현 근거가 필요합니다. 카탈로그 가격 이외의 세부사항을 계약상 약속으로 보기 전에 문의하세요.', oss: '오픈 소스 사용', cloud: 'Cloud 문의' },
+  en: {
+    title: 'Veritio pricing — OSS free, planned Cloud catalog',
+    description: 'Self-host Veritio without a license fee or review the six planned Veritio Cloud billing products and launch-gated registration paths.',
+    eyebrow: 'Pricing · Pre-launch Cloud catalog',
+    heading: 'Open source is free. The Cloud catalog is staged behind launch gates.',
+    lead: 'The protocol, SDKs, storage interfaces, examples, and verifier remain Apache-2.0. The reviewed pre-launch catalog defines three hosted plans across monthly and yearly billing. Checkout stays disabled until approved legal versions and operator production gates are published.',
+    trial: 'The planned launch configuration is a 14-day trial with a card required. It is not active yet.',
+    monthly: 'Monthly',
+    yearly: 'Yearly',
+    billedYearly: 'billed yearly',
+    events: 'evidence events included each month',
+    ceiling: (value: string) => `Ingestion pauses at ${value} events each month; no automatic usage charges.`,
+    projects: 'projects',
+    exports: (value: number | null) => value === null ? 'Unlimited export bundles' : `${value} export bundles each month`,
+    retention: 'Plan-based evidence retention is not available yet.',
+    monthlyCta: 'Register with monthly choice',
+    yearlyCta: 'Register with yearly choice',
+    activation: 'Registration preserves your selection. It does not start checkout, a purchase, or a trial.',
+    enterprise: 'Enterprise',
+    enterpriseCopy: 'Custom scale, retention, and operating commitments require a reviewed agreement.',
+    contact: 'Contact sales',
+    noteTitle: 'Boundaries stay explicit',
+    note: 'The catalog defines prices and operating limits, not legal outcomes, service levels, or automatic compliance. Annual prices below are exact invoice totals.',
+    oss: 'Use open source',
+  },
+  de: {
+    title: 'Veritio Preise — OSS kostenlos, geplanter Cloud-Katalog',
+    description: 'Veritio ohne Lizenzgebühr selbst hosten oder die sechs geplanten Cloud-Produkte und Launch-gesteuerten Registrierungswege prüfen.',
+    eyebrow: 'Preise · Cloud-Katalog vor dem Launch',
+    heading: 'Open Source ist kostenlos. Der Cloud-Katalog wartet hinter Launch-Gates.',
+    lead: 'Protokoll, SDKs, Storage-Schnittstellen, Beispiele und Verifier bleiben Apache-2.0. Der geprüfte Pre-Launch-Katalog definiert drei gehostete Tarife mit monatlicher oder jährlicher Abrechnung. Der Checkout bleibt deaktiviert, bis freigegebene Rechtsversionen und betriebliche Produktions-Gates veröffentlicht sind.',
+    trial: 'Die geplante Launch-Konfiguration ist eine 14-tägige Testphase mit erforderlicher Karte. Sie ist noch nicht aktiv.',
+    monthly: 'Monatlich',
+    yearly: 'Jährlich',
+    billedYearly: 'jährlich berechnet',
+    events: 'Evidence-Events pro Monat inklusive',
+    ceiling: (value: string) => `Die Aufnahme pausiert bei ${value} Events pro Monat; keine automatischen nutzungsbasierten Gebühren.`,
+    projects: 'Projekte',
+    exports: (value: number | null) => value === null ? 'Unbegrenzte Export-Bundles' : `${value} Export-Bundles pro Monat`,
+    retention: 'Planbasierte Aufbewahrung von Evidence-Daten ist noch nicht verfügbar.',
+    monthlyCta: 'Mit Monatsauswahl registrieren',
+    yearlyCta: 'Mit Jahresauswahl registrieren',
+    activation: 'Die Registrierung übernimmt Ihre Auswahl. Sie startet weder Checkout noch Kauf oder Testphase.',
+    enterprise: 'Enterprise',
+    enterpriseCopy: 'Individuelle Skalierung, Aufbewahrung und Betriebszusagen benötigen eine geprüfte Vereinbarung.',
+    contact: 'Vertrieb kontaktieren',
+    noteTitle: 'Grenzen bleiben ausdrücklich',
+    note: 'Der Katalog definiert Preise und Betriebsgrenzen, nicht rechtliche Ergebnisse, Service-Level oder automatische Compliance. Die Jahrespreise sind exakte Rechnungsbeträge.',
+    oss: 'Open Source nutzen',
+  },
+  ko: {
+    title: 'Veritio 요금 — 무료 OSS와 출시 예정 Cloud 카탈로그',
+    description: '라이선스 비용 없이 Veritio를 직접 호스팅하거나 출시 예정인 6개 Cloud 상품과 승인 후 열리는 가입 경로를 확인하세요.',
+    eyebrow: '요금 · 출시 전 Cloud 카탈로그',
+    heading: '오픈 소스는 무료입니다. Cloud 카탈로그는 출시 승인을 기다립니다.',
+    lead: '프로토콜, SDK, 스토리지 인터페이스, 예제, 검증기는 Apache-2.0으로 유지됩니다. 검토된 출시 전 카탈로그는 세 가지 호스팅 플랜의 월간 및 연간 결제를 정의합니다. 승인된 법률 문서 버전과 운영 프로덕션 게이트가 공개될 때까지 결제는 비활성화됩니다.',
+    trial: '출시 예정 구성은 카드가 필요한 14일 체험이며 아직 활성화되지 않았습니다.',
+    monthly: '월간',
+    yearly: '연간',
+    billedYearly: '연간 청구',
+    events: '월별 증거 이벤트 포함',
+    ceiling: (value: string) => `월 ${value}개 이벤트에서 수집이 일시 중지되며 자동 사용량 요금은 없습니다.`,
+    projects: '개 프로젝트',
+    exports: (value: number | null) => value === null ? '무제한 내보내기 번들' : `월 ${value}개 내보내기 번들`,
+    retention: '플랜 기반 증거 보존은 아직 제공되지 않습니다.',
+    monthlyCta: '월간 선택으로 가입',
+    yearlyCta: '연간 선택으로 가입',
+    activation: '가입 시 선택 사항만 유지되며 결제, 구매 또는 체험은 시작되지 않습니다.',
+    enterprise: 'Enterprise',
+    enterpriseCopy: '맞춤형 규모, 보존, 운영 약정에는 검토된 계약이 필요합니다.',
+    contact: '영업팀 문의',
+    noteTitle: '경계를 명확하게 유지합니다',
+    note: '카탈로그는 가격과 운영 한도를 정의하며 법적 결과, 서비스 수준 또는 자동 규정 준수를 보장하지 않습니다. 아래 연간 가격은 정확한 청구 총액입니다.',
+    oss: '오픈 소스 사용',
+  },
 }[locale]
+
+const monthlyProducts = billingCatalog.products.filter((product) => product.interval === 'monthly')
+
+/** Formats exact integer cents without deriving or rounding a billing amount. */
+function formatMoney(amountCents: number): string {
+  return new Intl.NumberFormat(localeTag, {
+    style: 'currency',
+    currency: billingCatalog.currency,
+    maximumFractionDigits: 0,
+  }).format(amountCents / 100)
+}
+
+/** Formats a reviewed integer operating limit for the active locale. */
+function formatCount(value: number): string {
+  return new Intl.NumberFormat(localeTag).format(value)
+}
+
+/** Preserves the selected public product through registration into checkout. */
+function checkoutHref(planId: PlanId, interval: BillingInterval): string {
+  const redirect = `/checkout?plan=${planId}&interval=${interval}`
+  return `https://console.getveritio.com/register?redirect=${encodeURIComponent(redirect)}`
+}
 ---
 
 <BaseLayout title={copy.title} description={copy.description} claimRefs={['cloud-price-catalog']}>
   <Nav />
   <main id="main-content">
-    <section class="container border-b border-line py-16 sm:py-24"><span class="eyebrow">{copy.eyebrow}</span><h1 class="mt-5 max-w-[14ch] text-[clamp(48px,7vw,88px)] font-medium leading-[0.98] tracking-[-0.02em]">{copy.heading}</h1><p class="mt-8 max-w-3xl text-xl leading-relaxed text-ink-soft">{copy.lead}</p></section>
-    <section class="container py-16 sm:py-20"><div class="grid sm:grid-cols-2 lg:grid-cols-4">{plans.map((plan) => <article class="border border-line p-7 sm:-ml-px"><h2 class="text-3xl font-medium">{plan.name}</h2><dl class="mt-8 space-y-5"><div><dt class="font-mono text-xs uppercase tracking-wider text-ink-muted">{copy.monthly}</dt><dd class="mt-1 text-3xl">{plan.monthly}</dd></div><div><dt class="font-mono text-xs uppercase tracking-wider text-ink-muted">{copy.annual}</dt><dd class="mt-1 text-xl text-ink-soft">{plan.annual}</dd></div></dl></article>)}</div><p class="mt-4 font-mono text-xs text-ink-muted">USD · Public price catalog verified on 2026-08-09.</p></section>
-    <section class="border-y border-line-strong bg-surface-raised"><div class="container py-16"><span class="eyebrow">{copy.noteTitle}</span><p class="mt-5 max-w-3xl text-lg leading-relaxed text-ink-soft">{copy.note}</p><div class="mt-8 flex flex-wrap gap-3"><a class="doc-btn doc-btn--solid" href="/open-source/">{copy.oss}</a><a class="doc-btn" href="mailto:hello@getveritio.com?subject=Veritio%20Cloud">{copy.cloud}</a></div></div></section>
+    <section class="container border-b border-line py-16 sm:py-24">
+      <span class="eyebrow">{copy.eyebrow}</span>
+      <h1 class="mt-5 max-w-[15ch] text-[clamp(48px,7vw,88px)] font-medium leading-[0.98] tracking-[-0.02em]">{copy.heading}</h1>
+      <p class="mt-8 max-w-3xl text-xl leading-relaxed text-ink-soft">{copy.lead}</p>
+      <p class="mt-5 font-mono text-sm text-ink-muted">{copy.trial}</p>
+    </section>
+
+    <section class="container py-16 sm:py-20">
+      <div class="grid gap-5 lg:grid-cols-3">
+        {monthlyProducts.map((monthly) => {
+          const yearly = billingCatalog.products.find((product) => product.planId === monthly.planId && product.interval === 'yearly')
+          if (!yearly) throw new Error(`Missing yearly billing product for ${monthly.planId}`)
+          return (
+            <article class="flex h-full flex-col border border-line p-7">
+              <h2 class="text-3xl font-medium">{monthly.name}</h2>
+              <dl class="mt-7 grid grid-cols-2 gap-4 border-b border-line pb-6">
+                <div>
+                  <dt class="font-mono text-xs uppercase tracking-wider text-ink-muted">{copy.monthly}</dt>
+                  <dd class="mt-1 text-3xl">{formatMoney(monthly.amountCents)}</dd>
+                </div>
+                <div>
+                  <dt class="font-mono text-xs uppercase tracking-wider text-ink-muted">{copy.yearly}</dt>
+                  <dd class="mt-1 text-2xl">{formatMoney(yearly.amountCents)}</dd>
+                  <dd class="mt-1 text-xs text-ink-muted">{copy.billedYearly}</dd>
+                </div>
+              </dl>
+              <ul class="mt-6 grow space-y-3 text-sm leading-relaxed text-ink-soft">
+                <li><strong class="text-ink">{formatCount(monthly.monthlyEvents)}</strong> {copy.events}</li>
+                <li>{copy.ceiling(formatCount(monthly.hardMonthlyEventCeiling))}</li>
+                <li><strong class="text-ink">{formatCount(monthly.maxProjects)}</strong> {copy.projects}</li>
+                <li>{copy.exports(monthly.exportBundlesPerMonth)}</li>
+                <li>{copy.retention}</li>
+              </ul>
+              <div class="mt-7 grid grid-cols-2 gap-2">
+                <a class="doc-btn text-center" href={checkoutHref(monthly.planId as PlanId, 'monthly')}>{copy.monthlyCta}</a>
+                <a class="doc-btn doc-btn--solid text-center" href={checkoutHref(monthly.planId as PlanId, 'yearly')}>{copy.yearlyCta}</a>
+              </div>
+            </article>
+          )
+        })}
+      </div>
+      <p class="mt-6 font-mono text-xs text-ink-muted">{billingCatalog.currency} · {billingCatalog.version} · {copy.activation}</p>
+    </section>
+
+    <section class="border-y border-line-strong bg-surface-raised">
+      <div class="container grid gap-10 py-16 lg:grid-cols-[1fr_2fr]">
+        <div>
+          <span class="eyebrow">{copy.enterprise}</span>
+          <p class="mt-5 max-w-xl text-lg leading-relaxed text-ink-soft">{copy.enterpriseCopy}</p>
+          <a class="doc-btn mt-7 inline-flex" href="mailto:hello@getveritio.com?subject=Veritio%20Enterprise">{copy.contact}</a>
+        </div>
+        <div>
+          <span class="eyebrow">{copy.noteTitle}</span>
+          <p class="mt-5 max-w-3xl text-lg leading-relaxed text-ink-soft">{copy.note}</p>
+          <a class="doc-btn doc-btn--solid mt-7 inline-flex" href="/open-source/">{copy.oss}</a>
+        </div>
+      </div>
+    </section>
   </main>
   <Footer />
 </BaseLayout>

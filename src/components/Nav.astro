@@ -59,7 +59,7 @@ const flagOf: Record<Locale, string> = { en: '/flags/gb.svg', de: '/flags/de.svg
       </details>
       <ThemeToggle />
       <a class="site-github" href="https://github.com/getveritio/veritio" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
-      <a class="site-cloud" href="https://console.getveritio.com/register" target="_blank" rel="noopener noreferrer">Start with Cloud ↗</a>
+      <a class="site-cloud" href="https://console.getveritio.com/register" target="_blank" rel="noopener noreferrer">{t.registerCloud} ↗</a>
     </div>
 
     <details class="mobile-nav">
@@ -72,7 +72,7 @@ const flagOf: Record<Locale, string> = { en: '/flags/gb.svg', de: '/flags/de.svg
           <ThemeToggle />
           {langs.map((lang) => <a href={switchTarget(lang)} hreflang={lang}>{lang.toUpperCase()}</a>)}
         </div>
-        <a class="site-cloud" href="https://console.getveritio.com/register" target="_blank" rel="noopener noreferrer">Start with Cloud ↗</a>
+        <a class="site-cloud" href="https://console.getveritio.com/register" target="_blank" rel="noopener noreferrer">{t.registerCloud} ↗</a>
       </div>
     </details>
   </div>
