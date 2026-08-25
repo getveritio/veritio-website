@@ -121,6 +121,30 @@ describe('public repository boundary', () => {
   })
 })
 
+describe('reviewed Cloud billing catalog', () => {
+  test('the website snapshot preserves the six public Cloud products exactly', () => {
+    const catalogPath = join(root, 'src/data/cloud-billing-catalog.json')
+    expect(existsSync(catalogPath)).toBeTrue()
+    if (!existsSync(catalogPath)) return
+
+    const catalog = JSON.parse(readFileSync(catalogPath, 'utf8'))
+    expect(catalog).toEqual({
+      version: '2026-08-25.v2',
+      currency: 'USD',
+      trial: { days: 14, cardRequired: true },
+      products: [
+        { key: 'pro:monthly', planId: 'pro', name: 'Pro', interval: 'monthly', amountCents: 2900, maxProjects: 3, monthlyEvents: 100000, hardMonthlyEventCeiling: 200000, exportBundlesPerMonth: 5, retention: { available: false } },
+        { key: 'pro:yearly', planId: 'pro', name: 'Pro', interval: 'yearly', amountCents: 29000, maxProjects: 3, monthlyEvents: 100000, hardMonthlyEventCeiling: 200000, exportBundlesPerMonth: 5, retention: { available: false } },
+        { key: 'team:monthly', planId: 'team', name: 'Team', interval: 'monthly', amountCents: 9900, maxProjects: 3, monthlyEvents: 500000, hardMonthlyEventCeiling: 1000000, exportBundlesPerMonth: null, retention: { available: false } },
+        { key: 'team:yearly', planId: 'team', name: 'Team', interval: 'yearly', amountCents: 99000, maxProjects: 3, monthlyEvents: 500000, hardMonthlyEventCeiling: 1000000, exportBundlesPerMonth: null, retention: { available: false } },
+        { key: 'compliance:monthly', planId: 'compliance', name: 'Compliance', interval: 'monthly', amountCents: 49900, maxProjects: 10, monthlyEvents: 5000000, hardMonthlyEventCeiling: 10000000, exportBundlesPerMonth: null, retention: { available: false } },
+        { key: 'compliance:yearly', planId: 'compliance', name: 'Compliance', interval: 'yearly', amountCents: 499000, maxProjects: 10, monthlyEvents: 5000000, hardMonthlyEventCeiling: 10000000, exportBundlesPerMonth: null, retention: { available: false } },
+      ],
+      enterprise: { contactSales: true },
+    })
+  })
+})
+
 describe('documentation publishing contracts', () => {
   test('every guide declares required provenance metadata', () => {
     const files = walk(docsRoot).filter((file) => /\.mdx?$/.test(file))
@@ -344,13 +368,20 @@ describe('checked code fixtures', () => {
   })
 
   test('fixture verification rejects output that differs from the reviewed artifact', () => {
-    expect(() => execFileSync('bun', ['run', 'scripts/verify-examples.ts'], {
-      cwd: root,
-      env: {
-        ...process.env,
-        VERITIO_EXAMPLE_MANIFEST: 'tests/fixtures/invalid-example-output.json',
-      },
-      stdio: 'pipe',
-    })).toThrow()
+    let failure = ''
+    try {
+      execFileSync('bun', ['run', 'scripts/verify-examples.ts'], {
+        cwd: root,
+        env: {
+          ...process.env,
+          VERITIO_EXAMPLE_MANIFEST: 'tests/fixtures/invalid-example-output.json',
+        },
+        stdio: 'pipe',
+      })
+    } catch (error) {
+      const commandError = error as Error & { stderr?: Buffer }
+      failure = `${commandError.message}\n${commandError.stderr?.toString() ?? ''}`
+    }
+    expect(failure).toContain('output changed')
   })
 })

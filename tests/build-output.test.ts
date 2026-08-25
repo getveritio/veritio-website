@@ -84,6 +84,82 @@ describe('built route and SEO contracts', () => {
     }
   })
 
+  test('desktop and mobile Cloud registration actions use the active locale', () => {
+    for (const [path, label] of [
+      ['pricing', 'Register for Cloud'],
+      ['de/pricing', 'Für Cloud registrieren'],
+      ['ko/pricing', 'Cloud 가입'],
+    ] as const) {
+      const source = html(path)
+      expect(source.match(new RegExp(`>${label} ↗</a>`, 'g'))).toHaveLength(2)
+    }
+  })
+
+  test('localized pricing renders six launch-gated selections with every reviewed operating limit', () => {
+    const expectedSelections = [
+      ['pro', 'monthly'],
+      ['pro', 'yearly'],
+      ['team', 'monthly'],
+      ['team', 'yearly'],
+      ['compliance', 'monthly'],
+      ['compliance', 'yearly'],
+    ] as const
+
+    const localeFacts = {
+      pricing: {
+        monthlyPrices: ['$29', '$99', '$499'],
+        monthlyLabel: 'Monthly',
+        counts: ['100,000', '200,000', '500,000', '1,000,000', '5,000,000', '10,000,000'],
+        projects: ['3 projects', '10 projects'],
+        exports: ['5 export bundles each month', 'Unlimited export bundles'],
+        retention: 'Plan-based evidence retention is not available yet.',
+        launchGate: 'The planned launch configuration is a 14-day trial with a card required. It is not active yet.',
+        handoff: 'Registration preserves your selection. It does not start checkout, a purchase, or a trial.',
+      },
+      'de/pricing': {
+        monthlyPrices: ['29 $', '99 $', '499 $'],
+        monthlyLabel: 'Monatlich',
+        counts: ['100.000', '200.000', '500.000', '1.000.000', '5.000.000', '10.000.000'],
+        projects: ['3 Projekte', '10 Projekte'],
+        exports: ['5 Export-Bundles pro Monat', 'Unbegrenzte Export-Bundles'],
+        retention: 'Planbasierte Aufbewahrung von Evidence-Daten ist noch nicht verfügbar.',
+        launchGate: 'Die geplante Launch-Konfiguration ist eine 14-tägige Testphase mit erforderlicher Karte. Sie ist noch nicht aktiv.',
+        handoff: 'Die Registrierung übernimmt Ihre Auswahl. Sie startet weder Checkout noch Kauf oder Testphase.',
+      },
+      'ko/pricing': {
+        monthlyPrices: ['US$29', 'US$99', 'US$499'],
+        monthlyLabel: '월간',
+        counts: ['100,000', '200,000', '500,000', '1,000,000', '5,000,000', '10,000,000'],
+        projects: ['3 개 프로젝트', '10 개 프로젝트'],
+        exports: ['월 5개 내보내기 번들', '무제한 내보내기 번들'],
+        retention: '플랜 기반 증거 보존은 아직 제공되지 않습니다.',
+        launchGate: '출시 예정 구성은 카드가 필요한 14일 체험이며 아직 활성화되지 않았습니다.',
+        handoff: '가입 시 선택 사항만 유지되며 결제, 구매 또는 체험은 시작되지 않습니다.',
+      },
+    } as const
+
+    for (const [path, facts] of Object.entries(localeFacts)) {
+      const source = html(path)
+      const text = visibleText(source)
+      for (const [plan, interval] of expectedSelections) {
+        const redirect = encodeURIComponent(`/checkout?plan=${plan}&interval=${interval}`)
+        expect(source, `${path}: ${plan}:${interval}`).toContain(
+          `href="https://console.getveritio.com/register?redirect=${redirect}"`,
+        )
+      }
+      for (const price of facts.monthlyPrices) {
+        expect(source, `${path}: monthly ${price}`).toContain(`>${facts.monthlyLabel}</dt><dd class="mt-1 text-3xl">${price}`)
+      }
+      for (const count of facts.counts) expect(text, `${path}: ${count}`).toContain(count)
+      for (const project of facts.projects) expect(text, `${path}: ${project}`).toContain(project)
+      for (const exportLimit of facts.exports) expect(text, `${path}: ${exportLimit}`).toContain(exportLimit)
+      expect(text.match(new RegExp(facts.retention, 'g')), `${path}: retention`).toHaveLength(3)
+      expect(text, `${path}: launch gate`).toContain(facts.launchGate)
+      expect(text, `${path}: registration handoff`).toContain(facts.handoff)
+      expect(text, path).not.toMatch(/90 days|365 days|5 years|90 Tage|365 Tage|5 Jahre|90일|365일|5년/i)
+    }
+  })
+
   test('sitemap excludes Markdown and localized docs fallbacks', () => {
     const sitemap = walk(dist).filter((file) => /sitemap.*\.xml$/.test(file)).map((file) => readFileSync(file, 'utf8')).join('\n')
     expect(sitemap).not.toContain('.md</loc>')
